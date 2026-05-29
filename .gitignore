@@ -6,3 +6,4 @@ build/
 Thumbs.db
 Yatra Desk_flutter_shell/
 Yatra Desk_driver_webview/
+.git.backup-*/
