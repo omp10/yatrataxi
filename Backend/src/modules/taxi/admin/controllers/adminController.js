@@ -13,6 +13,7 @@ import { AgentNeededDocument } from '../models/AgentNeededDocument.js';
 import { AgentWithdrawalRequest } from '../../agent/models/AgentWithdrawalRequest.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { listAgentWalletTransactions, applyAgentWalletAdjustment } from '../../agent/services/agentWalletService.js';
+import { getPublicActivePaymentGateway } from '../../services/paymentGatewayService.js';
 
 const ok = (res, data, extra = {}) =>
   res.json({ success: true, data, ...extra });
@@ -2136,19 +2137,24 @@ export const getTransportTypes = asyncHandler(async (_req, res) =>
 );
 
 export const getAppBootstrap = asyncHandler(async (_req, res) => {
-  const [modules, general, transportRide, customize] = await Promise.all([
+  const [modules, general, transportRide, customize, bidRide] = await Promise.all([
     adminService.listAppModules(),
     adminService.getGeneralSettings('general'),
     adminService.getGeneralSettings('transport-ride'),
-    adminService.getGeneralSettings('customize')
+    adminService.getGeneralSettings('customize'),
+    adminService.getGeneralSettings('bid-ride').catch(() => ({ settings: {} }))
   ]);
+
+  const gatewayResult = await getPublicActivePaymentGateway().catch(() => ({ activeGateway: null }));
 
   ok(res, {
     modules: modules.results || modules,
     settings: {
       general: general.settings || {},
       transportRide: transportRide.settings || {},
-      customization: customize.settings || {}
+      customization: customize.settings || {},
+      bidRide: bidRide.settings || {},
+      paymentGateway: gatewayResult?.activeGateway || null
     }
   });
 });

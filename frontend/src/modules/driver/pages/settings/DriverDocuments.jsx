@@ -59,6 +59,16 @@ const formatExpiryDate = (value) => {
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+const formatDateForInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const unwrapDriver = (response) => response?.data?.data || response?.data || response || null;
 const toTimestamp = (value) => {
   if (!value) return 0;
@@ -81,6 +91,53 @@ const DriverDocuments = () => {
   const uploadingDocumentKeyRef = useRef('');
   const documentInputRefs = useRef({});
   const autoOpenedDocumentRef = useRef('');
+  const [editingExpiryDate, setEditingExpiryDate] = useState('');
+  const [isSavingExpiry, setIsSavingExpiry] = useState(false);
+
+  useEffect(() => {
+    if (selectedDoc) {
+      setEditingExpiryDate(formatDateForInput(selectedDoc.expiryDate));
+    } else {
+      setEditingExpiryDate('');
+    }
+  }, [selectedDoc]);
+
+  const handleSaveExpiry = async () => {
+    if (!selectedDoc) return;
+    
+    setError('');
+    setIsSavingExpiry(true);
+
+    try {
+      const existingDoc = driver?.documents?.[selectedDoc.id] || {};
+      const previewUrl = existingDoc.previewUrl || existingDoc.secureUrl || existingDoc.url || selectedDoc.previewUrl || '';
+      
+      if (!previewUrl) {
+        throw new Error('Please upload the document image first.');
+      }
+
+      const updatedDocument = {
+        ...existingDoc,
+        expiryDate: editingExpiryDate,
+        expiry_date: editingExpiryDate,
+        uploaded: true,
+        uploadedAt: existingDoc.uploadedAt || new Date().toISOString(),
+        previewUrl,
+      };
+
+      const response = await updateDriverDocument(selectedDoc.id, updatedDocument);
+      const documents = response?.data?.documents || {
+        ...(driver?.documents || {}),
+        [selectedDoc.id]: updatedDocument,
+      };
+      setDriver((prev) => ({ ...(prev || {}), documents }));
+      setSelectedDoc(null);
+    } catch (err) {
+      setError(err?.message || 'Unable to update expiry date');
+    } finally {
+      setIsSavingExpiry(false);
+    }
+  };
 
   const {
     uploading: imageUploading,
@@ -196,6 +253,7 @@ const DriverDocuments = () => {
         reason,
         verified,
         order: index,
+        hasExpiryDate: field.hasExpiryDate,
       };
     });
   }, [driver?.documents, templates]);
@@ -270,9 +328,47 @@ const DriverDocuments = () => {
                   <p className="mt-1 text-[11px] font-semibold leading-relaxed text-rose-700">{selectedDoc.reason}</p>
                 </div>
               ) : null}
-              <button onClick={() => setSelectedDoc(null)} className="w-full h-11 bg-slate-900 text-white rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">
-                Close Viewer
-              </button>
+              {selectedDoc.hasExpiryDate && selectedDoc.hasDocument && (
+                <div className="text-left space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Expiry Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editingExpiryDate}
+                    disabled={isSavingExpiry}
+                    onChange={(e) => setEditingExpiryDate(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-[13px] font-bold text-slate-900 focus:outline-none focus:border-slate-400 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
+              )}
+              {selectedDoc.hasExpiryDate && !selectedDoc.hasDocument && (
+                <p className="text-[10px] font-semibold text-amber-600 bg-amber-50 rounded-lg p-2 text-left">
+                  Please upload the document photo first to edit the expiry date.
+                </p>
+              )}
+              {selectedDoc.hasExpiryDate && selectedDoc.hasDocument ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedDoc(null)}
+                    disabled={isSavingExpiry}
+                    className="flex-1 h-11 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveExpiry}
+                    disabled={isSavingExpiry}
+                    className="flex-1 h-11 bg-[#009b72] hover:bg-[#00805c] text-white rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSavingExpiry ? <Loader2 size={14} className="animate-spin" /> : 'Save Expiry'}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setSelectedDoc(null)} className="w-full h-11 bg-slate-900 text-white rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">
+                  Close Viewer
+                </button>
+              )}
             </motion.div>
           </div>
         ) : null}

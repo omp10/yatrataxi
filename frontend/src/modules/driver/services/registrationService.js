@@ -290,9 +290,10 @@ export const getDriverVehicleTypes = async () => {
     authConfig?.headers?.Authorization || authConfig?.headers?.authorization,
   );
 
+  let response;
   if (hasDriverAuthorization) {
     try {
-      return await api.get("/admin/types/vehicle-types", authConfig);
+      response = await api.get("/admin/types/vehicle-types", authConfig);
     } catch (error) {
       const status = Number(error?.response?.status || 0);
       if (status && status !== 401 && status !== 403) {
@@ -301,7 +302,31 @@ export const getDriverVehicleTypes = async () => {
     }
   }
 
-  return api.get("/users/vehicle-types");
+  if (!response) {
+    response = await api.get("/users/vehicle-types");
+  }
+
+  if (response) {
+    if (response.data?.results && Array.isArray(response.data.results)) {
+      response.data.results = response.data.results.filter(
+        (type) => type && type.active !== false && Number(type.status ?? 1) !== 0
+      );
+    } else if (response.data && Array.isArray(response.data)) {
+      response.data = response.data.filter(
+        (type) => type && type.active !== false && Number(type.status ?? 1) !== 0
+      );
+    } else if (response.results && Array.isArray(response.results)) {
+      response.results = response.results.filter(
+        (type) => type && type.active !== false && Number(type.status ?? 1) !== 0
+      );
+    } else if (Array.isArray(response)) {
+      response = response.filter(
+        (type) => type && type.active !== false && Number(type.status ?? 1) !== 0
+      );
+    }
+  }
+
+  return response;
 };
 
 export const getDriverApprovalStatus = () => {

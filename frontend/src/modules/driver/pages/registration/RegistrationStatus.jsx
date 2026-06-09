@@ -182,7 +182,7 @@ const RegistrationStatus = () => {
           return;
         }
 
-        if (error?.status === 401) {
+        if (error?.status === 401 || error?.status === 403) {
           redirectToDriverLogin(navigate);
           requestInFlightRef.current = false;
           return;
@@ -432,6 +432,12 @@ const getStatusColor = (status) => {
                 className="w-full h-14 bg-white border border-slate-200 text-slate-600 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold active:scale-95 transition-all"
             >
                 Contact Support
+            </button>
+            <button 
+                onClick={() => redirectToDriverLogin(navigate)}
+                className="w-full h-14 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold active:scale-95 transition-all"
+            >
+                Back to Login
             </button>
         </div>
       </main>

@@ -5780,7 +5780,10 @@ export const listPublicVehicleCatalog = async () => {
     return publicVehicleCatalogCache.value;
   }
 
-  const items = await Vehicle.find()
+  const items = await Vehicle.find({
+    active: { $ne: false },
+    status: { $ne: 0 },
+  })
     .select('name short_description description transport_type dispatch_type icon_types delivery_category delivery_distance_pricing capacity image icon map_icon status active')
     .sort({ createdAt: -1 })
     .lean();

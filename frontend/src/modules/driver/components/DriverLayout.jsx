@@ -5,6 +5,7 @@ import {
     getCurrentDriver,
     getLocalDriverToken,
     getStoredDriverRole,
+    clearDriverAuthState,
 } from '../services/registrationService';
 import DriverRideRequestListener from './DriverRideRequestListener';
 
@@ -263,7 +264,8 @@ const DriverLayout = () => {
                 }
 
                 if (error?.status === 403) {
-                    navigate(getPendingDriverRoute(currentPath, authenticatedRole), { replace: true });
+                    clearDriverAuthState();
+                    redirectToDriverLogin(navigate, currentPath, authenticatedRole);
                     return;
                 }
 

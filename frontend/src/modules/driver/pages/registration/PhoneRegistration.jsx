@@ -170,6 +170,10 @@ const PhoneRegistration = () => {
                     if (isLoginPage) {
                         if (!isAccountNotFoundError(requestError)) throw requestError;
 
+                        if (['bus_driver', 'service_center', 'service_center_staff'].includes(requestRole)) {
+                            throw new Error('You are not registered. Please contact your administrator.');
+                        }
+
                         response = await sendDriverOtp({ phone, role: requestRole });
                         loginMode = false;
                     } else {
@@ -353,17 +357,7 @@ const PhoneRegistration = () => {
                         >
                             Need help? <span className="text-amber-500">Contact Support</span>
                         </button>
-                        {!isOwnerPortal && (
-                            <div className="mt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/taxi/agent/login')}
-                                    className="text-[#0f6aa8] text-sm font-black uppercase tracking-[0.18em] hover:underline"
-                                >
-                                    Agent login
-                                </button>
-                            </div>
-                        )}
+
                     </div>
                 </motion.div>
 

@@ -3324,9 +3324,7 @@ export const updateCurrentDriverDocument = async (req, res) => {
     "",
   ).trim().toLowerCase();
 
-  if (["verified", "approved"].includes(existingStatus)) {
-    throw new ApiError(409, "Verified documents cannot be re-uploaded");
-  }
+
 
   const updatedDocument = {
     ...(typeof existingDocument === "object" ? existingDocument : {}),
