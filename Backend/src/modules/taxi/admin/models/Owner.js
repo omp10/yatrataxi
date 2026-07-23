@@ -169,7 +169,7 @@ const ownerSchema = new mongoose.Schema(
       },
       reviewedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Admin',
+        ref: 'TaxiAdmin',
         default: null,
       },
       adminNote: {

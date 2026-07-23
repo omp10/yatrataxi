@@ -11,6 +11,7 @@ import { AgentWithdrawalRequest } from '../models/AgentWithdrawalRequest.js';
 import { BusService } from '../../admin/models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { BusBooking } from '../../user/models/BusBooking.js';
+import { PoolingBooking } from '../../admin/models/PoolingBooking.js';
 import { User } from '../../user/models/User.js';
 import { Ride } from '../../user/models/Ride.js';
 import { getRideDetails, createRideRecord } from '../../services/rideService.js';
@@ -157,12 +158,14 @@ const serializeAgentRideBooking = (ride = {}) => ({
   status: ride.status || '',
   liveStatus: ride.liveStatus || '',
   fare: Number(ride.fare || 0),
+  amount: Number(ride.fare || 0),
   paymentMethod: ride.paymentMethod || '',
   pickupAddress: ride.pickupAddress || '',
   dropAddress: ride.dropAddress || '',
   customerName: ride.agentMeta?.customerName || '',
   customerPhone: ride.agentMeta?.customerPhone || '',
   commissionAmount: Number(ride.agentMeta?.commissionAmount || 0),
+  commissionMode: ride.agentMeta?.commissionMode || '',
   commissionCreditedAt: ride.agentMeta?.commissionCreditedAt || null,
   createdAt: ride.createdAt || null,
 });
@@ -184,6 +187,29 @@ const serializeAgentBusBooking = (booking = {}) => ({
     operatorName: booking.routeSnapshot?.operatorName || '',
   },
   commissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
+  commissionMode: booking.agentMeta?.commissionMode || '',
+  commissionCreditedAt: booking.agentMeta?.commissionCreditedAt || null,
+  createdAt: booking.createdAt || null,
+});
+
+const serializeAgentPoolingBooking = (booking = {}) => ({
+  id: String(booking._id || ''),
+  kind: 'pooling',
+  bookingCode: booking.bookingId || '',
+  status: booking.bookingStatus || '',
+  travelDate: booking.travelDate || '',
+  amount: Number(booking.fare || 0),
+  seatLabels: Array.isArray(booking.selectedSeats) ? booking.selectedSeats : [],
+  customerName: booking.user?.name || '',
+  customerPhone: booking.user?.phone || '',
+  route: {
+    fromCity: booking.pickupLabel || booking.route?.originLabel || '',
+    toCity: booking.dropLabel || booking.route?.destinationLabel || '',
+    busName: booking.route?.routeName || '',
+    operatorName: '',
+  },
+  commissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
+  commissionMode: booking.agentMeta?.commissionMode || '',
   commissionCreditedAt: booking.agentMeta?.commissionCreditedAt || null,
   createdAt: booking.createdAt || null,
 });
@@ -572,8 +598,46 @@ export const getAgentReferralSummary = async (req, res) => {
   });
 };
 
+// Commission actually credited per channel, summed from the bookings themselves so
+// the dashboard cannot drift from what was paid into the wallet.
+const summariseAgentCommission = async (agentId) => {
+  const match = { 'agentMeta.bookedByAgentId': new mongoose.Types.ObjectId(String(agentId)) };
+  const group = {
+    _id: '$agentMeta.commissionMode',
+    commission: { $sum: '$agentMeta.commissionAmount' },
+    bookings: { $sum: 1 },
+  };
+
+  const [rideRows, busRows, poolRows] = await Promise.all([
+    Ride.aggregate([{ $match: match }, { $group: group }]),
+    BusBooking.aggregate([{ $match: match }, { $group: group }]),
+    PoolingBooking.aggregate([{ $match: match }, { $group: group }]),
+  ]);
+
+  const pick = (rows, mode) => {
+    const row = rows.find((item) => String(item._id || 'direct') === mode);
+    return { commission: roundMoney(row?.commission || 0), bookings: Number(row?.bookings || 0) };
+  };
+
+  const channels = {
+    directRides: pick(rideRows, 'direct'),
+    referralRides: pick(rideRows, 'referral'),
+    directBuses: pick(busRows, 'direct'),
+    referralBuses: pick(busRows, 'referral'),
+    directPooling: pick(poolRows, 'direct'),
+    referralPooling: pick(poolRows, 'referral'),
+  };
+
+  const all = Object.values(channels);
+  return {
+    channels,
+    totalCommission: roundMoney(all.reduce((sum, item) => sum + item.commission, 0)),
+    totalBookings: all.reduce((sum, item) => sum + item.bookings, 0),
+  };
+};
+
 export const getAgentDashboard = async (req, res) => {
-  const [agent, wallet, rides, buses] = await Promise.all([
+  const [agent, wallet, rides, buses, commission] = await Promise.all([
     Agent.findById(req.auth.sub).lean(),
     listAgentWalletTransactions(req.auth.sub),
     Ride.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
@@ -584,6 +648,7 @@ export const getAgentDashboard = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(5)
       .lean(),
+    summariseAgentCommission(req.auth.sub),
   ]);
 
   if (!agent) {
@@ -597,6 +662,7 @@ export const getAgentDashboard = async (req, res) => {
       wallet,
       recentRides: rides.map(serializeAgentRideBooking),
       recentBusBookings: buses.map(serializeAgentBusBooking),
+      commission,
       quickStats: {
         totalDirectRideBookings: Number(agent.metrics?.directRideBookings || 0),
         totalReferredRideBookings: Number(agent.metrics?.referredRideBookings || 0),
@@ -609,20 +675,40 @@ export const getAgentDashboard = async (req, res) => {
 };
 
 export const listAgentBookings = async (req, res) => {
-  const [rides, buses] = await Promise.all([
+  const [rides, buses, pooling] = await Promise.all([
     Ride.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
       .sort({ createdAt: -1 })
       .lean(),
     BusBooking.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
       .sort({ createdAt: -1 })
       .lean(),
+    PoolingBooking.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
+      .sort({ createdAt: -1 })
+      .populate('route', 'routeName originLabel destinationLabel')
+      .populate('user', 'name phone')
+      .lean(),
   ]);
+
+  const serializedRides = rides.map(serializeAgentRideBooking);
+  const serializedBuses = buses.map(serializeAgentBusBooking);
+  const serializedPooling = pooling.map(serializeAgentPoolingBooking);
+  const everything = [...serializedRides, ...serializedBuses, ...serializedPooling];
 
   res.json({
     success: true,
     data: {
-      rides: rides.map(serializeAgentRideBooking),
-      buses: buses.map(serializeAgentBusBooking),
+      rides: serializedRides,
+      buses: serializedBuses,
+      pooling: serializedPooling,
+      summary: {
+        totalBookings: everything.length,
+        totalCommission: roundMoney(
+          everything.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
+        ),
+        totalBookingValue: roundMoney(
+          everything.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+        ),
+      },
     },
   });
 };

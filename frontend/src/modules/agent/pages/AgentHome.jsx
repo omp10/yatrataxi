@@ -31,6 +31,11 @@ const AgentHome = () => {
 
   const quickStats = dashboard?.quickStats || {};
   const wallet = dashboard?.wallet || {};
+  const commission = dashboard?.commission || {};
+  const channels = commission.channels || {};
+  // lifetimeEarned is the wallet's own running total; the per-channel sum is derived
+  // from the bookings. They should agree -- prefer the wallet as the headline figure.
+  const totalCommission = wallet.lifetimeEarned ?? commission.totalCommission ?? 0;
 
   return (
     <div className="space-y-4">
@@ -69,6 +74,13 @@ const AgentHome = () => {
           <IndianRupee size={18} className="text-[#0f6aa8]" />
           <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">Wallet Balance</p>
           <p className="mt-2 text-2xl font-black tracking-tight text-[#143a5a]">{formatMoney(wallet.balance)}</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-400">Paid out {formatMoney(wallet.lifetimePaidOut)}</p>
+        </div>
+        <div className={cardClass}>
+          <IndianRupee size={18} className="text-emerald-600" />
+          <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">Commission Earned</p>
+          <p className="mt-2 text-2xl font-black tracking-tight text-emerald-600">{formatMoney(totalCommission)}</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-400">{commission.totalBookings || 0} booking(s)</p>
         </div>
         <div className={cardClass}>
           <UsersRound size={18} className="text-[#0f6aa8]" />
@@ -81,23 +93,31 @@ const AgentHome = () => {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">Commission Mix</p>
-            <h3 className="mt-2 text-xl font-black tracking-tight text-[#143a5a]">Direct and referral earnings</h3>
+            <h3 className="mt-2 text-xl font-black tracking-tight text-[#143a5a]">Commission by channel</h3>
           </div>
         </div>
         <div className="mt-5 grid gap-3">
           {[
-            { label: 'Direct rides', value: quickStats.totalDirectRideBookings || 0 },
-            { label: 'Referral rides', value: quickStats.totalReferredRideBookings || 0 },
-            { label: 'Direct buses', value: quickStats.totalDirectBusBookings || 0 },
-            { label: 'Referral buses', value: quickStats.totalReferredBusBookings || 0 },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between rounded-[22px] bg-[#eef7ff] px-4 py-3">
-              <span className="text-sm font-bold text-[#143a5a]">{item.label}</span>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-[#0f6aa8]">
-                {item.value}
-              </span>
-            </div>
-          ))}
+            { label: 'Rides booked by you', key: 'directRides' },
+            { label: 'Rides from your referrals', key: 'referralRides' },
+            { label: 'Bus seats booked by you', key: 'directBuses' },
+            { label: 'Bus seats from your referrals', key: 'referralBuses' },
+            { label: 'Pooling booked by you', key: 'directPooling' },
+            { label: 'Pooling from your referrals', key: 'referralPooling' },
+          ].map((item) => {
+            const row = channels[item.key] || { commission: 0, bookings: 0 };
+            return (
+              <div key={item.key} className="flex items-center justify-between rounded-[22px] bg-[#eef7ff] px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-[#143a5a]">{item.label}</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{row.bookings} booking(s)</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-600">
+                  {formatMoney(row.commission)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </section>
 

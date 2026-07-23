@@ -46,6 +46,9 @@ export const env = {
   port: Number.isInteger(Number(process.env.PORT)) ? Number(process.env.PORT) : 4000,
   mongoUri: process.env.MONGODB_URI,
   mongoDbName: process.env.MONGODB_DB_NAME || 'appzeto_taxi',
+  // Escape hatch for the legacy tokenless "open user" access that let any request
+  // act as an arbitrary user. Off unless explicitly set; do not enable in production.
+  allowOpenUserAccess: String(process.env.ALLOW_OPEN_USER_ACCESS || '').trim().toLowerCase() === 'true',
   jwtSecret: resolvedJwtSecret,
   jwtExpiresIn: resolvedJwtExpiresIn,
   corsOrigin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '*',

@@ -44,9 +44,12 @@ const ROUTE = {
     { label: 'Afternoon', departureTime: '13:00', arrivalTime: '15:00' },
     { label: 'Evening', departureTime: '18:00', arrivalTime: '20:00' },
   ],
+  // Stops belong to the bus service, not to an individual schedule, so they carry no
+  // clock time -- pinning one would contradict two of the three daily runs. Departure
+  // and arrival come from the selected schedule.
   stops: [
-    { city: 'Indore', pointName: 'Sarwate Bus Stand', stopType: 'pickup', departureTime: '07:00' },
-    { city: 'Ujjain', pointName: 'Dewas Gate', stopType: 'drop', arrivalTime: '09:00' },
+    { city: 'Indore', pointName: 'Sarwate Bus Stand', stopType: 'pickup' },
+    { city: 'Ujjain', pointName: 'Dewas Gate', stopType: 'drop' },
   ],
 };
 
@@ -111,7 +114,7 @@ const buildSchedules = () =>
       blueprint: {
         templateKey: 'seater_2_2',
         layoutConfig: {
-          lower: { enabled: true, rows: ROWS, leftSeats: LEFT_SEATS, rightSeats: RIGHT_SEATS, seatType: 'seater' },
+          lower: { enabled: true, rows: ROWS, leftSeats: LEFT_SEATS, rightSeats: RIGHT_SEATS, seatType: 'seat' },
           upper: { enabled: false },
         },
         lowerDeck,

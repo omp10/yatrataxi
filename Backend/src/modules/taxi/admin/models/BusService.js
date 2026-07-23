@@ -321,13 +321,13 @@ const busServiceSchema = new mongoose.Schema(
     },
     ownerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Owner',
+      ref: 'TaxiOwner',
       default: null,
       index: true,
     },
     ownerDriverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Driver',
+      ref: 'TaxiDriver',
       default: null,
       index: true,
     },

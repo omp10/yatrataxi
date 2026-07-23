@@ -2,6 +2,7 @@ import { Admin } from '../admin/models/Admin.js';
 import { Owner } from '../admin/models/Owner.js';
 import { ServiceStore } from '../admin/models/ServiceStore.js';
 import { ServiceCenterStaff } from '../admin/models/ServiceCenterStaff.js';
+import { env } from '../../../config/env.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { Agent } from '../agent/models/Agent.js';
 import { Driver } from '../driver/models/Driver.js';
@@ -189,6 +190,13 @@ export const authenticateOrResolveUser = (allowedRoles = ['user']) => async (req
   }
 
   try {
+    // Without a token this used to fall back to "any user" -- with no x-user-id it
+    // resolved the oldest account, and with one it impersonated that account
+    // outright. That is a full authentication bypass, so it is now opt-in only.
+    if (!env.allowOpenUserAccess) {
+      throw new ApiError(401, 'Authorization token is required');
+    }
+
     if (!allowedRoles.includes('user')) {
       throw new ApiError(401, 'Authorization token is required');
     }
