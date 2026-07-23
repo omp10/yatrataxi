@@ -21,11 +21,18 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { userService } from '../../services/userService';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 import toast from 'react-hot-toast';
 import { schedulePoolingBookingReminders } from '../../utils/upcomingRideReminderService';
 
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
+
+const isEnabledFlag = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  return ['1', 'true', 'yes', 'on', 'enabled'].includes(String(value || '').trim().toLowerCase());
+};
 
 const loadRazorpayScript = () =>
   new Promise((resolve) => {
@@ -87,6 +94,9 @@ const PoolingConfirm = () => {
   const navigate = useNavigate();
   const { route, vehicle, selectedSeats, totalFare, fareBreakdown: routeFareBreakdown, travelDate, schedule, pickupStop, dropStop } = location.state || {};
 
+  const { settings } = useSettings();
+  const cashAllowed = isEnabledFlag(settings.transportRide?.enable_cash_seat_booking);
+
   const [isBooking, setIsBooking] = useState(false);
   const [isBooked, setIsBooked] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
@@ -131,6 +141,30 @@ const PoolingConfirm = () => {
       </div>
     );
   }
+
+  const bookingPayload = () => ({
+    routeId: route._id,
+    vehicleId: vehicle._id,
+    scheduleId: schedule.id,
+    travelDate,
+    selectedSeats,
+    pickupStopId: pickupStop.id,
+    dropStopId: dropStop.id,
+  });
+
+  const handleCashConfirm = async () => {
+    setIsBooking(true);
+
+    try {
+      const response = await userService.createPoolingBooking(bookingPayload());
+      setConfirmedBooking(unwrapPayload(response));
+      setIsBooked(true);
+      toast.success('Seat booked, pay the driver in cash');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || 'Unable to book this seat for cash payment');
+      setIsBooking(false);
+    }
+  };
 
   const handleConfirm = async () => {
     setIsBooking(true);
@@ -216,6 +250,7 @@ const PoolingConfirm = () => {
     }
   };
 
+  const isCashDue = confirmedBooking?.payment?.provider === 'cash' && confirmedBooking?.paymentStatus !== 'paid';
   const vehicleImage = (vehicle.images && vehicle.images.length > 0) ? vehicle.images[0] : taxiImg;
   const fareBreakdown = routeFareBreakdown || computePoolingFareBreakdown(route, vehicle, selectedSeats);
 
@@ -291,16 +326,18 @@ const PoolingConfirm = () => {
                     </div>
                   </div>
                   <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-5 transition-all hover:bg-slate-50">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Amount Paid</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                      {isCashDue ? 'Amount Due' : 'Amount Paid'}
+                    </p>
                     <div className="mt-4 flex items-start gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm">
                         <Receipt size={16} />
                       </div>
                       <div>
                         <p className="text-lg font-black text-slate-900">₹{confirmedBooking?.fare || fareBreakdown.totalFare || totalFare}</p>
-                        <p className="mt-0.5 text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                        <p className={`mt-0.5 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${isCashDue ? 'text-amber-600' : 'text-emerald-600'}`}>
                           <ShieldCheck size={10} />
-                          PAID
+                          {isCashDue ? 'PAY DRIVER IN CASH' : 'PAID'}
                         </p>
                       </div>
                     </div>
@@ -630,6 +667,17 @@ const PoolingConfirm = () => {
                     <div className="absolute inset-0 translate-x-[-100%] animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
                   )}
                 </button>
+
+                {cashAllowed ? (
+                  <button
+                    type="button"
+                    onClick={handleCashConfirm}
+                    disabled={isBooking}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-[26px] py-4 text-xs font-black uppercase tracking-[0.2em] text-white/80 transition-all hover:text-white disabled:opacity-50"
+                  >
+                    Book &amp; Pay Cash to Driver
+                  </button>
+                ) : null}
               </div>
             </div>
           </>

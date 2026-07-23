@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Loader2, QrCode, ScanLine, ShieldAlert, Ticket, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { checkInBusTicketByQr } from '../services/busDriverService';
+import { useQrScanner } from '../../../shared/hooks/useQrScanner';
 
 const unwrap = (response) => response?.data?.data || response?.data || response || null;
 
@@ -11,30 +12,9 @@ const getSeatLabelText = (seats = []) =>
 
 const BusDriverTicketScan = () => {
   const navigate = useNavigate();
-  const videoRef = useRef(null);
-  const scanLoopRef = useRef(null);
-  const streamRef = useRef(null);
   const [manualPayload, setManualPayload] = useState('');
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraError, setCameraError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [scanResult, setScanResult] = useState(null);
-
-  const stopCamera = () => {
-    if (scanLoopRef.current) {
-      window.clearInterval(scanLoopRef.current);
-      scanLoopRef.current = null;
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-
-    setCameraActive(false);
-  };
-
-  useEffect(() => () => stopCamera(), []);
 
   const submitPayload = async (payload) => {
     const qrValue = String(payload || '').trim();
@@ -55,52 +35,20 @@ const BusDriverTicketScan = () => {
     }
   };
 
-  const startCamera = async () => {
-    setCameraError('');
+  const { videoRef, cameraActive, cameraError, startCamera, stopCamera } = useQrScanner({
+    onDetect: submitPayload,
+    paused: submitting,
+  });
+
+  const handleStartCamera = async () => {
     setScanResult(null);
-
-    if (!('BarcodeDetector' in window)) {
-      setCameraError('Camera QR scanning is not supported in this browser. Paste the QR payload below.');
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      setCameraActive(true);
-
-      scanLoopRef.current = window.setInterval(async () => {
-        if (!videoRef.current || submitting) return;
-
-        try {
-          const codes = await detector.detect(videoRef.current);
-          const value = codes?.[0]?.rawValue;
-          if (value) {
-            await submitPayload(value);
-          }
-        } catch {
-          setCameraError('Unable to read the QR. Try better light or paste the payload manually.');
-        }
-      }, 700);
-    } catch {
-      setCameraError('Camera permission was blocked. Paste the QR payload below to continue.');
-      stopCamera();
-    }
+    await startCamera();
   };
 
   const booking = scanResult?.booking || {};
   const passenger = scanResult?.passenger || booking.passenger || {};
   const route = scanResult?.route || booking.routeSnapshot || {};
+  const cashDue = booking.payment?.provider === 'cash' && booking.payment?.status !== 'paid';
 
   return (
     <div className="min-h-screen bg-[#f6f1e8] text-slate-950">
@@ -154,7 +102,7 @@ const BusDriverTicketScan = () => {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={startCamera}
+              onClick={handleStartCamera}
               disabled={cameraActive || submitting}
               className="rounded-2xl bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-950 disabled:opacity-60"
             >
@@ -220,6 +168,15 @@ const BusDriverTicketScan = () => {
                 </p>
               </div>
             </div>
+
+            {cashDue ? (
+              <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">Collect Cash</p>
+                <p className="mt-1 text-lg font-black text-amber-900">
+                  ₹{Number(booking.amount || 0)} due from this passenger
+                </p>
+              </div>
+            ) : null}
           </section>
         ) : null}
 

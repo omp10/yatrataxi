@@ -306,7 +306,10 @@ const IncomingRideRequest = ({
                 </div>
                 <div>
                   <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Date</p>
-                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.travelDate || 'Today'}</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">
+                    {data.raw?.intercity?.travelDate || 'Today'}
+                    {data.raw?.intercity?.returnDate ? ` → ${data.raw.intercity.returnDate}` : ''}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Pax</p>

@@ -65,6 +65,7 @@ export const createDefaultBusinessSettings = () => ({
   },
   transport_ride: {
     enable_bus_service: '0',
+    enable_cash_seat_booking: '1',
     trip_dispatch_type: '1',
     maximum_time_for_accept_reject_bidding_ride: '60',
     maximum_time_for_find_drivers_for_bitting_ride: '300',

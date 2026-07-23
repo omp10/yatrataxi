@@ -263,6 +263,9 @@ const BusBookings = () => {
                     <div className="w-[1px] h-3 bg-slate-200" />
                     <div className="flex items-center gap-1.5">
                       <p className="text-[10px] font-black text-slate-900">{formatMoney(booking.amount, booking.currency)}</p>
+                      {booking.payment?.provider === 'cash' && booking.payment?.status !== 'paid' ? (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700">Cash</span>
+                      ) : null}
                     </div>
                   </div>
 

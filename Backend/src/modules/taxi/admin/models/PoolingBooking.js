@@ -125,6 +125,32 @@ const poolingBookingSchema = new mongoose.Schema(
         default: null,
       },
     },
+    agentMeta: {
+      bookedByAgentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiAgent',
+        default: null,
+        index: true,
+      },
+      customerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiUser',
+        default: null,
+      },
+      commissionAmount: {
+        type: Number,
+        default: 0,
+      },
+      commissionCreditedAt: {
+        type: Date,
+        default: null,
+      },
+      commissionMode: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+    },
   },
   { timestamps: true },
 );

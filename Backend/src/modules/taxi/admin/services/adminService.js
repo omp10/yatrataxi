@@ -9571,7 +9571,9 @@ export const buildDriverDutyReport = async (query = {}) => {
       return created[key] || {};
     }
 
-    return settings[key] || {};
+    // Defaults sit underneath so keys added in a later release show up for existing
+    // installs instead of reading as unset; anything the admin saved still wins.
+    return { ...(defaultFactory()[key] || {}), ...(settings[key] || {}) };
   };
 
   export const getGeneralSettings = async (category) => {

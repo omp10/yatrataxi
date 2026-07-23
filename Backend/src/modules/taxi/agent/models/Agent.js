@@ -127,6 +127,10 @@ const agentSchema = new mongoose.Schema(
         type: commissionRuleSchema,
         default: () => ({ enabled: true, type: 'percentage', value: 4 }),
       },
+      pooling: {
+        type: commissionRuleSchema,
+        default: () => ({ enabled: true, type: 'percentage', value: 4 }),
+      },
     },
     kycStatus: {
       type: String,

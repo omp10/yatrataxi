@@ -100,6 +100,11 @@ const rideSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      returnDate: {
+        type: String,
+        default: '',
+        trim: true,
+      },
       passengers: {
         type: Number,
         default: 1,

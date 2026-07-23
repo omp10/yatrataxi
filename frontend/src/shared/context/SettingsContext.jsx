@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS_CONTEXT = {
     },
     transportRide: {
       enable_bus_service: '0',
+      enable_cash_seat_booking: '1',
     },
     bidRide: {
       bidding_low_percentage: '10',
@@ -75,6 +76,7 @@ const normalizeBooleanSetting = (value, fallback = '0') => {
 const normalizeTransportRideSettings = (settings = {}) => ({
   ...settings,
   enable_bus_service: normalizeBooleanSetting(settings?.enable_bus_service, '0'),
+  enable_cash_seat_booking: normalizeBooleanSetting(settings?.enable_cash_seat_booking, '1'),
 });
 
 const normalizeHexColor = (value, fallback = '') => {

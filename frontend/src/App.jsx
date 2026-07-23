@@ -65,6 +65,7 @@ const ParcelTracking = lazy(() => import('./modules/user/pages/parcel/ParcelTrac
 const UserNotifications = lazy(() => import('./modules/user/pages/Notifications'));
 const PromoCodes = lazy(() => import('./modules/user/pages/PromoCodes'));
 const UserReferral = lazy(() => import('./modules/user/pages/Referral'));
+const UserScanAgentQr = lazy(() => import('./modules/user/pages/ScanAgentQr'));
 
 // Phase 3 — Safety & Support
 const SOSContacts = lazy(() => import('./modules/user/pages/safety/SOSContacts'));
@@ -327,6 +328,8 @@ const AdminAgentManager = lazy(() => import('./modules/admin/pages/agents/AgentM
 const AdminAgentDetails = lazy(() => import('./modules/admin/pages/agents/AgentDetails'));
 const AdminPendingAgents = lazy(() => import('./modules/admin/pages/agents/PendingAgents'));
 const AdminAgentNeededDocuments = lazy(() => import('./modules/admin/pages/agents/AgentNeededDocuments'));
+const AdminAgentBookings = lazy(() => import('./modules/admin/pages/agents/AgentBookings'));
+const AdminAgentCommissionDefaults = lazy(() => import('./modules/admin/pages/agents/AgentCommissionDefaults'));
 const AdminAgentWithdrawalRequests = lazy(() => import('./modules/admin/pages/agents/AgentWithdrawalRequests'));
 
 // Masters Management
@@ -792,6 +795,7 @@ function App() {
               <Route path="/notifications" element={<UserNotifications />} />
               <Route path="/promo" element={<PromoCodes />} />
               <Route path="/referral" element={<UserReferral />} />
+              <Route path="/scan-agent" element={<UserScanAgentQr />} />
 
               <Route path="/profile/settings" element={<ProfileSettings />} />
               <Route path="/profile/payments" element={<PaymentSettings />} />
@@ -956,6 +960,7 @@ function App() {
               />
               <Route path="/taxi/user/promo" element={<PromoCodes />} />
               <Route path="/taxi/user/referral" element={<UserReferral />} />
+              <Route path="/taxi/user/scan-agent" element={<UserScanAgentQr />} />
 
               <Route
                 path="/taxi/user/profile/settings"
@@ -1202,6 +1207,8 @@ function App() {
                 <Route path="agents" element={<AdminAgentManager />} />
                 <Route path="agents/documents" element={<AdminAgentNeededDocuments />} />
                 <Route path="agents/pending" element={<AdminPendingAgents />} />
+                <Route path="agents/bookings" element={<AdminAgentBookings />} />
+                <Route path="agents/commission-defaults" element={<AdminAgentCommissionDefaults />} />
                 <Route path="agents/withdrawals" element={<AdminAgentWithdrawalRequests />} />
                 <Route path="agents/:id" element={<AdminAgentDetails />} />
 

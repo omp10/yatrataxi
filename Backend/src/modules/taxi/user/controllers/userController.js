@@ -784,6 +784,13 @@ const ensureBusServiceEnabled = async () => {
   }
 };
 
+const ensureCashSeatBookingEnabled = async () => {
+  const transportSettings = await getTransportRideSettings();
+  if (String(transportSettings.enable_cash_seat_booking || '0') !== '1') {
+    throw new ApiError(403, 'Cash payment is currently disabled for seat bookings');
+  }
+};
+
 const cleanupExpiredBusSeatHolds = async () => {
   const now = new Date();
 
@@ -1375,6 +1382,56 @@ const findUserByReferralCode = async (referralCode) => {
   }
 
   return User.findOne({ referralCode: normalizedCode });
+};
+
+// Links an already-registered customer to an agent from a scanned agent QR. The
+// link is one-time on purpose: a customer already attributed to an agent must not
+// be reassigned by scanning a competitor's code.
+export const linkAgentByReferralCode = async (req, res) => {
+  const rawValue = toCleanString(req.body?.referralCode || req.body?.qrValue);
+  if (!rawValue) {
+    throw new ApiError(400, 'Agent code is required');
+  }
+
+  // The QR encodes a signup link, so accept either the bare code or the full URL.
+  let referralCode = rawValue;
+  try {
+    const parsed = new URL(rawValue);
+    referralCode = parsed.searchParams.get('ref') || rawValue;
+  } catch {
+    // not a URL, treat the value as the code itself
+  }
+
+  const agent = await findAgentByReferralCode(referralCode);
+  if (!agent || agent.active === false || String(agent.status || '').toLowerCase() !== 'active') {
+    throw new ApiError(404, 'No active agent found for this code');
+  }
+
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.referredByAgent) {
+    const isSameAgent = String(user.referredByAgent) === String(agent._id);
+    throw new ApiError(409, isSameAgent
+      ? 'You are already linked to this agent'
+      : 'Your account is already linked to another agent');
+  }
+
+  user.referredByAgent = agent._id;
+  await user.save();
+  await Agent.updateOne({ _id: agent._id }, { $inc: { 'metrics.totalCustomers': 1 } });
+
+  res.json({
+    success: true,
+    data: {
+      agentId: String(agent._id),
+      agentName: agent.name || '',
+      agentPhone: agent.phone || '',
+      referralCode: agent.referralCode || '',
+    },
+  });
 };
 
 const findAgentByReferralCode = async (referralCode) => {
@@ -3095,10 +3152,48 @@ export const getBusSeatLayout = async (req, res) => {
   });
 };
 
+// Credits the referring agent once a bus booking is confirmed, whether it was paid
+// online or booked against cash. No-op when the customer has no referring agent.
+const creditBusReferralCommission = async (booking) => {
+  const user = await User.findById(booking.userId).select('referredByAgent').lean();
+  if (!user?.referredByAgent) {
+    return;
+  }
+
+  const commissionResult = await creditAgentCommission({
+    agentId: user.referredByAgent,
+    bookingType: 'bus',
+    commissionMode: 'referral',
+    grossAmount: booking.amount || 0,
+    referenceKey: `agent:bus:${String(booking._id)}`,
+    title: `Referral bus booking commission for ${booking.bookingCode}`,
+    metadata: {
+      bookingId: String(booking._id),
+      bookingCode: booking.bookingCode,
+      userId: String(booking.userId || ''),
+    },
+  });
+
+  if (commissionResult?.transaction) {
+    booking.agentMeta = {
+      ...(booking.agentMeta || {}),
+      bookedByAgentId: user.referredByAgent,
+      customerId: booking.userId,
+      customerName: booking.passenger?.name || '',
+      customerPhone: booking.passenger?.phone || '',
+      commissionAmount: Number(commissionResult.transaction.amount || 0),
+      commissionCreditedAt: commissionResult.transaction.createdAt || new Date(),
+      commissionMode: 'referral',
+    };
+    await booking.save();
+  }
+};
+
 export const createBusBookingOrder = async (req, res) => {
   await ensureBusServiceEnabled();
   await cleanupExpiredBusSeatHolds();
 
+  const isCashBooking = String(req.body?.paymentMethod || '').trim().toLowerCase() === 'cash';
   const userId = req.auth?.sub;
   const busServiceId = String(req.body?.busServiceId || '');
   const scheduleId = toCleanString(req.body?.scheduleId);
@@ -3152,12 +3247,18 @@ export const createBusBookingOrder = async (req, res) => {
     throw new ApiError(400, 'Bus fare is not configured');
   }
 
-  const { keyId, keySecret } = await resolveRazorpayCredentials();
+  if (isCashBooking) {
+    await ensureCashSeatBookingEnabled();
+  }
+
+  const { keyId, keySecret } = isCashBooking
+    ? { keyId: '', keySecret: '' }
+    : await resolveRazorpayCredentials();
   const amountPaise = Math.round(amount * 100);
   const compactUserId = String(userId || '').replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'usr';
   const receipt = `ubus_${compactUserId}_${Date.now().toString(36)}`;
 
-  const order = await razorpayRequest({
+  const order = isCashBooking ? null : await razorpayRequest({
     method: 'POST',
     path: '/orders',
     body: {
@@ -3176,7 +3277,9 @@ export const createBusBookingOrder = async (req, res) => {
     keySecret,
   });
 
-  const expiresAt = new Date(Date.now() + BUS_HOLD_MINUTES * 60 * 1000);
+  // Cash bookings confirm immediately and hold their seats permanently; the fare is
+  // collected by the driver and settled when the ticket is scanned at boarding.
+  const expiresAt = isCashBooking ? null : new Date(Date.now() + BUS_HOLD_MINUTES * 60 * 1000);
   const booking = await BusBooking.create({
     userId,
     busServiceId,
@@ -3188,7 +3291,7 @@ export const createBusBookingOrder = async (req, res) => {
     passenger,
     amount,
     currency: busService.fareCurrency || 'INR',
-    status: 'pending',
+    status: isCashBooking ? 'confirmed' : 'pending',
     expiresAt,
     routeSnapshot: {
       originCity: busService.route?.originCity || '',
@@ -3204,11 +3307,9 @@ export const createBusBookingOrder = async (req, res) => {
       driverName: busService.driverName || '',
       driverPhone: busService.driverPhone || '',
     },
-    payment: {
-      provider: 'razorpay',
-      orderId: order.id,
-      status: 'created',
-    },
+    payment: isCashBooking
+      ? { provider: 'cash', status: 'pending' }
+      : { provider: 'razorpay', orderId: order.id, status: 'created' },
   });
 
   try {
@@ -3221,7 +3322,7 @@ export const createBusBookingOrder = async (req, res) => {
         travelDate,
         seatId,
         holdToken: booking.bookingCode,
-        status: 'held',
+        status: isCashBooking ? 'booked' : 'held',
         expiresAt,
       })),
       { ordered: true },
@@ -3232,6 +3333,20 @@ export const createBusBookingOrder = async (req, res) => {
       throw new ApiError(409, 'One or more selected seats were just booked by someone else');
     }
     throw error;
+  }
+
+  if (isCashBooking) {
+    await creditBusReferralCommission(booking);
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        paymentMethod: 'cash',
+        amount,
+        currency: busService.fareCurrency || 'INR',
+        booking: serializeBusBooking(booking, busService),
+      },
+    });
   }
 
   res.status(201).json({
@@ -3334,36 +3449,7 @@ export const verifyBusBookingPayment = async (req, res) => {
     },
   );
 
-  const user = await User.findById(req.auth?.sub).select('referredByAgent').lean();
-  if (user?.referredByAgent) {
-    const commissionResult = await creditAgentCommission({
-      agentId: user.referredByAgent,
-      bookingType: 'bus',
-      commissionMode: 'referral',
-      grossAmount: booking.amount || 0,
-      referenceKey: `agent:bus:${String(booking._id)}`,
-      title: `Referral bus booking commission for ${booking.bookingCode}`,
-      metadata: {
-        bookingId: String(booking._id),
-        bookingCode: booking.bookingCode,
-        userId: String(req.auth?.sub || ''),
-      },
-    });
-
-    if (commissionResult?.transaction) {
-      booking.agentMeta = {
-        ...(booking.agentMeta || {}),
-        bookedByAgentId: user.referredByAgent,
-        customerId: booking.userId,
-        customerName: booking.passenger?.name || '',
-        customerPhone: booking.passenger?.phone || '',
-        commissionAmount: Number(commissionResult.transaction.amount || 0),
-        commissionCreditedAt: commissionResult.transaction.createdAt || new Date(),
-        commissionMode: 'referral',
-      };
-      await booking.save();
-    }
-  }
+  await creditBusReferralCommission(booking);
 
   res.status(201).json({
     success: true,

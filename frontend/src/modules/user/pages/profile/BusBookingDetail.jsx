@@ -158,6 +158,7 @@ const BusBookingDetail = () => {
   const canRate = Boolean(booking?.review?.canRate);
   const qrImageUrl = checkInQr?.qrDataUrl || '';
   const isCheckedIn = (checkInQr?.checkIn?.status || booking?.checkIn?.status) === 'checked_in';
+  const isCashDue = booking?.payment?.provider === 'cash' && booking?.payment?.status !== 'paid';
 
   const toggleSeat = (seatId) => {
     setSelectedSeatIds((current) => (
@@ -265,6 +266,14 @@ const BusBookingDetail = () => {
                   </div>
                 </div>
               </div>
+
+              {isCashDue ? (
+                <div className="px-6 py-3 bg-amber-50 border-b border-amber-100">
+                  <p className="text-[11px] font-black text-amber-800 uppercase tracking-wider">
+                    Cash on board · Pay {formatMoney(booking.amount, booking.currency)} to the driver
+                  </p>
+                </div>
+              ) : null}
 
               <div className="p-6 space-y-6">
                 {/* Route Header */}

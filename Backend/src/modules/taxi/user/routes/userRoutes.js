@@ -40,6 +40,7 @@ import {
   transferUserWallet,
   updateMyActiveRentalLocation,
   updateCurrentUser,
+  linkAgentByReferralCode,
   uploadUserProfileImage,
   verifyBusBookingPayment,
   verifyRentalAdvancePayment,
@@ -90,6 +91,7 @@ userRouter.post('/otp-login', asyncHandler(verifyUserPhoneForOtpLogin));
 userRouter.post('/fcm-token', authenticateOrResolveUser(['user']), asyncHandler(saveUserFcmToken));
 userRouter.get('/me', authenticateOrResolveUser(['user']), asyncHandler(getCurrentUser));
 userRouter.patch('/me', authenticateOrResolveUser(['user']), asyncHandler(updateCurrentUser));
+userRouter.post('/agent-link', authenticateOrResolveUser(['user']), asyncHandler(linkAgentByReferralCode));
 userRouter.get('/subscriptions/plans', authenticateOrResolveUser(['user']), asyncHandler(getAvailableSubscriptionPlans));
 userRouter.get('/subscriptions/me', authenticateOrResolveUser(['user']), asyncHandler(getMySubscriptions));
 userRouter.post('/subscriptions/purchase', authenticateOrResolveUser(['user']), asyncHandler(buySubscription));

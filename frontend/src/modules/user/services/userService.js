@@ -1,6 +1,10 @@
 import api from '../../../shared/api/axiosInstance';
 
 export const userService = {
+  linkAgentByQr: async (payload) => {
+    const response = await api.post('/users/agent-link', payload);
+    return response;
+  },
   getAppModules: async () => {
     const response = await api.get('/users/app-modules');
     return response;

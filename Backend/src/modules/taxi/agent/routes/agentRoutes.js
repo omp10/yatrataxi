@@ -4,6 +4,8 @@ import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
   createAgentBusBooking,
   createAgentRideBooking,
+  createAgentWithdrawalRequest,
+  listAgentWithdrawalRequests,
   completeAgentOnboarding,
   getAgentDashboard,
   getAgentOnboardingDocuments,
@@ -31,6 +33,8 @@ agentRouter.get('/me', authenticate(['agent']), asyncHandler(getAgentProfile));
 agentRouter.patch('/me', authenticate(['agent']), asyncHandler(updateAgentProfile));
 agentRouter.get('/dashboard', authenticate(['agent']), asyncHandler(getAgentDashboard));
 agentRouter.get('/wallet', authenticate(['agent']), asyncHandler(getAgentWallet));
+agentRouter.get('/wallet/withdrawals', authenticate(['agent']), asyncHandler(listAgentWithdrawalRequests));
+agentRouter.post('/wallet/withdrawals', authenticate(['agent']), asyncHandler(createAgentWithdrawalRequest));
 agentRouter.get('/referral', authenticate(['agent']), asyncHandler(getAgentReferralSummary));
 agentRouter.get('/bookings', authenticate(['agent']), asyncHandler(listAgentBookings));
 agentRouter.post('/customers/resolve', authenticate(['agent']), asyncHandler(resolveAgentCustomer));

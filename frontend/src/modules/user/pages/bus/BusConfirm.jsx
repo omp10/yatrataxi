@@ -44,6 +44,7 @@ const BusConfirm = () => {
   const routePrefix = getRoutePrefix(location.pathname);
   const state = location.state || {};
   const { booking, fromCity, toCity, date } = state;
+  const isCashDue = booking?.payment?.provider === 'cash' && booking?.payment?.status !== 'paid';
 
   useEffect(() => {
     if (booking?.bookingCode) {
@@ -189,7 +190,9 @@ const BusConfirm = () => {
                     ({booking.passenger?.age}{String(booking.passenger?.gender || '').charAt(0)})
                   </span>
                 </p>
-                <p className="mt-2 text-xs font-bold text-slate-500">Paid ₹{Number(booking.amount || 0)}</p>
+                <p className={`mt-2 text-xs font-bold ${isCashDue ? 'text-amber-600' : 'text-slate-500'}`}>
+                  {isCashDue ? 'Pay driver' : 'Paid'} ₹{Number(booking.amount || 0)}
+                </p>
               </div>
               <QrCode size={48} className="text-slate-900" strokeWidth={1.5} />
             </div>

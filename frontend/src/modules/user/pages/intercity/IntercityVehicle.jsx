@@ -145,10 +145,12 @@ const IntercityVehicle = () => {
       ? String(location.state.scheduledAt).slice(0, 16)
       : getTomorrowLocalDateTime()
   );
+  const [returnDate, setReturnDate] = useState(location.state?.returnDate || '');
   const [passengers, setPassengers] = useState(1);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [scheduleError, setScheduleError] = useState('');
   const travelDateInputRef = useRef(null);
+  const returnDateInputRef = useRef(null);
   const scheduledAtInputRef = useRef(null);
   const minTravelDate = useMemo(() => getTodayLocalDate(), []);
   const maxTravelDate = useMemo(() => getMaxAdvanceDate(), []);
@@ -273,6 +275,18 @@ const IntercityVehicle = () => {
       }
     }
 
+    if (tripType === 'Round Trip') {
+      if (!returnDate) {
+        setScheduleError('Choose a return date for the round trip.');
+        return;
+      }
+
+      if (returnDate < travelDate) {
+        setScheduleError('Return date cannot be earlier than the travel date.');
+        return;
+      }
+    }
+
     setScheduleError('');
 
     navigate(`${routePrefix}/intercity/details`, {
@@ -283,6 +297,7 @@ const IntercityVehicle = () => {
         rideMode,
         date: getDisplayDate(rideMode, travelDate),
         travelDate,
+        returnDate: tripType === 'Round Trip' ? returnDate : '',
         scheduledAt: rideMode === 'schedule' ? new Date(scheduledAt).toISOString() : null,
         selectedPackages,
         pickupAddress,
@@ -448,6 +463,38 @@ const IntercityVehicle = () => {
               ) : (
                 <p className="mt-2 text-xs text-slate-500">Drivers will be notified automatically around this scheduled time.</p>
               )}
+            </div>
+          ) : null}
+
+          {tripType === 'Round Trip' ? (
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-slate-700">Return date</label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => openPicker(returnDateInputRef)}
+                  className="flex h-12 w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm text-slate-900 outline-none transition focus:border-blue-500"
+                >
+                  <span>{returnDate || 'Select return date'}</span>
+                  <Calendar size={16} className="text-slate-400" />
+                </button>
+                <input
+                  ref={returnDateInputRef}
+                  type="date"
+                  min={travelDate || minTravelDate}
+                  max={maxTravelDate}
+                  value={returnDate}
+                  onChange={(event) => {
+                    setReturnDate(event.target.value);
+                    setScheduleError('');
+                  }}
+                  className="pointer-events-none absolute inset-0 opacity-0"
+                  tabIndex={-1}
+                />
+              </div>
+              {scheduleError && rideMode !== 'schedule' ? (
+                <p className="mt-2 text-sm font-medium text-rose-500">{scheduleError}</p>
+              ) : null}
             </div>
           ) : null}
 

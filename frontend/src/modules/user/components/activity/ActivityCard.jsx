@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Calendar, ChevronRight, Clock } from 'lucide-react';
 import { buildAvatarFallback } from './activityHelpers';
 
-const ActivityCard = ({ type, title, address, date, time, status, statusTone, price, onClick, driverName, driverImage, vehicleImage, eyebrow }) => {
+const ActivityCard = ({ type, title, address, date, time, status, statusTone, price, cashDue, onClick, driverName, driverImage, vehicleImage, eyebrow }) => {
   const [vehicleBroken, setVehicleBroken] = useState(false);
   const [driverBroken, setDriverBroken] = useState(false);
   const resolvedVehicleImage = vehicleBroken ? (type === 'parcel' ? '/5_Parcel.png' : '/1_Bike.png') : vehicleImage;
@@ -46,7 +46,10 @@ const ActivityCard = ({ type, title, address, date, time, status, statusTone, pr
               </p>
               <p className="mt-2 line-clamp-2 text-[12px] text-slate-600">{address}</p>
             </div>
-            <span className="shrink-0 whitespace-nowrap pl-1 text-[13px] font-semibold text-slate-900 sm:text-[14px]">Rs {price}</span>
+            <span className="shrink-0 whitespace-nowrap pl-1 text-[13px] font-semibold text-slate-900 sm:text-[14px]">
+              Rs {price}
+              {cashDue ? <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700">Cash</span> : null}
+            </span>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">

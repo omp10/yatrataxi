@@ -93,6 +93,7 @@ const CustomizationSettings = () => {
           settings: {
             ...transportRideSettings,
             enable_bus_service: transportRideSettings.enable_bus_service === "1" ? "1" : "0",
+            enable_cash_seat_booking: transportRideSettings.enable_cash_seat_booking === "1" ? "1" : "0",
           },
         }),
       ]);
@@ -218,6 +219,23 @@ const CustomizationSettings = () => {
                  }`}
                >
                  <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-300 ${transportRideSettings.enable_bus_service === "1" ? 'right-1' : 'left-1'}`} />
+               </button>
+             </div>
+
+             <div className="mt-4 flex items-start justify-between gap-4 rounded-2xl border border-rose-100 bg-white p-4">
+               <div>
+                 <p className="text-[13px] font-black text-slate-800">Allow Cash Seat Bookings</p>
+                 <p className="mt-1 text-xs text-slate-500">
+                   Let users reserve mini bus and car pooling seats without paying online. The driver collects the fare on board.
+                 </p>
+               </div>
+               <button
+                 onClick={() => handleTransportRideChange('enable_cash_seat_booking', transportRideSettings.enable_cash_seat_booking === "1" ? "0" : "1")}
+                 className={`w-11 h-6 rounded-full relative transition-all duration-300 shrink-0 ${
+                   transportRideSettings.enable_cash_seat_booking === "1" ? 'bg-rose-500' : 'bg-slate-300'
+                 }`}
+               >
+                 <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-300 ${transportRideSettings.enable_cash_seat_booking === "1" ? 'right-1' : 'left-1'}`} />
                </button>
              </div>
 

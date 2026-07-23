@@ -98,6 +98,9 @@ import {
   getAgent,
   getAgents,
   getAgentNeededDocuments,
+  getAgentBookings,
+  getAgentCommissionDefaults,
+  updateAgentCommissionDefaults,
   getAgentWithdrawalRequests,
   getIntercityTrips,
   getRentalPackageTypes,
@@ -276,6 +279,9 @@ adminRouter.get('/admin/agents/documents', getAgentNeededDocuments);
 adminRouter.post('/admin/agents/documents', createAgentNeededDocument);
 adminRouter.patch('/admin/agents/documents/:id', updateAgentNeededDocument);
 adminRouter.delete('/admin/agents/documents/:id', deleteAgentNeededDocument);
+adminRouter.get('/admin/agents/commission-defaults', getAgentCommissionDefaults);
+adminRouter.put('/admin/agents/commission-defaults', updateAgentCommissionDefaults);
+adminRouter.get('/admin/agents/bookings', getAgentBookings);
 adminRouter.get('/admin/agents/:id', getAgent);
 adminRouter.patch('/admin/agents/:id', updateAgent);
 adminRouter.get('/admin/drivers', getDrivers);

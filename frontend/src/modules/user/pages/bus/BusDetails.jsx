@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, User, Phone, Mail, ChevronRight, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, ChevronRight, Check, Loader2, Banknote } from 'lucide-react';
 import userBusService from '../../services/busService';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 import { userAuthService } from '../../services/authService';
+
+const isEnabledFlag = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  return ['1', 'true', 'yes', 'on', 'enabled'].includes(String(value || '').trim().toLowerCase());
+};
 
 const getRoutePrefix = (pathname = '') => (pathname.startsWith('/taxi/user') ? '/taxi/user' : '');
 
@@ -40,6 +47,8 @@ const BusDetails = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const routePrefix = useMemo(() => getRoutePrefix(location.pathname), [location.pathname]);
+  const { settings } = useSettings();
+  const cashAllowed = isEnabledFlag(settings.transportRide?.enable_cash_seat_booking);
   const state = location.state || {};
   const { bus, fromCity, toCity, date, selectedSeats, totalFare } = state;
   const [name, setName] = useState('');
@@ -142,7 +151,7 @@ const BusDetails = () => {
     return null;
   }
 
-  const handleContinue = async () => {
+  const handleContinue = async (paymentMethod = 'online') => {
     if (isPaying) return;
 
     if (!name || !age || !phone || !email) {
@@ -152,6 +161,28 @@ const BusDetails = () => {
 
     setError('');
     setIsPaying(true);
+
+    if (paymentMethod === 'cash') {
+      try {
+        const cashResponse = await userBusService.createBookingOrder({
+          busServiceId: bus.busServiceId,
+          scheduleId: bus.scheduleId,
+          travelDate: date,
+          seatIds: selectedSeats.map((seat) => seat.id),
+          passenger: { name, age, gender, phone, email },
+          paymentMethod: 'cash',
+        });
+        const { booking } = unwrapPayload(cashResponse);
+        navigate(`${routePrefix}/bus/confirm`, {
+          replace: true,
+          state: { booking, fromCity, toCity, date },
+        });
+      } catch (cashError) {
+        setError(cashError?.response?.data?.message || cashError?.message || 'Unable to reserve seats for cash payment');
+        setIsPaying(false);
+      }
+      return;
+    }
 
     try {
       const scriptLoaded = await loadRazorpayScript();
@@ -421,13 +452,25 @@ const BusDetails = () => {
 
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={handleContinue}
+          onClick={() => handleContinue('online')}
           disabled={isPaying}
           className="w-full bg-slate-900 text-white py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-70 transition-all"
         >
           {isPaying ? <Loader2 size={20} className="animate-spin" /> : 'Pay Now'}
           {!isPaying && <ChevronRight size={18} />}
         </motion.button>
+
+        {cashAllowed ? (
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => handleContinue('cash')}
+            disabled={isPaying}
+            className="mt-3 w-full border border-slate-200 bg-white text-slate-900 py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 disabled:opacity-70 transition-all"
+          >
+            <Banknote size={18} />
+            Book &amp; Pay Cash to Driver
+          </motion.button>
+        ) : null}
       </div>
     </div>
   );

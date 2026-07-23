@@ -7,6 +7,7 @@ import { normalizePoint } from '../../../../utils/geo.js';
 import { Agent } from '../models/Agent.js';
 import { AgentLoginSession } from '../models/AgentLoginSession.js';
 import { AgentNeededDocument } from '../../admin/models/AgentNeededDocument.js';
+import { AgentWithdrawalRequest } from '../models/AgentWithdrawalRequest.js';
 import { BusService } from '../../admin/models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { BusBooking } from '../../user/models/BusBooking.js';
@@ -15,7 +16,7 @@ import { Ride } from '../../user/models/Ride.js';
 import { getRideDetails, createRideRecord } from '../../services/rideService.js';
 import { startDispatchFlow } from '../../services/dispatchService.js';
 import { listAgentWalletTransactions, serializeAgentWallet, ensureAgentWallet, withMongoSession } from '../services/agentWalletService.js';
-import { creditAgentCommission } from '../services/agentCommissionService.js';
+import { creditAgentCommission, getDefaultAgentCommissionConfig } from '../services/agentCommissionService.js';
 import { startAgentLoginOtp, verifyAgentLoginOtp } from '../services/agentLoginOtpService.js';
 
 const toCleanString = (value) => String(value || '').trim();
@@ -392,6 +393,7 @@ export const completeAgentOnboarding = async (req, res) => {
     active: false,
     status: 'inactive',
     kycStatus: 'pending',
+    commissionConfig: await getDefaultAgentCommissionConfig(),
     documents,
     notes,
     onboarding: {
@@ -474,6 +476,70 @@ export const getAgentWallet = async (req, res) => {
     success: true,
     data: wallet,
   });
+};
+
+const serializeAgentWithdrawal = (item = {}) => ({
+  id: String(item._id || ''),
+  amount: roundMoney(item.amount || 0),
+  status: item.status || 'pending',
+  paymentMethod: item.payment_method || '',
+  notes: item.notes || '',
+  adminNote: item.adminNote || '',
+  payoutSnapshot: item.payoutSnapshot || {},
+  reviewedAt: item.reviewedAt || null,
+  createdAt: item.createdAt || null,
+});
+
+export const listAgentWithdrawalRequests = async (req, res) => {
+  const items = await AgentWithdrawalRequest.find({ agentId: req.auth.sub })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  res.json({ success: true, data: { results: items.map(serializeAgentWithdrawal) } });
+};
+
+export const createAgentWithdrawalRequest = async (req, res) => {
+  const amount = roundMoney(req.body?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Withdrawal amount must be greater than zero');
+  }
+
+  const agent = await Agent.findById(req.auth.sub).lean();
+  if (!agent) {
+    throw new ApiError(404, 'Agent not found');
+  }
+
+  const payout = agent.payout || {};
+  if (!toCleanString(payout.upiId) && !(toCleanString(payout.accountNumber) && toCleanString(payout.ifscCode))) {
+    throw new ApiError(400, 'Add your bank account or UPI ID in profile before requesting a withdrawal');
+  }
+
+  const pending = await AgentWithdrawalRequest.findOne({ agentId: agent._id, status: 'pending' }).lean();
+  if (pending) {
+    throw new ApiError(409, 'You already have a pending withdrawal request');
+  }
+
+  const wallet = await listAgentWalletTransactions(agent._id);
+  if (amount > wallet.balance) {
+    throw new ApiError(400, 'Withdrawal amount exceeds your wallet balance');
+  }
+
+  const request = await AgentWithdrawalRequest.create({
+    agentId: agent._id,
+    amount,
+    payment_method: toCleanString(payout.upiId) ? 'upi' : 'bank_transfer',
+    payoutSnapshot: {
+      bankName: toCleanString(payout.bankName),
+      accountHolder: toCleanString(payout.accountHolder),
+      accountNumber: toCleanString(payout.accountNumber),
+      ifscCode: toCleanString(payout.ifscCode),
+      upiId: toCleanString(payout.upiId),
+    },
+    notes: toCleanString(req.body?.notes),
+  });
+
+  res.status(201).json({ success: true, data: serializeAgentWithdrawal(request.toObject()) });
 };
 
 export const getAgentReferralSummary = async (req, res) => {

@@ -373,6 +373,7 @@ const normalizeIntercityPayload = (intercity = {}) => ({
   toCity: String(intercity.toCity || '').trim(),
   tripType: String(intercity.tripType || '').trim(),
   travelDate: String(intercity.travelDate || intercity.date || '').trim(),
+  returnDate: String(intercity.returnDate || '').trim(),
   passengers: Math.max(Number(intercity.passengers || 1), 1),
   distance: Math.max(Number(intercity.distance || 0), 0),
   vehicleName: String(intercity.vehicleName || '').trim(),

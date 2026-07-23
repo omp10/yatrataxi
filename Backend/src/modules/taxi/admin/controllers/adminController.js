@@ -2,7 +2,9 @@ import { asyncHandler } from "../../../../utils/asyncHandler.js";
 import { ApiError } from "../../../../utils/ApiError.js";
 import * as adminService from "../services/adminService.js";
 import ExcelJS from 'exceljs';
+import mongoose from 'mongoose';
 import { BusBooking } from '../../user/models/BusBooking.js';
+import { PoolingBooking } from '../models/PoolingBooking.js';
 import { Ride } from '../../user/models/Ride.js';
 import { BusService } from '../models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
@@ -13,6 +15,7 @@ import { AgentNeededDocument } from '../models/AgentNeededDocument.js';
 import { AgentWithdrawalRequest } from '../../agent/models/AgentWithdrawalRequest.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { listAgentWalletTransactions, applyAgentWalletAdjustment } from '../../agent/services/agentWalletService.js';
+import { getDefaultAgentCommissionConfig, saveDefaultAgentCommissionConfig } from '../../agent/services/agentCommissionService.js';
 import { getPublicActivePaymentGateway } from '../../services/paymentGatewayService.js';
 
 const ok = (res, data, extra = {}) =>
@@ -757,7 +760,7 @@ export const createAgent = asyncHandler(async (req, res) => {
       ? String(req.body.kycStatus).trim().toLowerCase()
       : 'pending',
     referralCode: normalizeReferralCode(req.body?.referralCode),
-    commissionConfig: req.body?.commissionConfig || undefined,
+    commissionConfig: req.body?.commissionConfig || (await getDefaultAgentCommissionConfig()),
     payout: req.body?.payout || undefined,
     notes: toCleanString(req.body?.notes),
   });
@@ -914,6 +917,122 @@ export const deleteAgentNeededDocument = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Agent needed document not found');
   }
   ok(res, { deleted: true });
+});
+
+export const getAgentCommissionDefaults = asyncHandler(async (_req, res) => {
+  ok(res, await getDefaultAgentCommissionConfig());
+});
+
+export const updateAgentCommissionDefaults = asyncHandler(async (req, res) => {
+  ok(res, await saveDefaultAgentCommissionConfig(req.body?.commissionConfig || req.body || {}));
+});
+
+export const getAgentBookings = asyncHandler(async (req, res) => {
+  const query = String(req.query?.search || '').trim().toLowerCase();
+  const agentId = String(req.query?.agentId || '').trim();
+  const bookingType = String(req.query?.type || '').trim().toLowerCase();
+
+  const agentFilter = { 'agentMeta.bookedByAgentId': { $ne: null } };
+  if (agentId && mongoose.isValidObjectId(agentId)) {
+    agentFilter['agentMeta.bookedByAgentId'] = new mongoose.Types.ObjectId(agentId);
+  }
+
+  const [rides, busBookings, poolingBookings] = await Promise.all([
+    bookingType && bookingType !== 'ride'
+      ? []
+      : Ride.find(agentFilter)
+        .sort({ createdAt: -1 })
+        .limit(300)
+        .populate('agentMeta.bookedByAgentId', 'name phone referralCode')
+        .lean(),
+    bookingType && bookingType !== 'bus'
+      ? []
+      : BusBooking.find(agentFilter)
+        .sort({ createdAt: -1 })
+        .limit(300)
+        .populate('agentMeta.bookedByAgentId', 'name phone referralCode')
+        .lean(),
+    bookingType && bookingType !== 'pooling'
+      ? []
+      : PoolingBooking.find(agentFilter)
+        .sort({ createdAt: -1 })
+        .limit(300)
+        .populate('agentMeta.bookedByAgentId', 'name phone referralCode')
+        .populate('user', 'name phone')
+        .lean(),
+  ]);
+
+  const items = [
+    ...rides.map((ride) => ({
+      id: String(ride._id),
+      type: String(ride.serviceType || 'ride').toLowerCase() === 'intercity' ? 'intercity' : 'ride',
+      reference: ride.intercity?.bookingId || String(ride._id).slice(-8).toUpperCase(),
+      route: [ride.pickupAddress, ride.dropAddress].filter(Boolean).join(' → '),
+      amount: Number(ride.fare || 0),
+      status: ride.status || '',
+      createdAt: ride.createdAt || null,
+      agent: ride.agentMeta?.bookedByAgentId || null,
+      customerName: ride.agentMeta?.customerName || '',
+      customerPhone: ride.agentMeta?.customerPhone || '',
+      commissionAmount: Number(ride.agentMeta?.commissionAmount || 0),
+      commissionMode: ride.agentMeta?.commissionMode || '',
+    })),
+    ...busBookings.map((booking) => ({
+      id: String(booking._id),
+      type: 'bus',
+      reference: booking.bookingCode || String(booking._id).slice(-8).toUpperCase(),
+      route: [booking.routeSnapshot?.originCity, booking.routeSnapshot?.destinationCity].filter(Boolean).join(' → '),
+      amount: Number(booking.amount || 0),
+      status: booking.status || '',
+      createdAt: booking.createdAt || null,
+      agent: booking.agentMeta?.bookedByAgentId || null,
+      customerName: booking.agentMeta?.customerName || booking.passenger?.name || '',
+      customerPhone: booking.agentMeta?.customerPhone || booking.passenger?.phone || '',
+      commissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
+      commissionMode: booking.agentMeta?.commissionMode || '',
+    })),
+    ...poolingBookings.map((booking) => ({
+      id: String(booking._id),
+      type: 'pooling',
+      reference: booking.bookingId || String(booking._id).slice(-8).toUpperCase(),
+      route: [booking.pickupLabel, booking.dropLabel].filter(Boolean).join(' → '),
+      amount: Number(booking.fare || 0),
+      status: booking.bookingStatus || '',
+      createdAt: booking.createdAt || null,
+      agent: booking.agentMeta?.bookedByAgentId || null,
+      customerName: booking.user?.name || '',
+      customerPhone: booking.user?.phone || '',
+      commissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
+      commissionMode: booking.agentMeta?.commissionMode || '',
+    })),
+  ]
+    .map((item) => ({
+      ...item,
+      agentName: item.agent?.name || '',
+      agentPhone: item.agent?.phone || '',
+      agentCode: item.agent?.referralCode || '',
+      agentId: item.agent?._id ? String(item.agent._id) : '',
+    }))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const filtered = query
+    ? items.filter((item) =>
+        [item.reference, item.agentName, item.agentPhone, item.agentCode, item.customerName, item.customerPhone, item.route, item.status]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(query),
+      )
+    : items;
+
+  ok(res, {
+    results: filtered,
+    summary: {
+      totalBookings: filtered.length,
+      totalRevenue: filtered.reduce((sum, item) => sum + item.amount, 0),
+      totalCommission: filtered.reduce((sum, item) => sum + item.commissionAmount, 0),
+    },
+  });
 });
 
 export const getAgentWithdrawalRequests = asyncHandler(async (req, res) => {
