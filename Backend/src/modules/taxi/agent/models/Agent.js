@@ -177,6 +177,16 @@ const agentSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    fcmTokenWeb: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    fcmTokenMobile: {
+      type: String,
+      default: '',
+      trim: true,
+    },
   },
   { timestamps: true },
 );

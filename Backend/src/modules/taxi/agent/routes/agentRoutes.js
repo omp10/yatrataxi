@@ -20,6 +20,7 @@ import {
   searchAgentBuses,
   getAgentBusSeatLayout,
   updateAgentProfile,
+  saveAgentFcmToken,
 } from '../controllers/agentController.js';
 
 export const agentRouter = Router();
@@ -43,3 +44,4 @@ agentRouter.get('/buses/routes', authenticate(['agent']), asyncHandler(listAgent
 agentRouter.get('/buses/search', authenticate(['agent']), asyncHandler(searchAgentBuses));
 agentRouter.get('/buses/:id/seats', authenticate(['agent']), asyncHandler(getAgentBusSeatLayout));
 agentRouter.post('/buses/bookings', authenticate(['agent']), asyncHandler(createAgentBusBooking));
+agentRouter.post('/fcm-token', authenticate(['agent']), asyncHandler(saveAgentFcmToken));

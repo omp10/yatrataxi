@@ -1085,3 +1085,34 @@ export const createAgentBusBooking = async (req, res) => {
     data: serializeAgentBusBooking(booking),
   });
 };
+
+export const saveAgentFcmToken = async (req, res) => {
+  const agentId = req.user.id;
+  const { fcmToken, platform } = req.body;
+
+  if (!fcmToken) {
+    throw new ApiError(400, 'FCM token is required');
+  }
+
+  const agent = await Agent.findById(agentId);
+  if (!agent) {
+    throw new ApiError(404, 'Agent not found');
+  }
+
+  if (platform === 'web') {
+    agent.fcmTokenWeb = fcmToken;
+  } else {
+    agent.fcmTokenMobile = fcmToken;
+  }
+
+  await agent.save();
+
+  res.json({
+    success: true,
+    message: 'Agent FCM token saved successfully',
+    data: {
+      fcmTokenWeb: agent.fcmTokenWeb,
+      fcmTokenMobile: agent.fcmTokenMobile,
+    },
+  });
+};
