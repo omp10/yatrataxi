@@ -19,6 +19,7 @@ import { startDispatchFlow } from '../../services/dispatchService.js';
 import { listAgentWalletTransactions, serializeAgentWallet, ensureAgentWallet, withMongoSession } from '../services/agentWalletService.js';
 import { creditAgentCommission, getDefaultAgentCommissionConfig } from '../services/agentCommissionService.js';
 import { startAgentLoginOtp, verifyAgentLoginOtp } from '../services/agentLoginOtpService.js';
+import { assignPushTokenToEntity } from '../../services/pushTokenService.js';
 
 const toCleanString = (value) => String(value || '').trim();
 const normalizePhone = (value) => {
@@ -1087,23 +1088,17 @@ export const createAgentBusBooking = async (req, res) => {
 };
 
 export const saveAgentFcmToken = async (req, res) => {
-  const agentId = req.user.id;
-  const { fcmToken, platform } = req.body;
-
-  if (!fcmToken) {
-    throw new ApiError(400, 'FCM token is required');
-  }
-
+  const agentId = req.auth.sub;
   const agent = await Agent.findById(agentId);
+  
   if (!agent) {
     throw new ApiError(404, 'Agent not found');
   }
 
-  if (platform === 'web') {
-    agent.fcmTokenWeb = fcmToken;
-  } else {
-    agent.fcmTokenMobile = fcmToken;
-  }
+  const saved = assignPushTokenToEntity(agent, {
+    token: req.body?.token || req.body?.fcmToken,
+    platform: req.body?.platform,
+  });
 
   await agent.save();
 
@@ -1111,8 +1106,8 @@ export const saveAgentFcmToken = async (req, res) => {
     success: true,
     message: 'Agent FCM token saved successfully',
     data: {
-      fcmTokenWeb: agent.fcmTokenWeb,
-      fcmTokenMobile: agent.fcmTokenMobile,
+      platform: saved.platform,
+      field: saved.fieldName,
     },
   });
 };
