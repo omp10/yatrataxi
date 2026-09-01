@@ -232,6 +232,7 @@ const AdminReferralTranslation = lazy(() => import('./modules/admin/pages/referr
 const AdminPromoCodes = lazy(() => import('./modules/admin/pages/promotions/PromoCodes'));
 const AdminSendNotification = lazy(() => import('./modules/admin/pages/promotions/SendNotification'));
 const AdminBannerImage = lazy(() => import('./modules/admin/pages/promotions/BannerImage'));
+const AdminExploreIndia = lazy(() => import('./modules/admin/pages/promotions/ExploreIndia'));
 
 // Price Management
 const AdminServiceLocation = lazy(() => import('./modules/admin/pages/price-management/ServiceLocation'));
@@ -1326,6 +1327,14 @@ function App() {
                 <Route
                   path="promotions/banner-image/create"
                   element={<AdminBannerImage />}
+                />
+                <Route
+                  path="promotions/explore-india"
+                  element={<AdminExploreIndia />}
+                />
+                <Route
+                  path="promotions/explore-india/create"
+                  element={<AdminExploreIndia />}
                 />
 
                 {/* Admin Management */}

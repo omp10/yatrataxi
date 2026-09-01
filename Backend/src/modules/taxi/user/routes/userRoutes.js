@@ -62,11 +62,13 @@ import {
   getMyPoolingBookings
 } from '../controllers/poolingController.js';
 import { getAppBootstrap, getAppModules, getGeneralSettingsCategory, getGoodsTypes, getPublicRentalVehicleCatalog, getPublicVehicleTypeCatalog } from '../../admin/controllers/adminController.js';
+import { getPublicExploreDestinations } from '../../admin/promotions/controllers/exploreDestinationController.js';
 import { triggerUserSosAlert } from '../../safety/controllers/safetyController.js';
 
 export const userRouter = Router();
 
 userRouter.get('/bootstrap', asyncHandler(getAppBootstrap));
+userRouter.get('/explore-destinations', asyncHandler(getPublicExploreDestinations));
 userRouter.get('/app-modules', asyncHandler(getAppModules));
 userRouter.get('/settings/:category', asyncHandler(getGeneralSettingsCategory));
 userRouter.get('/intercity-packages', asyncHandler(getIntercityPackageCatalog));

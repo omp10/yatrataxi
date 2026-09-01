@@ -18,8 +18,22 @@ import {
   updateBanner,
   updatePromoCode,
 } from '../controllers/promotionsController.js';
+import {
+  createExploreDestination,
+  deleteExploreDestination,
+  getAdminExploreDestinations,
+  getExploreDestinationById,
+  getPublicExploreDestinations,
+  toggleExploreDestinationStatus,
+  updateExploreDestination,
+} from '../controllers/exploreDestinationController.js';
 
 export const promotionsRouter = Router();
+
+// Public explore destinations endpoint (unauthenticated)
+promotionsRouter.get('/user/explore-destinations', getPublicExploreDestinations);
+promotionsRouter.get('/taxi/explore-destinations', getPublicExploreDestinations);
+promotionsRouter.get('/explore-destinations', getPublicExploreDestinations);
 
 promotionsRouter.use('/admin', authenticate(['admin']));
 
@@ -43,3 +57,13 @@ promotionsRouter.post('/admin/banners', createBanner);
 promotionsRouter.patch('/admin/banners/:id', updateBanner);
 promotionsRouter.delete('/admin/banners/:id', deleteBanner);
 promotionsRouter.post('/admin/banners/:id/push', pushBanner);
+
+// Explore Destinations (Explore India) Admin Routes
+promotionsRouter.get('/admin/explore-destinations', getAdminExploreDestinations);
+promotionsRouter.post('/admin/explore-destinations', createExploreDestination);
+promotionsRouter.get('/admin/explore-destinations/:id', getExploreDestinationById);
+promotionsRouter.patch('/admin/explore-destinations/:id', updateExploreDestination);
+promotionsRouter.put('/admin/explore-destinations/:id', updateExploreDestination);
+promotionsRouter.patch('/admin/explore-destinations/:id/toggle', toggleExploreDestinationStatus);
+promotionsRouter.delete('/admin/explore-destinations/:id', deleteExploreDestination);
+

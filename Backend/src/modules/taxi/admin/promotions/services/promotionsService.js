@@ -8,6 +8,7 @@ import { Notification } from '../models/Notification.js';
 import { PromoCode } from '../models/PromoCode.js';
 import { uploadDataUrlToCloudinary } from '../../../../../utils/cloudinaryUpload.js';
 import { sendPushNotificationToAudience } from '../../../services/pushNotificationService.js';
+import { listAdminDestinations } from './exploreDestinationService.js';
 
 const nextId = () => new mongoose.Types.ObjectId().toString();
 const PROMO_TRANSPORT_TYPES = ['taxi', 'delivery', 'pooling', 'bus', 'self_drive', 'all'];
@@ -632,10 +633,11 @@ export const pushBanner = async (id) => {
 };
 
 export const getPromotionsBootstrap = async () => {
-  const [promos, notifications, banners, serviceLocations, users] = await Promise.all([
+  const [promos, notifications, banners, exploreDestinations, serviceLocations, users] = await Promise.all([
     listPromoCodes({ page: 1, limit: 50 }),
     listNotifications({ page: 1, limit: 50 }),
     listBanners({ page: 1, limit: 50 }),
+    listAdminDestinations({ page: 1, limit: 50 }).catch(() => ({ results: [], paginator: {} })),
     ServiceLocation.find().sort({ createdAt: -1 }).lean(),
     listAdminUsersForPromotions(),
   ]);
@@ -646,10 +648,12 @@ export const getPromotionsBootstrap = async () => {
     promo_codes: promos.results,
     notifications: notifications.results,
     banners: banners.results,
+    explore_destinations: exploreDestinations.results || [],
     meta: {
       promo_codes: promos.paginator,
       notifications: notifications.paginator,
       banners: banners.paginator,
+      explore_destinations: exploreDestinations.paginator,
     },
   };
 };
