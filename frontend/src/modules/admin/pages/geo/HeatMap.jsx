@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { GoogleMap, HeatmapLayer } from '@react-google-maps/api';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { GoogleMap } from '@react-google-maps/api';
+import { HeatmapLayer } from '@deck.gl/aggregation-layers';
+import { GoogleMapsOverlay } from '@deck.gl/google-maps';
 import { 
   ChevronRight, 
   Map as MapIcon, 
@@ -16,10 +18,33 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../utils/googleMaps';
 import { adminService } from '../../services/adminService';
-import { motion } from 'framer-motion';
 
 const INDIA_CENTER = { lat: 22.7196, lng: 75.8577 };
 const MAP_CONTAINER_STYLE = { width: '100%', height: '400px' };
+
+const HEATMAP_GRADIENTS = {
+  thermal: [
+    [0, 255, 255],
+    [0, 128, 255],
+    [0, 255, 0],
+    [255, 255, 0],
+    [255, 0, 0]
+  ],
+  spectral: [
+    [94, 79, 162],
+    [50, 136, 189],
+    [102, 194, 165],
+    [254, 224, 139],
+    [213, 62, 79]
+  ],
+  density: [
+    [255, 247, 236],
+    [254, 232, 200],
+    [253, 187, 132],
+    [227, 74, 51],
+    [127, 0, 0]
+  ]
+};
 
 const mapOptions = {
   disableDefaultUI: false,
@@ -35,13 +60,51 @@ const mapOptions = {
   ]
 };
 
+const DeckHeatmapOverlay = ({ map, data, opacity, radius, gradient }) => {
+  const overlayRef = useRef(null);
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const overlay = new GoogleMapsOverlay({ interleaved: false });
+    overlay.setMap(map);
+    overlayRef.current = overlay;
+
+    return () => {
+      overlay.setMap(null);
+      overlayRef.current = null;
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (!overlayRef.current) return;
+
+    overlayRef.current.setProps({
+      layers: [
+        new HeatmapLayer({
+          id: 'admin-demand-heatmap',
+          data,
+          getPosition: point => point.position,
+          getWeight: point => point.weight,
+          radiusPixels: radius,
+          opacity,
+          colorRange: HEATMAP_GRADIENTS[gradient]
+        })
+      ]
+    });
+  }, [data, gradient, opacity, radius, map]);
+
+  return null;
+};
+
 const HeatMap = () => {
   const navigate = useNavigate();
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [opacity, setOpacity] = useState(0.7);
   const [radius, setRadius] = useState(40);
-  const [gradient, setGradient] = useState('Default');
+  const [gradient, setGradient] = useState('thermal');
+  const [map, setMap] = useState(null);
 
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
@@ -66,21 +129,21 @@ const HeatMap = () => {
   }, []);
 
   const heatmapData = useMemo(() => {
-    if (!zones.length || !window.google) return [];
+    if (!zones.length) return [];
     return zones.flatMap((zone) => {
       const coord = zone.coordinates?.[0]?.[0] || [75.8577, 22.7196];
       const lat = Number(coord[1]);
       const lng = Number(coord[0]);
       
       return Array.from({ length: 12 }).map(() => ({
-        location: new window.google.maps.LatLng(
-          lat + (Math.random() - 0.5) * 0.08,
-          lng + (Math.random() - 0.5) * 0.08
-        ),
+        position: [
+          lng + (Math.random() - 0.5) * 0.08,
+          lat + (Math.random() - 0.5) * 0.08
+        ],
         weight: Math.random() * 10
       }));
     });
-  }, [zones, isLoaded]);
+  }, [zones]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans">
@@ -113,8 +176,16 @@ const HeatMap = () => {
               ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
                  <GoogleMap
                     mapContainerStyle={MAP_CONTAINER_STYLE} center={INDIA_CENTER} zoom={11} options={mapOptions}
+                    onLoad={setMap}
+                    onUnmount={() => setMap(null)}
                  >
-                    <HeatmapLayer data={heatmapData} options={{ opacity, radius }} />
+                    <DeckHeatmapOverlay
+                      map={map}
+                      data={heatmapData}
+                      opacity={opacity}
+                      radius={radius}
+                      gradient={gradient}
+                    />
                  </GoogleMap>
               ) : (
                 <div className="h-[400px] flex flex-col items-center justify-center bg-gray-50 gap-4">
@@ -151,9 +222,9 @@ const HeatMap = () => {
                     Heatmap Gradient Mode
                  </label>
                  <select value={gradient} onChange={e => setGradient(e.target.value)} className={inputClass}>
-                    <option>Default (Thermal)</option>
-                    <option>Spectral View</option>
-                    <option>Density Focus</option>
+                    <option value="thermal">Default (Thermal)</option>
+                    <option value="spectral">Spectral View</option>
+                    <option value="density">Density Focus</option>
                  </select>
               </div>
 

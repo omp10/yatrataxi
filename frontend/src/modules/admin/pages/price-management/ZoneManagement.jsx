@@ -24,12 +24,12 @@ import {
 } from "lucide-react";
 import {
   GoogleMap,
-  DrawingManager,
   Circle,
   Polygon,
   Autocomplete,
 } from "@react-google-maps/api";
 import { useAppGoogleMapsLoader } from "../../utils/googleMaps";
+import TerraDrawOverlay from "../../components/maps/TerraDrawOverlay";
 import { adminService } from "../../services/adminService";
 import {
   buildCountryBoundaryUrl,
@@ -59,6 +59,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
   const [countryBoundaryPaths, setCountryBoundaryPaths] = useState([]);
   const [boundaryLoading, setBoundaryLoading] = useState(false);
   const mapRef = useRef(null);
+  const [map, setMap] = useState(null);
   const polygonRef = useRef(null);
   const polygonListenersRef = useRef([]);
   const circleRef = useRef(null);
@@ -71,6 +72,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
   const [polygonCoords, setPolygonCoords] = useState([]);
   const [circleCenter, setCircleCenter] = useState(null);
   const [circleRadiusMeters, setCircleRadiusMeters] = useState('');
+  const [drawMode, setDrawMode] = useState(null);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   // Form State
@@ -168,28 +170,28 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     }
   };
 
-  const onPolygonComplete = (polygon) => {
-    const coords = polygon.getPath().getArray().map(p => ({
-      lat: p.lat(),
-      lng: p.lng()
-    }));
-    setBoundaryMode('polygon');
-    setPolygonCoords(coords);
-    setCircleCenter(null);
-    setCircleRadiusMeters('');
-    polygon.setMap(null);
-  };
+  const handleDrawComplete = (feature, mode) => {
+    const ring = feature.geometry?.type === 'Polygon'
+      ? feature.geometry.coordinates?.[0]?.slice(0, -1)
+      : [];
 
-  const onCircleComplete = (circle) => {
-    const center = circle.getCenter();
-    setBoundaryMode('circle');
-    setCircleCenter({
-      lat: center.lat(),
-      lng: center.lng(),
-    });
-    setCircleRadiusMeters(String(Math.round(circle.getRadius())));
-    setPolygonCoords([]);
-    circle.setMap(null);
+    if (mode === 'polygon' && ring.length >= 3) {
+      setBoundaryMode('polygon');
+      setPolygonCoords(ring.map(([lng, lat]) => ({ lat, lng })));
+      setCircleCenter(null);
+      setCircleRadiusMeters('');
+    } else if (mode === 'circle' && ring.length >= 3) {
+      const center = ring.reduce(
+        (result, [lng, lat]) => ({ lat: result.lat + lat, lng: result.lng + lng }),
+        { lat: 0, lng: 0 },
+      );
+      setBoundaryMode('circle');
+      setCircleCenter({ lat: center.lat / ring.length, lng: center.lng / ring.length });
+      setCircleRadiusMeters(String(Math.round(Number(feature.properties?.radiusKilometers) * 1000)));
+      setPolygonCoords([]);
+    }
+
+    setDrawMode(null);
   };
 
   const syncPolygonState = () => {
@@ -329,6 +331,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
     setPolygonCoords([]);
     setCircleCenter(null);
     setCircleRadiusMeters('');
+    setDrawMode(null);
     setCountryBoundaryPaths([]);
   };
 
@@ -746,6 +749,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                         <button 
                           type="button"
                           onClick={() => {
+                            setDrawMode(null);
                             setPolygonCoords([]);
                             setCircleCenter(null);
                             setCircleRadiusMeters('');
@@ -764,7 +768,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                          <GoogleMap
                            mapContainerStyle={{ width: '100%', height: '100%' }}
                            center={mapCenter} zoom={12}
-                           onLoad={m => { mapRef.current = m; }}
+                           onLoad={m => { mapRef.current = m; setMap(m); }}
+                           onUnmount={() => { mapRef.current = null; setMap(null); }}
                            options={{
                               mapTypeId: 'roadmap',
                               disableDefaultUI: false,
@@ -774,33 +779,11 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                               fullscreenControl: true
                            }}
                          >
-                           <DrawingManager
-                             onPolygonComplete={onPolygonComplete}
-                             options={{
-                               drawingControl: true,
-                               drawingControlOptions: {
-                                 position: window.google.maps.ControlPosition.TOP_RIGHT,
-                                 drawingModes: [
-                                   window.google.maps.drawing.OverlayType.POLYGON,
-                                   window.google.maps.drawing.OverlayType.CIRCLE,
-                                 ],
-                               },
-                               polygonOptions: {
-                                 fillColor: '#4f46e5',
-                                 fillOpacity: 0.15,
-                                 strokeColor: '#4f46e5',
-                                 strokeWeight: 2,
-                                 editable: true,
-                               },
-                               circleOptions: {
-                                 fillColor: '#0f766e',
-                                 fillOpacity: 0.12,
-                                 strokeColor: '#0f766e',
-                                 strokeWeight: 2,
-                                 editable: true,
-                               },
-                             }}
-                             onCircleComplete={onCircleComplete}
+                           <TerraDrawOverlay
+                             map={map}
+                             activeMode={drawMode}
+                             enableCircle
+                             onFeatureComplete={handleDrawComplete}
                            />
                            {boundaryMode === 'polygon' && polygonCoords.length > 0 && (
                              <Polygon
@@ -862,6 +845,22 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                               />
                            ))}
                          </GoogleMap>
+                         <div className="absolute right-2 top-14 z-10 flex overflow-hidden rounded-md bg-white shadow-md">
+                           <button
+                             type="button"
+                             onClick={() => setDrawMode(drawMode === 'polygon' ? null : 'polygon')}
+                             className={`px-3 py-2 text-xs font-semibold ${drawMode === 'polygon' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                           >
+                             Polygon
+                           </button>
+                           <button
+                             type="button"
+                             onClick={() => setDrawMode(drawMode === 'circle' ? null : 'circle')}
+                             className={`border-l px-3 py-2 text-xs font-semibold ${drawMode === 'circle' ? 'bg-teal-700 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+                           >
+                             Circle
+                           </button>
+                         </div>
                        </div>
                      ) : (
                        <div className="flex h-full items-center justify-center bg-gray-50 rounded-lg">

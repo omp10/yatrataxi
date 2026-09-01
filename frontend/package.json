@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.3.11",
+    "@deck.gl/google-maps": "^9.3.11",
     "@react-google-maps/api": "^2.20.8",
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.14.0",
@@ -23,6 +25,8 @@
     "simplify-js": "^1.2.4",
     "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.2.2",
+    "terra-draw": "^1.32.3",
+    "terra-draw-google-maps-adapter": "^1.6.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
