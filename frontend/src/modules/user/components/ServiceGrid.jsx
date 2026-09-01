@@ -1,8 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useSettings, normalizeAssetUrl } from '../../../shared/context/SettingsContext';
-import toast from 'react-hot-toast';
+import { getActiveServiceModules, getServiceModulePath } from '../utils/serviceModulePresentation';
+
+const MotionButton = motion.button;
+
+const getServiceKey = (service, index) => {
+  const label = String(service?.label || '').trim();
+  const path = String(service?.path || '').trim();
+  return label || path ? `${label || 'service'}-${path || index}` : `service-${index}`;
+};
+
+const getAccent = (index) => {
+  const accents = [
+    'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]',
+    'bg-[linear-gradient(135deg,#FEFCE8_0%,#FDE68A_100%)]',
+    'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]',
+    'bg-[linear-gradient(135deg,#F5F3FF_0%,#E9D5FF_100%)]',
+    'bg-[linear-gradient(135deg,#ECFDF5_0%,#A7F3D0_100%)]',
+    'bg-[linear-gradient(135deg,#FFF1F2_0%,#FECDD3_100%)]',
+  ];
+  return accents[index % accents.length];
+};
 
 const ServiceTile = ({ icon, label, description, path, accentClass, loading }) => {
   const navigate = useNavigate();
@@ -19,7 +39,7 @@ const ServiceTile = ({ icon, label, description, path, accentClass, loading }) =
   }
 
   return (
-    <motion.button
+    <MotionButton
       type="button"
       whileHover={{ y: -1.5 }}
       whileTap={{ scale: 0.98 }}
@@ -38,66 +58,20 @@ const ServiceTile = ({ icon, label, description, path, accentClass, loading }) =
           <span className="sr-only">{description}</span>
         </div>
       </div>
-    </motion.button>
+    </MotionButton>
   );
 };
 
 const ServiceGrid = () => {
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const getServiceKey = (service, index) => {
-    const label = String(service?.label || '').trim();
-    const path = String(service?.path || '').trim();
-    return label || path ? `${label || 'service'}-${path || index}` : `service-${index}`;
-  };
-
-  const getPath = (module) => {
-    if (module.transport_type === 'delivery') return '/taxi/user/parcel/type';
-    if (module.service_type === 'rental') return '/taxi/user/rental';
-    if (module.service_type === 'outstation') return '/taxi/user/intercity';
-    if (module.service_type === 'pooling' || module.name.toLowerCase().includes('pooling')) {
-      return '/taxi/user/pooling';
-    }
-    
-    // Default taxi paths based on name/keywords if needed, or just generic select-location
-    if (module.name.toLowerCase().includes('cab') || module.name.toLowerCase().includes('taxi')) {
-        return '/taxi/user/cab';
-    }
-    return '/taxi/user/ride/select-location';
-  };
-
-  const getAccent = (index) => {
-    const accnets = [
-      'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]', // Orange
-      'bg-[linear-gradient(135deg,#FEFCE8_0%,#FDE68A_100%)]', // Yellow
-      'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]', // Blue
-      'bg-[linear-gradient(135deg,#F5F3FF_0%,#E9D5FF_100%)]', // Purple
-      'bg-[linear-gradient(135deg,#ECFDF5_0%,#A7F3D0_100%)]', // Green
-      'bg-[linear-gradient(135deg,#FFF1F2_0%,#FECDD3_100%)]', // Rose
-    ];
-    return accnets[index % accnets.length];
-  };
-
   const { modules, loading: settingsLoading } = useSettings();
-
-  useEffect(() => {
-    if (settingsLoading) return;
-    
-    // Only show active modules
-    const activeModules = (modules || []).filter(m => m.active);
-    
-    const mapped = activeModules.map((m, idx) => ({
+  const loading = settingsLoading;
+  const services = useMemo(() => getActiveServiceModules(modules).map((m, idx) => ({
       icon: normalizeAssetUrl(m.mobile_menu_icon),
       label: m.name,
       description: m.short_description,
-      path: getPath(m),
+      path: getServiceModulePath(m),
       accentClass: getAccent(idx)
-    }));
-    
-    setServices(mapped);
-    setLoading(false);
-  }, [modules, settingsLoading]);
+    })), [modules]);
 
   const optionCount = loading ? '...' : services.length;
   const optionLabel = services.length === 1 ? 'option' : 'options';

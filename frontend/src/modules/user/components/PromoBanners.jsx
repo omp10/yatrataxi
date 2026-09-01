@@ -2,31 +2,26 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Clock3, ShieldCheck, Sparkles } from 'lucide-react';
+import { normalizeAssetUrl, useSettings } from '../../../shared/context/SettingsContext';
+import {
+  getActiveServiceModules,
+  getServiceModuleButtonText,
+  getServiceModuleDescription,
+  getServiceModulePath,
+} from '../utils/serviceModulePresentation';
 
-const rotatingCards = [
+const MotionDiv = motion.div;
+const MotionButton = motion.button;
+const cardThemes = [
   {
     icon: Clock3,
     iconClass: 'text-orange-600',
-    title: 'In a hurry?',
-    description: 'Auto for shorter wait times.',
     actionClass: 'bg-orange-50 text-orange-500',
-    path: '/taxi/user/ride/select-location',
-    images: [
-      { src: '/2_AutoRickshaw.png', alt: 'Auto' },
-      { src: '/1_Bike.png', alt: 'Bike' },
-    ],
   },
   {
     icon: ShieldCheck,
     iconClass: 'text-blue-600',
-    title: 'Need more space?',
-    description: 'Cab for luggage or comfort.',
     actionClass: 'bg-blue-50 text-blue-500',
-    path: '/taxi/user/ride/select-location',
-    images: [
-      { src: '/4_Taxi.png', alt: 'Taxi' },
-      { src: '/white_sedan_banner_car.png', alt: 'Sedan' },
-    ],
   },
 ];
 
@@ -43,7 +38,7 @@ const ImageCarousel = ({ images, className }) => {
 };
 
 const PromoCard = ({ icon: Icon, iconClass, title, description, actionClass, path, images, onNavigate }) => (
-  <motion.div
+  <MotionDiv
     whileTap={{ scale: 0.98 }}
     onClick={() => onNavigate(path)}
     className="relative min-h-[140px] overflow-hidden rounded-2xl border border-white/80 bg-white/88 p-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.07)]"
@@ -57,11 +52,27 @@ const PromoCard = ({ icon: Icon, iconClass, title, description, actionClass, pat
       <ArrowRight size={15} strokeWidth={2.5} />
     </div>
     <ImageCarousel images={images} className="absolute bottom-1 right-1 w-[74px] opacity-95 pointer-events-none" />
-  </motion.div>
+  </MotionDiv>
 );
 
 const PromoBanners = () => {
   const navigate = useNavigate();
+  const { modules, loading } = useSettings();
+  const activeModules = getActiveServiceModules(modules);
+  const recommendedCards = activeModules.map((module, index) => ({
+    ...cardThemes[index % cardThemes.length],
+    title: module.name,
+    description: getServiceModuleDescription(module),
+    path: getServiceModulePath(module),
+    images: [{
+      src: normalizeAssetUrl(module.mobile_menu_icon || module.mobile_menu_cover_image),
+      alt: module.name,
+    }],
+    key: module.id || module._id || `${module.name}-${index}`,
+  }));
+  const featuredModule = activeModules[0];
+
+  if (loading || !featuredModule) return null;
 
   return (
     <div className="px-5 space-y-4">
@@ -70,12 +81,12 @@ const PromoBanners = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {rotatingCards.map((card, index) => (
-          <PromoCard key={`${String(card.title || '').trim() || 'promo'}-${index}`} {...card} onNavigate={navigate} />
+        {recommendedCards.map((card) => (
+          <PromoCard key={card.key} {...card} onNavigate={navigate} />
         ))}
       </div>
 
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
@@ -88,30 +99,36 @@ const PromoBanners = () => {
           <div className="max-w-[62%]">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/85">
               <Sparkles size={12} strokeWidth={2.5} className="text-cyan-200" />
-              Savings
+              {featuredModule.service_type || featuredModule.transport_type || 'Recommended'}
             </div>
 
             <h3 className="mt-3 text-[20px] font-black leading-tight tracking-tight text-white">
-              Better savings on your next ride.
+              Try {featuredModule.name} for your next trip.
             </h3>
-            <p className="mt-1.5 text-[11px] font-bold leading-relaxed text-white/70">Book quickly and save more.</p>
+            <p className="mt-1.5 text-[11px] font-bold leading-relaxed text-white/70">
+              {getServiceModuleDescription(featuredModule)}
+            </p>
 
-            <motion.button
+            <MotionButton
               type="button"
               whileTap={{ scale: 0.98 }}
-              onClick={() => navigate('/taxi/user/ride/select-location')}
+              onClick={() => navigate(getServiceModulePath(featuredModule))}
               className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[12px] font-black text-slate-900 shadow-lg shadow-black/15"
             >
-              Ride Now
+              {getServiceModuleButtonText(featuredModule)}
               <ArrowRight size={14} strokeWidth={3} />
-            </motion.button>
+            </MotionButton>
           </div>
 
           <div className="pointer-events-none w-[140px] shrink-0 opacity-95">
-            <img src="/ride_now_banner.png" alt="Promo" className="w-full drop-shadow-2xl" />
+            <img
+              src={normalizeAssetUrl(featuredModule.mobile_menu_cover_image || featuredModule.mobile_menu_icon) || '/ride_now_banner.png'}
+              alt={featuredModule.name}
+              className="w-full drop-shadow-2xl"
+            />
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 };

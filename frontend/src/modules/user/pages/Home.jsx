@@ -6,7 +6,6 @@ import HeaderGreeting from '../components/HeaderGreeting';
 import ServiceGrid from '../components/ServiceGrid';
 import LocationMapSection from '../components/LocationMapSection';
 import ActionsSection from '../components/ActionsSection';
-import PromoBanners from '../components/PromoBanners';
 import ExplorerSection from '../components/ExplorerSection';
 import CheckUsOutSection from '../components/CheckUsOutSection';
 import BottomNavbar from '../components/BottomNavbar';
@@ -16,7 +15,6 @@ import indiaGateRealImg from '@/assets/india_gate_real.png';
 import autoIcon from '../../../assets/icons/auto.png';
 import deliveryIcon from '../../../assets/icons/Delivery.png';
 import api from '../../../shared/api/axiosInstance';
-import { useSettings } from '../../../shared/context/SettingsContext';
 import { userService } from '../services/userService';
 import {
   CURRENT_RIDE_UPDATED_EVENT,
@@ -190,9 +188,6 @@ const normalizeRentalCurrentRideSnapshot = (ride = {}, previousRide = {}) => {
 const Home = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { settings } = useSettings();
-  const appName = settings.general?.app_name || 'App';
-
   const [currentRide, setCurrentRide] = useState(() => {
     const ride = getCurrentRide();
     return isActiveCurrentRide(ride) ? ride : null;
@@ -684,7 +679,6 @@ const Home = () => {
           <>
             <LocationMapSection />
             <ActionsSection />
-            <PromoBanners />
             <ExplorerSection />
 
           </>
