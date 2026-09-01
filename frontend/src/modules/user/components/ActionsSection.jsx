@@ -1,6 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { normalizeAssetUrl, useSettings } from '../../../shared/context/SettingsContext';
+import {
+  getActiveServiceModules,
+  getServiceModuleButtonText,
+  getServiceModuleDescription,
+  getServiceModulePath,
+} from '../utils/serviceModulePresentation';
 
 const ActionCard = ({ title, description, image, surfaceClass, titleClass, buttonClass, buttonText, path }) => {
   const navigate = useNavigate();
@@ -52,6 +59,21 @@ const ActionCard = ({ title, description, image, surfaceClass, titleClass, butto
 };
 
 const ActionsSection = () => {
+  const { modules, loading } = useSettings();
+  const activeModules = getActiveServiceModules(modules);
+  const cardThemes = [
+    {
+      surfaceClass: 'bg-gradient-to-br from-orange-50/80 via-white/80 to-orange-100/60',
+      buttonClass: 'bg-orange-500',
+    },
+    {
+      surfaceClass: 'bg-gradient-to-br from-indigo-50/80 via-white/80 to-indigo-100/60',
+      buttonClass: 'bg-indigo-500',
+    },
+  ];
+
+  if (loading || activeModules.length === 0) return null;
+
   return (
     <div className="px-5">
       <div className="mb-3 ml-1">
@@ -59,27 +81,22 @@ const ActionsSection = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <ActionCard
-          title="Ride"
-          description="Bike, auto, and cab rides."
-          image="/1_Bike.png"
-          surfaceClass="bg-gradient-to-br from-orange-50/80 via-white/80 to-orange-100/60"
-          titleClass="text-slate-900"
-          buttonClass="bg-orange-500"
-          buttonText="Book Now"
-          path="/ride/select-location"
-        />
-
-        <ActionCard
-          title="Delivery"
-          description="Send parcels across the city."
-          image="/5_Parcel.png"
-          surfaceClass="bg-gradient-to-br from-indigo-50/80 via-white/80 to-indigo-100/60"
-          titleClass="text-slate-900"
-          buttonClass="bg-indigo-500"
-          buttonText="Send Now"
-          path="/parcel/type"
-        />
+        {activeModules.map((module, index) => {
+          const theme = cardThemes[index % cardThemes.length];
+          return (
+            <ActionCard
+              key={module.id || module._id || `${module.name}-${index}`}
+              title={module.name}
+              description={getServiceModuleDescription(module)}
+              image={normalizeAssetUrl(module.mobile_menu_icon || module.mobile_menu_cover_image)}
+              surfaceClass={theme.surfaceClass}
+              titleClass="text-slate-900"
+              buttonClass={theme.buttonClass}
+              buttonText={getServiceModuleButtonText(module)}
+              path={getServiceModulePath(module)}
+            />
+          );
+        })}
       </div>
     </div>
   );
