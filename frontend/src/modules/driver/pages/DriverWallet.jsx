@@ -480,7 +480,7 @@ const DriverWallet = () => {
                             setTopUpAmount('500');
                         }, 2000);
                     } catch (verifyError) {
-                        setError(verifyError?.response?.data?.message || 'Payment verification failed.');
+                        setError(verifyError?.response?.data?.message || verifyError?.message || 'Payment verification failed.');
                     } finally {
                         setProcessingTopUp(false);
                     }

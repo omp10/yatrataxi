@@ -14,7 +14,10 @@ import { creditAgentCommission } from '../../agent/services/agentCommissionServi
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { env } from '../../../../config/env.js';
 import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js';
-import { resolveConfiguredGatewayCredentials } from '../../services/paymentGatewayService.js';
+import {
+  createRazorpayRequestError,
+  resolveConfiguredGatewayCredentials,
+} from '../../services/paymentGatewayService.js';
 import { getTransportRideSettings } from '../../services/transportSettingsService.js';
 import {
   consumeUserSignupSession,
@@ -490,7 +493,7 @@ const razorpayRequest = async ({ method, path, body, keyId, keySecret }) => {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new ApiError(response.status || 502, payload?.error?.description || payload?.error?.message || 'Razorpay request failed');
+    throw createRazorpayRequestError(response.status, payload);
   }
 
   return payload;

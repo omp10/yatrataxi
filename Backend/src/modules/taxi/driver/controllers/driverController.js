@@ -65,7 +65,10 @@ import {
   updateBusService,
   updateRentalVehicleType,
 } from "../../admin/services/adminService.js";
-import { resolveConfiguredGatewayCredentials } from "../../services/paymentGatewayService.js";
+import {
+  createRazorpayRequestError,
+  resolveConfiguredGatewayCredentials,
+} from "../../services/paymentGatewayService.js";
 import { assignPushTokenToEntity } from "../../services/pushTokenService.js";
 import {
   completeDriverOnboarding,
@@ -788,7 +791,7 @@ const ownerRazorpayRequest = async ({ method, path, body, keyId, keySecret }) =>
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new ApiError(response.status || 502, payload?.error?.description || payload?.error?.message || "Razorpay request failed");
+    throw createRazorpayRequestError(response.status, payload);
   }
 
   return payload;
@@ -1324,17 +1327,7 @@ const razorpayRequest = async ({ method, path, body }) => {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new ApiError(
-      response.status || 502,
-      payload?.error?.description ||
-        payload?.error?.message ||
-        "Razorpay QR request failed",
-      {
-        provider: "razorpay",
-        path,
-        code: payload?.error?.code || null,
-      },
-    );
+    throw createRazorpayRequestError(response.status, payload);
   }
 
   return payload;
@@ -5901,12 +5894,7 @@ const fetchRazorpay = async ({ method, path, body, keyId, keySecret }) => {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new ApiError(
-      response.status || 502,
-      payload?.error?.description ||
-        payload?.error?.message ||
-        "Razorpay request failed",
-    );
+    throw createRazorpayRequestError(response.status, payload);
   }
 
   return payload;

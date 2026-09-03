@@ -182,6 +182,33 @@ export const getPublicActivePaymentGateway = async () => {
   };
 };
 
+export const createRazorpayRequestError = (status, payload = null) => {
+  const providerStatus = Number(status || 502);
+  const providerError = payload?.error || {};
+
+  if (providerStatus === 401 || providerStatus === 403) {
+    return new ApiError(
+      502,
+      'Razorpay rejected the configured API credentials. Generate a new key and secret, then update the selected environment in Admin > Payment Gateway Settings.',
+      {
+        provider: 'razorpay',
+        providerStatus,
+        code: providerError.code || null,
+      },
+    );
+  }
+
+  return new ApiError(
+    providerStatus,
+    providerError.description || providerError.message || 'Razorpay request failed',
+    {
+      provider: 'razorpay',
+      providerStatus,
+      code: providerError.code || null,
+    },
+  );
+};
+
 export const resolveConfiguredGatewayCredentials = async (gatewayKey) => {
   const spec = PAYMENT_GATEWAY_SPECS[gatewayKey];
   if (!spec) {
