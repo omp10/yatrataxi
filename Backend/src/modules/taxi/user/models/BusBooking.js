@@ -157,6 +157,22 @@ const busBookingSchema = new mongoose.Schema(
     routeSnapshot: {
       originCity: { type: String, default: '' },
       destinationCity: { type: String, default: '' },
+      fromCity: { type: String, default: '' },
+      toCity: { type: String, default: '' },
+      fromStopIndex: { type: Number, default: 0 },
+      toStopIndex: { type: Number, default: 0 },
+      pickupStop: {
+        id: { type: String, default: '' },
+        city: { type: String, default: '' },
+        pointName: { type: String, default: '' },
+        time: { type: String, default: '' },
+      },
+      dropStop: {
+        id: { type: String, default: '' },
+        city: { type: String, default: '' },
+        pointName: { type: String, default: '' },
+        time: { type: String, default: '' },
+      },
       departureTime: { type: String, default: '' },
       arrivalTime: { type: String, default: '' },
       durationHours: { type: String, default: '' },

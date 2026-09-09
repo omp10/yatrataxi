@@ -35,6 +35,14 @@ const busSeatHoldSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    fromStopIndex: {
+      type: Number,
+      default: 0,
+    },
+    toStopIndex: {
+      type: Number,
+      default: 0,
+    },
     holdToken: {
       type: String,
       default: '',
@@ -57,8 +65,8 @@ const busSeatHoldSchema = new mongoose.Schema(
 );
 
 busSeatHoldSchema.index(
-  { busServiceId: 1, scheduleId: 1, travelDate: 1, seatId: 1 },
-  { unique: true, name: 'unique_bus_travel_seat' },
+  { busServiceId: 1, scheduleId: 1, travelDate: 1, seatId: 1, status: 1 },
+  { name: 'bus_travel_seat_status_idx' },
 );
 
 export const BusSeatHold =

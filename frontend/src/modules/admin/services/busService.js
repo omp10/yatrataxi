@@ -94,7 +94,50 @@ const createEmptyRoute = () => ({
   distanceKm: '',
   durationHours: '',
   stops: [],
+  stageFares: [],
 });
+
+export const generateDefaultStageFares = (stops = [], baseSeatPrice = 0, variantPricing = {}) => {
+  if (!Array.isArray(stops) || stops.length < 2) {
+    return [];
+  }
+
+  const basePrice = Math.max(0, Number(baseSeatPrice || 0));
+  const sleeperPrice = Number(variantPricing?.sleeper || (basePrice > 0 ? basePrice * 1.3 : 0));
+  const windowPrice = Number(variantPricing?.window || basePrice);
+  const aislePrice = Number(variantPricing?.aisle || basePrice);
+
+  const stageFares = [];
+  const totalSegments = stops.length - 1;
+
+  for (let i = 0; i < stops.length; i += 1) {
+    for (let j = i + 1; j < stops.length; j += 1) {
+      const fromStop = stops[i];
+      const toStop = stops[j];
+      const segmentRatio = (j - i) / totalSegments;
+      const stageBase = Math.max(50, Math.round((basePrice * segmentRatio) / 10) * 10);
+      const stageSleeper = Math.max(stageBase, Math.round((sleeperPrice * segmentRatio) / 10) * 10);
+      const stageWindow = Math.max(stageBase, Math.round((windowPrice * segmentRatio) / 10) * 10);
+      const stageAisle = Math.max(stageBase, Math.round((aislePrice * segmentRatio) / 10) * 10);
+
+      stageFares.push({
+        fromStopIndex: Number.isFinite(Number(fromStop.stopIndex)) ? Number(fromStop.stopIndex) : i,
+        toStopIndex: Number.isFinite(Number(toStop.stopIndex)) ? Number(toStop.stopIndex) : j,
+        fromCity: fromStop.city || `Stop ${i + 1}`,
+        toCity: toStop.city || `Stop ${j + 1}`,
+        baseFare: stageBase,
+        variantPricing: {
+          seat: stageBase,
+          window: stageWindow,
+          aisle: stageAisle,
+          sleeper: stageSleeper,
+        },
+      });
+    }
+  }
+
+  return stageFares;
+};
 
 const normalizeDeckConfig = (value = {}, fallback = {}) => {
   const base = {

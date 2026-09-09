@@ -19,6 +19,7 @@ import {
   Plus,
   Route,
   Save,
+  Sparkles,
   Trash2,
   Upload,
   XCircle,
@@ -30,6 +31,7 @@ import {
   countTotalSeats,
   createBlueprintFromTemplate,
   createBusDraft,
+  generateDefaultStageFares,
   deleteAdminBus as defaultDeleteBus,
   getAdminBuses as defaultGetBuses,
   upsertAdminBus as defaultUpsertBus,
@@ -72,9 +74,11 @@ const blankStop = () => ({
   id: `stop-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   city: '',
   pointName: '',
-  stopType: 'pickup',
+  stopType: 'both',
   arrivalTime: '',
   departureTime: '',
+  distanceFromOriginKm: '',
+  dayOffset: 0,
 });
 
 const blankSchedule = () => ({
@@ -154,14 +158,17 @@ const buildMirroredReturnRoute = (route = {}) => ({
         .slice()
         .reverse()
         .map((stop, index) => ({
-          id: stop.id || `return-stop-${index + 1}`,
+          id: stop.id ? `return-${stop.id}` : `return-stop-${index + 1}`,
           city: stop.city || '',
           pointName: stop.pointName || '',
           stopType: swapStopType(stop.stopType),
           arrivalTime: stop.departureTime || '',
           departureTime: stop.arrivalTime || '',
+          distanceFromOriginKm: stop.distanceFromOriginKm ?? '',
+          dayOffset: stop.dayOffset ?? 0,
         }))
     : [],
+  stageFares: Array.isArray(route.stageFares) ? route.stageFares : [],
 });
 
 const fileToDataUrl = (file) =>
@@ -988,6 +995,82 @@ const BusServiceManager = ({
           })
         : current.returnRoute,
     }));
+  };
+
+  const handleAutoGenerateStageFares = (isReturn = false) => {
+    const routeObj = isReturn ? draft.returnRoute : draft.route;
+    const stops = routeObj?.stops || [];
+    if (stops.length < 2) {
+      toast.error('Add at least 2 stops to generate stage fares.');
+      return;
+    }
+    const generated = generateDefaultStageFares(stops, draft.baseSeatPrice, draft.variantPricing);
+    setDraft((current) => {
+      if (isReturn) {
+        return {
+          ...current,
+          returnRoute: {
+            ...current.returnRoute,
+            stageFares: generated,
+          },
+        };
+      }
+      return {
+        ...current,
+        route: {
+          ...current.route,
+          stageFares: generated,
+        },
+      };
+    });
+    toast.success(`Generated ${generated.length} stage fare combinations!`);
+  };
+
+  const handleUpdateStageFare = (fromStopIndex, toStopIndex, field, value, fromCity = '', toCity = '', isReturn = false) => {
+    setDraft((current) => {
+      const targetRouteKey = isReturn ? 'returnRoute' : 'route';
+      const routeObj = current[targetRouteKey] || {};
+      const existingFares = Array.isArray(routeObj.stageFares) ? [...routeObj.stageFares] : [];
+
+      const fareIndex = existingFares.findIndex(
+        (item) => Number(item.fromStopIndex) === Number(fromStopIndex) && Number(item.toStopIndex) === Number(toStopIndex)
+      );
+
+      let updatedFares = [...existingFares];
+      if (fareIndex >= 0) {
+        const item = { ...updatedFares[fareIndex] };
+        if (field.startsWith('variantPricing.')) {
+          const vKey = field.split('.')[1];
+          item.variantPricing = {
+            ...(item.variantPricing || {}),
+            [vKey]: Math.max(0, Number(value || 0)),
+          };
+        } else {
+          item[field] = field === 'baseFare' ? Math.max(0, Number(value || 0)) : value;
+        }
+        updatedFares[fareIndex] = item;
+      } else {
+        const newItem = {
+          fromStopIndex: Number(fromStopIndex),
+          toStopIndex: Number(toStopIndex),
+          fromCity: String(fromCity || '').trim(),
+          toCity: String(toCity || '').trim(),
+          baseFare: field === 'baseFare' ? Math.max(0, Number(value || 0)) : Math.max(0, Number(current.baseSeatPrice || 0)),
+          variantPricing: field.startsWith('variantPricing.')
+            ? { [field.split('.')[1]]: Math.max(0, Number(value || 0)) }
+            : {},
+        };
+        updatedFares.push(newItem);
+      }
+
+      return {
+        ...current,
+        [targetRouteKey]: {
+          ...routeObj,
+          stageFares: updatedFares,
+        },
+      };
+    });
   };
 
   const updateSchedule = (scheduleId, field, value) => {
@@ -2493,7 +2576,7 @@ const BusServiceManager = ({
                         <MapPin size={16} />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-slate-900">Stop {index + 1}</p>
+                        <p className="text-sm font-black text-slate-900">Stop {index + 1}: {stop.city || 'Untitled Stop'}</p>
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Pickup / drop configuration</p>
                       </div>
                     </div>
@@ -2504,20 +2587,238 @@ const BusServiceManager = ({
                     )}
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                    <input className={fieldClassName} value={stop.city} onChange={(event) => updateStop(stop.id, 'city', event.target.value)} placeholder="City" />
-                    <input className={fieldClassName} value={stop.pointName} onChange={(event) => updateStop(stop.id, 'pointName', event.target.value)} placeholder="Pickup / Drop Point" />
-                    <select className={fieldClassName} value={stop.stopType} onChange={(event) => updateStop(stop.id, 'stopType', event.target.value)}>
-                      <option value="pickup">Pickup Only</option>
-                      <option value="drop">Drop Only</option>
-                      <option value="both">Pickup + Drop</option>
-                    </select>
-                    <input className={fieldClassName} type="time" value={stop.arrivalTime} onChange={(event) => updateStop(stop.id, 'arrivalTime', event.target.value)} />
-                    <input className={fieldClassName} type="time" value={stop.departureTime} onChange={(event) => updateStop(stop.id, 'departureTime', event.target.value)} />
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <label className={labelClassName}>City</label>
+                      <input className={fieldClassName} value={stop.city} onChange={(event) => updateStop(stop.id, 'city', event.target.value)} placeholder="City" />
+                    </div>
+                    <div>
+                      <label className={labelClassName}>Point / Landmark</label>
+                      <input className={fieldClassName} value={stop.pointName} onChange={(event) => updateStop(stop.id, 'pointName', event.target.value)} placeholder="Pickup / Drop Point" />
+                    </div>
+                    <div>
+                      <label className={labelClassName}>Stop Type</label>
+                      <select className={fieldClassName} value={stop.stopType} onChange={(event) => updateStop(stop.id, 'stopType', event.target.value)}>
+                        <option value="both">Pickup + Drop</option>
+                        <option value="pickup">Pickup Only</option>
+                        <option value="drop">Drop Only</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClassName}>Distance from Origin (KM)</label>
+                      <input className={fieldClassName} type="number" min="0" value={stop.distanceFromOriginKm ?? ''} onChange={(event) => updateStop(stop.id, 'distanceFromOriginKm', event.target.value)} placeholder="e.g. 120" />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-4 md:grid-cols-3">
+                    <div>
+                      <label className={labelClassName}>Arrival Time</label>
+                      <input className={fieldClassName} type="time" value={stop.arrivalTime} onChange={(event) => updateStop(stop.id, 'arrivalTime', event.target.value)} />
+                    </div>
+                    <div>
+                      <label className={labelClassName}>Departure Time</label>
+                      <input className={fieldClassName} type="time" value={stop.departureTime} onChange={(event) => updateStop(stop.id, 'departureTime', event.target.value)} />
+                    </div>
+                    <div>
+                      <label className={labelClassName}>Day Offset</label>
+                      <select className={fieldClassName} value={stop.dayOffset ?? 0} onChange={(event) => updateStop(stop.id, 'dayOffset', Number(event.target.value || 0))}>
+                        <option value={0}>Same Day (+0)</option>
+                        <option value={1}>Next Day (+1)</option>
+                        <option value={2}>Day 3 (+2)</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Stage-wise Pricing Matrix */}
+            {draft.route.stops.length >= 2 && (
+              <div className="mt-8 rounded-3xl border border-slate-200 bg-slate-50/70 p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Route size={18} className="text-orange-500" />
+                      Stop-to-Stop Pricing Matrix (Main Route)
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Configure custom fares for each stage combination. Intermediate searches will charge exact stage fares.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoGenerateStageFares(false)}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-orange-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-700 active:scale-95"
+                  >
+                    <Sparkles size={14} />
+                    Auto Calculate Fares
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {draft.route.stops.flatMap((fromStop, i) =>
+                    draft.route.stops.slice(i + 1).map((toStop, relativeIdx) => {
+                      const j = i + 1 + relativeIdx;
+                      const fromLabel = fromStop.city || fromStop.pointName || `Stop ${i + 1}`;
+                      const toLabel = toStop.city || toStop.pointName || `Stop ${j + 1}`;
+                      const existingFare = (draft.route.stageFares || []).find(
+                        (item) => Number(item.fromStopIndex) === i && Number(item.toStopIndex) === j
+                      );
+                      const basePrice = existingFare?.baseFare ?? draft.baseSeatPrice ?? 0;
+                      const sleeperPrice = existingFare?.variantPricing?.sleeper ?? draft.variantPricing?.sleeper ?? '';
+
+                      return (
+                        <div
+                          key={`stage-fare-${i}-${j}`}
+                          className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                                Stop {i + 1} → {j + 1}
+                              </span>
+                              <p className="text-sm font-black text-slate-900 truncate">
+                                {fromLabel} <span className="text-slate-400 font-normal">→</span> {toLabel}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="w-36">
+                              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Base Fare (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-slate-400"
+                                value={basePrice}
+                                onChange={(event) =>
+                                  handleUpdateStageFare(i, j, 'baseFare', event.target.value, fromStop.city, toStop.city, false)
+                                }
+                                placeholder="Fare"
+                              />
+                            </div>
+
+                            {draft.variantPricing?.sleeper !== undefined && (
+                              <div className="w-36">
+                                <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                  Sleeper (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-slate-400"
+                                  value={sleeperPrice}
+                                  onChange={(event) =>
+                                    handleUpdateStageFare(i, j, 'variantPricing.sleeper', event.target.value, fromStop.city, toStop.city, false)
+                                  }
+                                  placeholder="Sleeper Fare"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Return Route Stage-wise Pricing Matrix (if returnRouteEnabled) */}
+            {draft.returnRouteEnabled && draft.returnRoute?.stops?.length >= 2 && (
+              <div className="mt-8 rounded-3xl border border-emerald-200 bg-emerald-50/40 p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Route size={18} className="text-emerald-600" />
+                      Stop-to-Stop Pricing Matrix (Return Route)
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Configure custom fares for each return stage combination.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoGenerateStageFares(true)}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95"
+                  >
+                    <Sparkles size={14} />
+                    Auto Calculate Return Fares
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {draft.returnRoute.stops.flatMap((fromStop, i) =>
+                    draft.returnRoute.stops.slice(i + 1).map((toStop, relativeIdx) => {
+                      const j = i + 1 + relativeIdx;
+                      const fromLabel = fromStop.city || fromStop.pointName || `Stop ${i + 1}`;
+                      const toLabel = toStop.city || toStop.pointName || `Stop ${j + 1}`;
+                      const existingFare = (draft.returnRoute.stageFares || []).find(
+                        (item) => Number(item.fromStopIndex) === i && Number(item.toStopIndex) === j
+                      );
+                      const basePrice = existingFare?.baseFare ?? draft.baseSeatPrice ?? 0;
+                      const sleeperPrice = existingFare?.variantPricing?.sleeper ?? draft.variantPricing?.sleeper ?? '';
+
+                      return (
+                        <div
+                          key={`return-stage-fare-${i}-${j}`}
+                          className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                Return Stop {i + 1} → {j + 1}
+                              </span>
+                              <p className="text-sm font-black text-slate-900 truncate">
+                                {fromLabel} <span className="text-slate-400 font-normal">→</span> {toLabel}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="w-36">
+                              <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                Base Fare (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-slate-400"
+                                value={basePrice}
+                                onChange={(event) =>
+                                  handleUpdateStageFare(i, j, 'baseFare', event.target.value, fromStop.city, toStop.city, true)
+                                }
+                                placeholder="Fare"
+                              />
+                            </div>
+
+                            {draft.variantPricing?.sleeper !== undefined && (
+                              <div className="w-36">
+                                <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                                  Sleeper (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm outline-none focus:border-slate-400"
+                                  value={sleeperPrice}
+                                  onChange={(event) =>
+                                    handleUpdateStageFare(i, j, 'variantPricing.sleeper', event.target.value, fromStop.city, toStop.city, true)
+                                  }
+                                  placeholder="Sleeper Fare"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">

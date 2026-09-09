@@ -1,7 +1,8 @@
 import { getApps, initializeApp } from 'firebase/app';
-import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { getLocalDriverToken, saveDriverFcmToken } from '../../modules/driver/services/registrationService';
 import { getLocalUserToken, userAuthService } from '../../modules/user/services/authService';
+import { dispatchDriverRideRequestPush } from './driverRideRequestPush';
 
 const LAST_BROWSER_FCM_KEY = 'lastBrowserFcmRegistration';
 const FIREBASE_CONFIG = {
@@ -15,6 +16,15 @@ const FIREBASE_CONFIG = {
 const VAPID_KEY = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim();
 
 let messagingSupportPromise = null;
+let foregroundMessageUnsubscribe = null;
+
+const installForegroundMessageListener = (messaging) => {
+  if (foregroundMessageUnsubscribe) return;
+
+  foregroundMessageUnsubscribe = onMessage(messaging, (payload) => {
+    dispatchDriverRideRequestPush(payload);
+  });
+};
 
 const isDriverPendingApprovalScreen = () => {
   if (typeof window === 'undefined') {
@@ -147,6 +157,7 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
 
   const serviceWorkerRegistration = await navigator.serviceWorker.register(createServiceWorkerUrl());
   const messaging = getMessaging(app);
+  installForegroundMessageListener(messaging);
   const token = await getToken(messaging, {
     vapidKey: VAPID_KEY,
     serviceWorkerRegistration,
@@ -183,6 +194,12 @@ export const installBrowserFcmRegistration = () => {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       retryPassiveRegistration();
+    }
+  });
+
+  navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type === 'driver_ride_request') {
+      dispatchDriverRideRequestPush(event.data.payload);
     }
   });
 

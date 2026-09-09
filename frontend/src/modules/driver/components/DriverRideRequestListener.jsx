@@ -4,6 +4,7 @@ import IncomingRideRequest from '../pages/IncomingRideRequest';
 import api from '../../../shared/api/axiosInstance';
 import { socketService } from '../../../shared/api/socket';
 import { getLocalDriverToken } from '../services/registrationService';
+import { DRIVER_RIDE_REQUEST_PUSH_EVENT } from '../../../shared/push/driverRideRequestPush';
 import {
     playRideRequestAlertSound,
     stopRideRequestAlertSound,
@@ -152,6 +153,8 @@ const DriverRideRequestListener = () => {
         }
 
         const onRideRequest = (data) => {
+            if (requestRef.current?.rideId === data?.rideId) return;
+
             const requestType = normalizeJobType(data);
             const request = {
                 type: requestType,
@@ -173,6 +176,7 @@ const DriverRideRequestListener = () => {
                 raw: data,
             };
 
+            requestRef.current = request;
             setCurrentRequest(request);
             playRideRequestAlertSound();
         };
@@ -283,6 +287,8 @@ const DriverRideRequestListener = () => {
         };
 
         socketService.on('rideRequest', onRideRequest);
+        const onFcmRideRequest = (event) => onRideRequest(event.detail || {});
+        window.addEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
         socketService.on('rideRequestClosed', onRideRequestClosed);
         socketService.on('errorMessage', onSocketError);
         socketService.on('rideAccepted', openAcceptedRide);
@@ -291,6 +297,7 @@ const DriverRideRequestListener = () => {
 
         return () => {
             socketService.off('rideRequest', onRideRequest);
+            window.removeEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
             socketService.off('rideRequestClosed', onRideRequestClosed);
             socketService.off('errorMessage', onSocketError);
             socketService.off('rideAccepted', openAcceptedRide);

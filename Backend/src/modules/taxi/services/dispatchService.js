@@ -519,6 +519,18 @@ const emitRideRequestToDrivers = async ({
       rideId: String(ride._id),
       serviceType: ride.serviceType || 'ride',
       userId: String(ride.userId?._id || ride.userId || ''),
+      pickupAddress: ride.pickupAddress || '',
+      dropAddress: ride.dropAddress || '',
+      pickupLocation: JSON.stringify(ride.pickupLocation || null),
+      dropLocation: JSON.stringify(ride.dropLocation || null),
+      fare: String(ride.fare || 0),
+      paymentMethod: ride.paymentMethod || 'cash',
+      bookingMode: ride.bookingMode || 'normal',
+      scheduledAt: ride.scheduledAt ? new Date(ride.scheduledAt).toISOString() : '',
+      estimatedDistanceMeters: String(ride.estimatedDistanceMeters || 0),
+      estimatedDurationMinutes: String(ride.estimatedDurationMinutes || 0),
+      acceptRejectDurationSeconds: String(dispatchConfig.retryWindowSeconds),
+      requestExpiresAt,
     },
   }).catch((error) => {
     console.error('Failed to send driver ride-request push notification', error);

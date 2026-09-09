@@ -557,11 +557,23 @@ const countSeatsInBlueprintDeck = (deckRows = []) =>
 
 const normalizeBusStop = (stop = {}, index = 0) => ({
   id: sanitizeBusText(stop.id, `stop-${Date.now()}-${index}`),
+  stopIndex: Number.isFinite(Number(stop.stopIndex)) ? Number(stop.stopIndex) : index,
   city: sanitizeBusText(stop.city),
   pointName: sanitizeBusText(stop.pointName),
   stopType: ['pickup', 'drop', 'both'].includes(stop.stopType) ? stop.stopType : 'pickup',
   arrivalTime: sanitizeBusText(stop.arrivalTime),
   departureTime: sanitizeBusText(stop.departureTime),
+  distanceFromOriginKm: Math.max(0, Number(stop.distanceFromOriginKm || 0)),
+  dayOffset: Math.max(0, Number(stop.dayOffset || 0)),
+});
+
+const normalizeBusStageFare = (fare = {}, index = 0) => ({
+  fromStopIndex: Math.max(0, Number(fare.fromStopIndex ?? index)),
+  toStopIndex: Math.max(0, Number(fare.toStopIndex ?? index + 1)),
+  fromCity: sanitizeBusText(fare.fromCity),
+  toCity: sanitizeBusText(fare.toCity),
+  baseFare: Math.max(0, sanitizeBusSeatPrice(fare.baseFare, 0)),
+  variantPricing: normalizeBusVariantPricing(fare.variantPricing || {}, fare.baseFare ?? 0),
 });
 
 const normalizeBusSchedule = (schedule = {}, index = 0) => ({
@@ -603,6 +615,18 @@ const normalizeBusServicePayload = (payload = {}, existing = {}) => {
     upperDeck: normalizeBusDeck(payload.blueprint?.upperDeck ?? existing.blueprint?.upperDeck ?? []),
   };
 
+  const routeStops = Array.isArray(payload.route?.stops)
+    ? payload.route.stops.map((stop, index) => normalizeBusStop(stop, index))
+    : Array.isArray(existing.route?.stops)
+      ? existing.route.stops.map((stop, index) => normalizeBusStop(stop, index))
+      : [];
+
+  const routeStageFares = Array.isArray(payload.route?.stageFares)
+    ? payload.route.stageFares.map((fare, index) => normalizeBusStageFare(fare, index))
+    : Array.isArray(existing.route?.stageFares)
+      ? existing.route.stageFares.map((fare, index) => normalizeBusStageFare(fare, index))
+      : [];
+
   const route = {
     routeName: sanitizeBusText(payload.route?.routeName, existing.route?.routeName || ''),
     originCity: sanitizeBusText(payload.route?.originCity, existing.route?.originCity || ''),
@@ -611,12 +635,21 @@ const normalizeBusServicePayload = (payload = {}, existing = {}) => {
     destinationCoords: sanitizeBusCoords(payload.route?.destinationCoords ?? existing.route?.destinationCoords),
     distanceKm: sanitizeBusText(payload.route?.distanceKm, existing.route?.distanceKm || ''),
     durationHours: sanitizeBusText(payload.route?.durationHours, existing.route?.durationHours || ''),
-    stops: Array.isArray(payload.route?.stops)
-      ? payload.route.stops.map((stop, index) => normalizeBusStop(stop, index))
-      : Array.isArray(existing.route?.stops)
-        ? existing.route.stops.map((stop, index) => normalizeBusStop(stop, index))
-        : [],
+    stops: routeStops,
+    stageFares: routeStageFares,
   };
+
+  const returnRouteStops = Array.isArray(payload.returnRoute?.stops)
+    ? payload.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
+    : Array.isArray(existing.returnRoute?.stops)
+      ? existing.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
+      : [];
+
+  const returnRouteStageFares = Array.isArray(payload.returnRoute?.stageFares)
+    ? payload.returnRoute.stageFares.map((fare, index) => normalizeBusStageFare(fare, index))
+    : Array.isArray(existing.returnRoute?.stageFares)
+      ? existing.returnRoute.stageFares.map((fare, index) => normalizeBusStageFare(fare, index))
+      : [];
 
   const returnRoute = {
     routeName: sanitizeBusText(payload.returnRoute?.routeName, existing.returnRoute?.routeName || ''),
@@ -626,11 +659,8 @@ const normalizeBusServicePayload = (payload = {}, existing = {}) => {
     destinationCoords: sanitizeBusCoords(payload.returnRoute?.destinationCoords ?? existing.returnRoute?.destinationCoords),
     distanceKm: sanitizeBusText(payload.returnRoute?.distanceKm, existing.returnRoute?.distanceKm || ''),
     durationHours: sanitizeBusText(payload.returnRoute?.durationHours, existing.returnRoute?.durationHours || ''),
-    stops: Array.isArray(payload.returnRoute?.stops)
-      ? payload.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
-      : Array.isArray(existing.returnRoute?.stops)
-        ? existing.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
-        : [],
+    stops: returnRouteStops,
+    stageFares: returnRouteStageFares,
   };
 
   const schedules = Array.isArray(payload.schedules)
@@ -765,6 +795,9 @@ const serializeBusService = (item = {}) => ({
     stops: Array.isArray(item.route?.stops)
       ? item.route.stops.map((stop, index) => normalizeBusStop(stop, index))
       : [],
+    stageFares: Array.isArray(item.route?.stageFares)
+      ? item.route.stageFares.map((fare, index) => normalizeBusStageFare(fare, index))
+      : [],
   },
   returnRouteEnabled: Boolean(item.returnRouteEnabled),
   returnRoute: {
@@ -777,6 +810,9 @@ const serializeBusService = (item = {}) => ({
     durationHours: item.returnRoute?.durationHours || '',
     stops: Array.isArray(item.returnRoute?.stops)
       ? item.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
+      : [],
+    stageFares: Array.isArray(item.returnRoute?.stageFares)
+      ? item.returnRoute.stageFares.map((fare, index) => normalizeBusStageFare(fare, index))
       : [],
   },
   schedules: Array.isArray(item.schedules)

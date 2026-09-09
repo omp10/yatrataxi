@@ -21,13 +21,26 @@ if (hasFirebaseConfig) {
   const messaging = firebase.messaging();
 
   messaging.onBackgroundMessage((payload) => {
+    const messageData = payload?.data || {};
     const notificationTitle = payload?.notification?.title || 'New notification';
     const notificationOptions = {
       body: payload?.notification?.body || '',
       icon: '/favicon.svg',
       image: payload?.notification?.image || '',
-      data: payload?.data || {},
+      data: {
+        ...messageData,
+        url: messageData.type === 'ride_request' ? '/taxi/driver/home' : (messageData.url || '/'),
+      },
     };
+
+    if (messageData.type === 'ride_request') {
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        clientList.forEach((client) => client.postMessage({
+          type: 'driver_ride_request',
+          payload: messageData,
+        }));
+      });
+    }
 
     self.registration.showNotification(notificationTitle, notificationOptions);
   });

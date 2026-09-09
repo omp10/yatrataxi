@@ -1,5 +1,6 @@
 import { saveDriverFcmToken, getLocalDriverToken } from '../../modules/driver/services/registrationService';
 import { userAuthService, getLocalUserToken } from '../../modules/user/services/authService';
+import { dispatchDriverRideRequestPush } from './driverRideRequestPush';
 
 const PENDING_NATIVE_FCM_KEY = 'pendingNativeFcmRegistration';
 const LAST_NATIVE_FCM_KEY = 'lastNativeFcmRegistration';
@@ -156,6 +157,8 @@ const flushPendingRegistration = async () => {
 };
 
 export const installNativeFcmBridge = () => {
+  window.__handleNativeFcmMessage = (payload) => dispatchDriverRideRequestPush(payload);
+
   window.__saveNativeFcmToken = async (token, role, platform = 'mobile') => {
     try {
       const result = await submitFcmToken({ token, role, platform });

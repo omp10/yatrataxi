@@ -38,9 +38,9 @@ export const userBusService = {
       params: { fromCity, toCity, date: normalizeTravelDate(date) },
     }),
 
-  getSeatLayout: ({ busServiceId, scheduleId, date }) =>
+  getSeatLayout: ({ busServiceId, scheduleId, date, fromCity, toCity, fromStopIndex, toStopIndex }) =>
     api.get(`/users/buses/${busServiceId}/seats`, {
-      params: { scheduleId, date: normalizeTravelDate(date) },
+      params: { scheduleId, date: normalizeTravelDate(date), fromCity, toCity, fromStopIndex, toStopIndex },
     }),
 
   getMyBookings: ({ page = 1, limit = 10, status = '', tripState = '' } = {}) =>

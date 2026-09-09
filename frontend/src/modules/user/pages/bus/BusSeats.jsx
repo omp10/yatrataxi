@@ -135,6 +135,10 @@ const BusSeats = () => {
           busServiceId: bus.busServiceId,
           scheduleId: bus.scheduleId,
           date,
+          fromCity: bus.fromCity || fromCity,
+          toCity: bus.toCity || toCity,
+          fromStopIndex: bus.fromStopIndex,
+          toStopIndex: bus.toStopIndex,
         });
         if (!active) return;
         setSeatLayout(response?.data || null);
@@ -153,7 +157,7 @@ const BusSeats = () => {
     return () => {
       active = false;
     };
-  }, [bus?.busServiceId, bus?.scheduleId, date, navigate, routePrefix]);
+  }, [bus?.busServiceId, bus?.fromCity, bus?.fromStopIndex, bus?.scheduleId, bus?.toCity, bus?.toStopIndex, date, fromCity, navigate, routePrefix, toCity]);
 
   const toggleSeat = (seat) => {
     if (!seat || seat.status === 'booked') return;

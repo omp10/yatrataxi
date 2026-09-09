@@ -558,7 +558,7 @@ const buildBusCityRegex = (value) => new RegExp(`^${escapeRegex(toCleanString(va
 
 const flattenBusBlueprintSeats = (blueprint = {}) =>
   ['lowerDeck', 'upperDeck']
-    .flatMap((deckKey) => Array.isArray(blueprint?.[deckKey]) ? blueprint[deckKey] : [])
+    .flatMap((deckKey) => (Array.isArray(blueprint?.[deckKey]) ? blueprint[deckKey] : []))
     .flatMap((row) => (Array.isArray(row) ? row : []))
     .filter((cell) => cell?.kind === 'seat' && cell?.id);
 
@@ -569,6 +569,115 @@ const resolveBusSeatPrice = (busService = {}, seat = {}) => {
   const resolvedPrice = variantPricing?.[variantKey] ?? variantPricing?.seat ?? defaultPrice;
 
   return Number.isFinite(Number(resolvedPrice)) ? Number(resolvedPrice) : defaultPrice;
+};
+
+const doBusSegmentsOverlap = (from1, to1, from2, to2) => {
+  const f1 = Number(from1 ?? 0);
+  const t1 = Number(to1 ?? 0);
+  const f2 = Number(from2 ?? 0);
+  const t2 = Number(to2 ?? 0);
+  return Math.max(f1, f2) < Math.min(t1, t2);
+};
+
+const getBusRouteAllStops = (routeData = {}) => {
+  const stops = Array.isArray(routeData?.stops) ? routeData.stops : [];
+  if (stops.length > 0) {
+    return stops.map((s, idx) => ({
+      id: s.id || `stop-${idx}`,
+      stopIndex: Number.isFinite(Number(s.stopIndex)) ? Number(s.stopIndex) : idx,
+      city: String(s.city || '').trim(),
+      pointName: String(s.pointName || '').trim(),
+      stopType: s.stopType || 'both',
+      arrivalTime: s.arrivalTime || '',
+      departureTime: s.departureTime || '',
+      distanceFromOriginKm: Number(s.distanceFromOriginKm || 0),
+      dayOffset: Number(s.dayOffset || 0),
+    }));
+  }
+
+  const originCity = String(routeData?.originCity || '').trim();
+  const destinationCity = String(routeData?.destinationCity || '').trim();
+
+  return [
+    {
+      id: 'stop-origin',
+      stopIndex: 0,
+      city: originCity,
+      pointName: originCity ? `${originCity} Boarding Point` : 'Boarding Point',
+      stopType: 'pickup',
+      arrivalTime: '',
+      departureTime: '',
+      distanceFromOriginKm: 0,
+      dayOffset: 0,
+    },
+    {
+      id: 'stop-destination',
+      stopIndex: 1,
+      city: destinationCity,
+      pointName: destinationCity ? `${destinationCity} Dropping Point` : 'Dropping Point',
+      stopType: 'drop',
+      arrivalTime: '',
+      departureTime: '',
+      distanceFromOriginKm: Number(routeData?.distanceKm || 0),
+      dayOffset: 0,
+    },
+  ];
+};
+
+const matchBusRouteSegment = (routeData = {}, requestedFromCity = '', requestedToCity = '') => {
+  const allStops = getBusRouteAllStops(routeData);
+  const normalizedFrom = normalizeBusCity(requestedFromCity);
+  const normalizedTo = normalizeBusCity(requestedToCity);
+
+  if (!normalizedFrom || !normalizedTo) {
+    return { matched: false };
+  }
+
+  let fromStop = null;
+  let toStop = null;
+
+  for (const stop of allStops) {
+    const stopCity = normalizeBusCity(stop.city);
+    if (!fromStop && stopCity === normalizedFrom && ['pickup', 'both'].includes(stop.stopType)) {
+      fromStop = stop;
+    } else if (fromStop && stopCity === normalizedTo && ['drop', 'both'].includes(stop.stopType)) {
+      toStop = stop;
+      break;
+    }
+  }
+
+  if (fromStop && toStop && fromStop.stopIndex < toStop.stopIndex) {
+    return {
+      matched: true,
+      allStops,
+      fromStop,
+      toStop,
+      fromStopIndex: fromStop.stopIndex,
+      toStopIndex: toStop.stopIndex,
+    };
+  }
+
+  return { matched: false };
+};
+
+const resolveBusSegmentFare = (busService = {}, routeData = {}, fromStopIndex = 0, toStopIndex = 1, seat = {}) => {
+  const stageFares = Array.isArray(routeData?.stageFares) ? routeData.stageFares : [];
+  const foundStage = stageFares.find(
+    (sf) => Number(sf.fromStopIndex) === Number(fromStopIndex) && Number(sf.toStopIndex) === Number(toStopIndex),
+  );
+
+  const seatVariant = String(seat?.variant || 'seat').trim().toLowerCase();
+
+  if (foundStage && Number(foundStage.baseFare) > 0) {
+    const variantPricing = foundStage.variantPricing || {};
+    const price = Number(variantPricing?.[seatVariant] ?? variantPricing?.seat ?? foundStage.baseFare);
+    if (Number.isFinite(price) && price > 0) {
+      return price;
+    }
+    return Number(foundStage.baseFare);
+  }
+
+  return resolveBusSeatPrice(busService, seat);
 };
 
 const findBusSchedule = (busService, scheduleId) =>
@@ -822,52 +931,6 @@ const cleanupExpiredBusSeatHolds = async () => {
     expiresAt: { $lte: now },
   });
 };
-
-const createBusBookingCode = () =>
-  `BUS${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-
-const serializeBusSearchResult = ({ busService, schedule, availableSeats, travelDate }) => ({
-  id: `${String(busService._id)}:${String(schedule.id)}:${travelDate}`,
-  busServiceId: String(busService._id),
-  scheduleId: String(schedule.id || ''),
-  operator: busService.operatorName || '',
-  operatorName: busService.operatorName || '',
-  busName: busService.busName || '',
-  type: busService.coachType || busService.busCategory || 'Bus',
-  coachType: busService.coachType || '',
-  busCategory: busService.busCategory || '',
-  departure: schedule.departureTime || '',
-  arrival: schedule.arrivalTime || '',
-  duration: busService.route?.durationHours || '',
-  routeName: busService.route?.routeName || '',
-  fromCity: busService.route?.originCity || '',
-  toCity: busService.route?.destinationCity || '',
-  seats: Math.max(0, Number(availableSeats || 0)),
-  availableSeats: Math.max(0, Number(availableSeats || 0)),
-  price: Number(busService.seatPrice || 0),
-  variantPricing: busService.variantPricing || null,
-  fareCurrency: busService.fareCurrency || 'INR',
-  rating: Number(busService.rating || 0),
-  ratingCount: Number(busService.ratingCount || 0),
-  amenities: Array.isArray(busService.amenities) ? busService.amenities : [],
-  boardingPolicy: busService.boardingPolicy || '',
-  cancellationPolicy: busService.cancellationPolicy || '',
-  cancellationRules: normalizeBusCancellationRules(busService.cancellationRules),
-  registrationNumber: busService.registrationNumber || '',
-  busColor: busService.busColor || '#1f2937',
-  image: busService.image || busService.coverImage || '',
-  coverImage: busService.coverImage || busService.image || '',
-  galleryImages: Array.isArray(busService.galleryImages) ? busService.galleryImages.filter(Boolean) : [],
-  luggagePolicy: busService.luggagePolicy || '',
-  driverName: busService.driverName || '',
-  driverPhone: busService.driverPhone || '',
-  route: {
-    routeName: busService.route?.routeName || '',
-    originCity: busService.route?.originCity || '',
-    destinationCity: busService.route?.destinationCity || '',
-    stops: Array.isArray(busService.route?.stops) ? busService.route.stops : [],
-  },
-});
 
 export const getIntercityPackageCatalog = async (_req, res) => {
   const items = await SetPrice.find({
@@ -2982,11 +3045,7 @@ export const searchBuses = async (req, res) => {
     throw new ApiError(400, 'fromCity and toCity are required');
   }
 
-  const items = await BusService.find({
-    status: 'active',
-    'route.originCity': buildBusCityRegex(fromCity),
-    'route.destinationCity': buildBusCityRegex(toCity),
-  }).lean();
+  const items = await BusService.find({ status: 'active' }).lean();
 
   if (items.length === 0) {
     return res.status(200).json({
@@ -2998,36 +3057,121 @@ export const searchBuses = async (req, res) => {
     });
   }
 
-  const busIds = items.map((item) => item._id);
+  const matchingServices = [];
+
+  for (const busService of items) {
+    const mainMatch = matchBusRouteSegment(busService.route, fromCity, toCity);
+    if (mainMatch.matched) {
+      matchingServices.push({
+        busService,
+        isReturnRoute: false,
+        activeRoute: busService.route,
+        match: mainMatch,
+      });
+    }
+
+    if (busService.returnRouteEnabled && busService.returnRoute) {
+      const returnMatch = matchBusRouteSegment(busService.returnRoute, fromCity, toCity);
+      if (returnMatch.matched) {
+        matchingServices.push({
+          busService,
+          isReturnRoute: true,
+          activeRoute: busService.returnRoute,
+          match: returnMatch,
+        });
+      }
+    }
+  }
+
+  if (matchingServices.length === 0) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        travelDate,
+        results: [],
+      },
+    });
+  }
+
+  const busIds = [...new Set(matchingServices.map((entry) => entry.busService._id))];
   const holds = await BusSeatHold.find({
     busServiceId: { $in: busIds },
     travelDate,
     status: { $in: ['held', 'booked'] },
   })
-    .select('busServiceId scheduleId seatId')
+    .select('busServiceId scheduleId seatId fromStopIndex toStopIndex')
     .lean();
 
-  const reservedCountMap = new Map();
+  const holdsByServiceAndSchedule = new Map();
   holds.forEach((hold) => {
     const key = `${String(hold.busServiceId)}:${String(hold.scheduleId)}`;
-    reservedCountMap.set(key, (reservedCountMap.get(key) || 0) + 1);
+    if (!holdsByServiceAndSchedule.has(key)) {
+      holdsByServiceAndSchedule.set(key, []);
+    }
+    holdsByServiceAndSchedule.get(key).push(hold);
   });
 
-  const results = items.flatMap((busService) => {
+  const results = matchingServices.flatMap(({ busService, isReturnRoute, activeRoute, match }) => {
     const schedules = Array.isArray(busService.schedules) ? busService.schedules : [];
-    const totalSeats = flattenBusBlueprintSeats(busService.blueprint).filter(
+    const allSeats = flattenBusBlueprintSeats(busService.blueprint).filter(
       (seat) => String(seat.status || 'available') !== 'blocked',
-    ).length;
+    );
+
+    const fromIdx = match.fromStopIndex;
+    const toIdx = match.toStopIndex;
+
+    const departureTime = match.pickupStop?.departureTime || match.pickupStop?.arrivalTime || '';
+    const arrivalTime = match.dropStop?.arrivalTime || match.dropStop?.departureTime || '';
+
+    let durationHours = activeRoute?.durationHours || '';
+    if (departureTime && arrivalTime) {
+      const [dh, dm] = departureTime.split(':').map(Number);
+      const [ah, am] = arrivalTime.split(':').map(Number);
+      if (!Number.isNaN(dh) && !Number.isNaN(ah)) {
+        let diffMinutes = ah * 60 + am - (dh * 60 + dm);
+        const dayOffsetDiff = (match.dropStop?.dayOffset || 0) - (match.pickupStop?.dayOffset || 0);
+        diffMinutes += dayOffsetDiff * 24 * 60;
+        if (diffMinutes > 0) {
+          const hours = Math.floor(diffMinutes / 60);
+          const mins = diffMinutes % 60;
+          durationHours = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+        }
+      }
+    }
+
+    const stageFare = resolveBusSegmentFare(busService, activeRoute, fromIdx, toIdx);
 
     return schedules
       .filter((schedule) => isScheduleAvailableOnDate(schedule, travelDate))
       .map((schedule) => {
-        const reservedSeats = reservedCountMap.get(`${String(busService._id)}:${String(schedule.id)}`) || 0;
+        const scheduleHolds =
+          holdsByServiceAndSchedule.get(`${String(busService._id)}:${String(schedule.id)}`) || [];
+
+        const conflictingSeatIds = new Set(
+          scheduleHolds
+            .filter((h) => doBusSegmentsOverlap(fromIdx, toIdx, h.fromStopIndex, h.toStopIndex))
+            .map((h) => String(h.seatId)),
+        );
+
+        const availableSeatsCount = allSeats.filter((s) => !conflictingSeatIds.has(String(s.id))).length;
+
         return serializeBusSearchResult({
           busService,
           schedule,
           travelDate,
-          availableSeats: totalSeats - reservedSeats,
+          fromCity,
+          toCity,
+          fromStopIndex: fromIdx,
+          toStopIndex: toIdx,
+          departureTime: departureTime || schedule.departureTime,
+          arrivalTime: arrivalTime || schedule.arrivalTime,
+          durationHours,
+          stagePrice: stageFare,
+          pickupStop: match.pickupStop,
+          dropStop: match.dropStop,
+          allStops: match.allStops,
+          isReturnRoute,
+          availableSeats: availableSeatsCount,
         });
       });
   });
@@ -3045,7 +3189,7 @@ export const getBusRouteSuggestions = async (_req, res) => {
   await ensureBusServiceEnabled();
 
   const items = await BusService.find({ status: 'active' })
-    .select('route operatorName seatPrice createdAt')
+    .select('route returnRoute returnRouteEnabled operatorName seatPrice createdAt')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -3053,20 +3197,38 @@ export const getBusRouteSuggestions = async (_req, res) => {
   const results = [];
 
   items.forEach((busService) => {
-    const fromCity = toCleanString(busService.route?.originCity);
-    const toCity = toCleanString(busService.route?.destinationCity);
-
-    if (!fromCity || !toCity) {
-      return;
+    const routesToProcess = [busService.route];
+    if (busService.returnRouteEnabled && busService.returnRoute) {
+      routesToProcess.push(busService.returnRoute);
     }
 
-    const key = `${normalizeBusCity(fromCity)}::${normalizeBusCity(toCity)}`;
-    if (seenRoutes.has(key)) {
-      return;
-    }
-
-    seenRoutes.add(key);
-    results.push(serializeBusRouteSuggestion(busService));
+    routesToProcess.forEach((rt) => {
+      const allStops = getBusRouteAllStops(rt);
+      if (allStops.length >= 2) {
+        for (let i = 0; i < allStops.length; i += 1) {
+          for (let j = i + 1; j < allStops.length; j += 1) {
+            const fromCity = allStops[i].city;
+            const toCity = allStops[j].city;
+            if (fromCity && toCity) {
+              const key = `${normalizeBusCity(fromCity)}::${normalizeBusCity(toCity)}`;
+              if (!seenRoutes.has(key)) {
+                seenRoutes.add(key);
+                results.push({
+                  id: `${String(busService._id)}:${i}:${j}`,
+                  fromCity,
+                  toCity,
+                  routeName: rt.routeName || `${fromCity} to ${toCity}`,
+                  duration: rt.durationHours || '',
+                  startingPrice: resolveBusSegmentFare(busService, rt, i, j),
+                  variantPricing: busService.variantPricing || null,
+                  operator: busService.operatorName || '',
+                });
+              }
+            }
+          }
+        }
+      }
+    });
   });
 
   res.status(200).json({
@@ -3084,6 +3246,14 @@ export const getBusSeatLayout = async (req, res) => {
   const busServiceId = String(req.params?.id || '');
   const scheduleId = toCleanString(req.query?.scheduleId);
   const travelDate = normalizeBusTravelDate(req.query?.date || req.query?.travelDate);
+  const requestedFromCity = toCleanString(req.query?.fromCity);
+  const requestedToCity = toCleanString(req.query?.toCity);
+  const fromStopIndex = Number.isFinite(Number(req.query?.fromStopIndex))
+    ? Number(req.query.fromStopIndex)
+    : 0;
+  const toStopIndex = Number.isFinite(Number(req.query?.toStopIndex))
+    ? Number(req.query.toStopIndex)
+    : 1;
 
   if (!scheduleId) {
     throw new ApiError(400, 'scheduleId is required');
@@ -3099,16 +3269,31 @@ export const getBusSeatLayout = async (req, res) => {
     throw new ApiError(404, 'Bus schedule not found for the selected date');
   }
 
+  let activeRoute = busService.route;
+  let isReturnRoute = false;
+  if (busService.returnRouteEnabled && requestedFromCity && requestedToCity) {
+    const returnMatch = matchBusRouteSegment(busService.returnRoute, requestedFromCity, requestedToCity);
+    if (returnMatch.matched) {
+      activeRoute = busService.returnRoute;
+      isReturnRoute = true;
+    }
+  }
+
   const holds = await BusSeatHold.find({
     busServiceId,
     scheduleId,
     travelDate,
     status: { $in: ['held', 'booked'] },
   })
-    .select('seatId')
+    .select('seatId fromStopIndex toStopIndex')
     .lean();
 
-  const reservedSeatIds = new Set(holds.map((item) => String(item.seatId)));
+  const conflictingSeatIds = new Set(
+    holds
+      .filter((h) => doBusSegmentsOverlap(fromStopIndex, toStopIndex, h.fromStopIndex, h.toStopIndex))
+      .map((item) => String(item.seatId)),
+  );
+
   const normalizeDeck = (deckRows = []) =>
     deckRows.map((row) =>
       (Array.isArray(row) ? row : []).map((cell) => {
@@ -3118,7 +3303,7 @@ export const getBusSeatLayout = async (req, res) => {
 
         const seatId = String(cell.id || '');
         const isBlocked = String(cell.status || 'available') === 'blocked';
-        const isReserved = reservedSeatIds.has(seatId);
+        const isReserved = conflictingSeatIds.has(seatId);
 
         return {
           ...cell,
@@ -3129,6 +3314,7 @@ export const getBusSeatLayout = async (req, res) => {
 
   const blueprint = {
     templateKey: busService.blueprint?.templateKey || 'seater_2_2',
+    layoutConfig: busService.blueprint?.layoutConfig || {},
     lowerDeck: normalizeDeck(busService.blueprint?.lowerDeck || []),
     upperDeck: normalizeDeck(busService.blueprint?.upperDeck || []),
   };
@@ -3136,6 +3322,8 @@ export const getBusSeatLayout = async (req, res) => {
   const availableSeats = flattenBusBlueprintSeats(blueprint).filter(
     (seat) => String(seat.status || 'available') === 'available',
   ).length;
+
+  const stagePrice = resolveBusSegmentFare(busService, activeRoute, fromStopIndex, toStopIndex);
 
   res.status(200).json({
     success: true,
@@ -3148,15 +3336,19 @@ export const getBusSeatLayout = async (req, res) => {
         busService,
         schedule,
         travelDate,
+        fromCity: requestedFromCity || activeRoute?.originCity || busService.route?.originCity,
+        toCity: requestedToCity || activeRoute?.destinationCity || busService.route?.destinationCity,
+        fromStopIndex,
+        toStopIndex,
+        stagePrice,
         availableSeats,
+        isReturnRoute,
       }),
       blueprint,
     },
   });
 };
 
-// Credits the referring agent once a bus booking is confirmed, whether it was paid
-// online or booked against cash. No-op when the customer has no referring agent.
 const creditBusReferralCommission = async (booking) => {
   const user = await User.findById(booking.userId).select('referredByAgent').lean();
   if (!user?.referredByAgent) {
@@ -3201,6 +3393,13 @@ export const createBusBookingOrder = async (req, res) => {
   const busServiceId = String(req.body?.busServiceId || '');
   const scheduleId = toCleanString(req.body?.scheduleId);
   const travelDate = normalizeBusTravelDate(req.body?.travelDate || req.body?.date);
+  const requestedFromCity = toCleanString(req.body?.fromCity);
+  const requestedToCity = toCleanString(req.body?.toCity);
+  const fromStopIndex = Number.isFinite(Number(req.body?.fromStopIndex)) ? Number(req.body.fromStopIndex) : 0;
+  const toStopIndex = Number.isFinite(Number(req.body?.toStopIndex)) ? Number(req.body.toStopIndex) : 1;
+  const pickupStopPayload = req.body?.pickupStop || null;
+  const dropStopPayload = req.body?.dropStop || null;
+
   const passenger = {
     name: toCleanString(req.body?.passenger?.name),
     age: Number(req.body?.passenger?.age || 0),
@@ -3234,6 +3433,14 @@ export const createBusBookingOrder = async (req, res) => {
     throw new ApiError(404, 'Bus schedule not found for the selected date');
   }
 
+  let activeRoute = busService.route;
+  if (busService.returnRouteEnabled && requestedFromCity && requestedToCity) {
+    const returnMatch = matchBusRouteSegment(busService.returnRoute, requestedFromCity, requestedToCity);
+    if (returnMatch.matched) {
+      activeRoute = busService.returnRoute;
+    }
+  }
+
   const availableSeatCells = flattenBusBlueprintSeats(busService.blueprint).filter(
     (seat) => String(seat.status || 'available') !== 'blocked',
   );
@@ -3243,9 +3450,29 @@ export const createBusBookingOrder = async (req, res) => {
     throw new ApiError(400, `Seat ${invalidSeat} is not available for booking`);
   }
 
+  const existingHolds = await BusSeatHold.find({
+    busServiceId,
+    scheduleId,
+    travelDate,
+    seatId: { $in: seatIds },
+    status: { $in: ['held', 'booked'] },
+  }).lean();
+
+  const conflictingHold = existingHolds.find((h) =>
+    doBusSegmentsOverlap(fromStopIndex, toStopIndex, h.fromStopIndex, h.toStopIndex),
+  );
+  if (conflictingHold) {
+    throw new ApiError(400, `Seat ${conflictingHold.seatId} is already booked or held for this route segment`);
+  }
+
   const amount = Math.round(
-    seatIds.reduce((sum, seatId) => sum + resolveBusSeatPrice(busService, seatCellMap.get(seatId)), 0) * 100,
+    seatIds.reduce(
+      (sum, seatId) =>
+        sum + resolveBusSegmentFare(busService, activeRoute, fromStopIndex, toStopIndex, seatCellMap.get(seatId)),
+      0,
+    ) * 100,
   ) / 100;
+
   if (amount <= 0) {
     throw new ApiError(400, 'Bus fare is not configured');
   }
@@ -3261,27 +3488,29 @@ export const createBusBookingOrder = async (req, res) => {
   const compactUserId = String(userId || '').replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'usr';
   const receipt = `ubus_${compactUserId}_${Date.now().toString(36)}`;
 
-  const order = isCashBooking ? null : await razorpayRequest({
-    method: 'POST',
-    path: '/orders',
-    body: {
-      amount: amountPaise,
-      currency: busService.fareCurrency || 'INR',
-      receipt,
-      notes: {
-        userId: String(userId || ''),
-        busServiceId,
-        scheduleId,
-        travelDate,
-        seats: seatIds.join(','),
-      },
-    },
-    keyId,
-    keySecret,
-  });
+  const order = isCashBooking
+    ? null
+    : await razorpayRequest({
+        method: 'POST',
+        path: '/orders',
+        body: {
+          amount: amountPaise,
+          currency: busService.fareCurrency || 'INR',
+          receipt,
+          notes: {
+            userId: String(userId || ''),
+            busServiceId,
+            scheduleId,
+            travelDate,
+            fromStopIndex: String(fromStopIndex),
+            toStopIndex: String(toStopIndex),
+            seats: seatIds.join(','),
+          },
+        },
+        keyId,
+        keySecret,
+      });
 
-  // Cash bookings confirm immediately and hold their seats permanently; the fare is
-  // collected by the driver and settled when the ticket is scanned at boarding.
   const expiresAt = isCashBooking ? null : new Date(Date.now() + BUS_HOLD_MINUTES * 60 * 1000);
   const booking = await BusBooking.create({
     userId,
@@ -3297,11 +3526,27 @@ export const createBusBookingOrder = async (req, res) => {
     status: isCashBooking ? 'confirmed' : 'pending',
     expiresAt,
     routeSnapshot: {
-      originCity: busService.route?.originCity || '',
-      destinationCity: busService.route?.destinationCity || '',
+      originCity: activeRoute?.originCity || busService.route?.originCity || '',
+      destinationCity: activeRoute?.destinationCity || busService.route?.destinationCity || '',
+      fromCity: requestedFromCity || activeRoute?.originCity || '',
+      toCity: requestedToCity || activeRoute?.destinationCity || '',
+      fromStopIndex,
+      toStopIndex,
+      pickupStop: pickupStopPayload || {
+        id: '',
+        city: requestedFromCity || activeRoute?.originCity || '',
+        pointName: 'Boarding Point',
+        time: schedule.departureTime || '',
+      },
+      dropStop: dropStopPayload || {
+        id: '',
+        city: requestedToCity || activeRoute?.destinationCity || '',
+        pointName: 'Dropping Point',
+        time: schedule.arrivalTime || '',
+      },
       departureTime: schedule.departureTime || '',
       arrivalTime: schedule.arrivalTime || '',
-      durationHours: busService.route?.durationHours || '',
+      durationHours: activeRoute?.durationHours || busService.route?.durationHours || '',
       busName: busService.busName || '',
       operatorName: busService.operatorName || '',
       coachType: busService.coachType || '',
@@ -3310,58 +3555,49 @@ export const createBusBookingOrder = async (req, res) => {
       driverName: busService.driverName || '',
       driverPhone: busService.driverPhone || '',
     },
-    payment: isCashBooking
-      ? { provider: 'cash', status: 'pending' }
-      : { provider: 'razorpay', orderId: order.id, status: 'created' },
+    payment: {
+      provider: isCashBooking ? 'cash' : 'razorpay',
+      orderId: order?.id || '',
+      status: isCashBooking ? 'paid' : 'pending',
+      paidAt: isCashBooking ? new Date() : null,
+    },
+    cancellation: {
+      allowed: normalizeBusCancellationRules(busService.cancellationRules).length > 0,
+      notes: busService.cancellationPolicy || '',
+    },
   });
 
-  try {
-    await BusSeatHold.insertMany(
-      seatIds.map((seatId) => ({
-        busServiceId,
-        bookingId: booking._id,
-        userId,
-        scheduleId,
-        travelDate,
-        seatId,
-        holdToken: booking.bookingCode,
-        status: isCashBooking ? 'booked' : 'held',
-        expiresAt,
-      })),
-      { ordered: true },
-    );
-  } catch (error) {
-    await BusBooking.deleteOne({ _id: booking._id });
-    if (error?.code === 11000) {
-      throw new ApiError(409, 'One or more selected seats were just booked by someone else');
-    }
-    throw error;
-  }
+  const holdToken = `hold_${booking._id}_${Date.now()}`;
+  await BusSeatHold.insertMany(
+    seatIds.map((seatId) => ({
+      busServiceId,
+      scheduleId,
+      travelDate,
+      seatId,
+      bookingId: booking._id,
+      userId,
+      holdToken,
+      fromStopIndex,
+      toStopIndex,
+      status: isCashBooking ? 'booked' : 'held',
+      expiresAt,
+    })),
+  );
 
   if (isCashBooking) {
     await creditBusReferralCommission(booking);
-
-    return res.status(201).json({
-      success: true,
-      data: {
-        paymentMethod: 'cash',
-        amount,
-        currency: busService.fareCurrency || 'INR',
-        booking: serializeBusBooking(booking, busService),
-      },
-    });
   }
 
   res.status(201).json({
     success: true,
     data: {
+      booking: serializeBusBooking(booking.toObject(), busService),
+      razorpayOrder: order,
       keyId,
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency || busService.fareCurrency || 'INR',
-      expiresAt,
-      booking: serializeBusBooking(booking, busService),
     },
+    message: isCashBooking
+      ? 'Bus booking confirmed with cash payment on boarding'
+      : 'Bus booking order created successfully',
   });
 };
 

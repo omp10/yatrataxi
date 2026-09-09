@@ -38,6 +38,10 @@ const busStopSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    stopIndex: {
+      type: Number,
+      default: 0,
+    },
     city: {
       type: String,
       default: '',
@@ -62,6 +66,60 @@ const busStopSchema = new mongoose.Schema(
       type: String,
       default: '',
       trim: true,
+    },
+    distanceFromOriginKm: {
+      type: Number,
+      default: 0,
+    },
+    dayOffset: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false },
+);
+
+const busStageFareSchema = new mongoose.Schema(
+  {
+    fromStopIndex: {
+      type: Number,
+      required: true,
+    },
+    toStopIndex: {
+      type: Number,
+      required: true,
+    },
+    fromCity: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    toCity: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    baseFare: {
+      type: Number,
+      default: 0,
+    },
+    variantPricing: {
+      seat: {
+        type: Number,
+        default: 0,
+      },
+      window: {
+        type: Number,
+        default: 0,
+      },
+      aisle: {
+        type: Number,
+        default: 0,
+      },
+      sleeper: {
+        type: Number,
+        default: 0,
+      },
     },
   },
   { _id: false },
@@ -491,6 +549,10 @@ const busServiceSchema = new mongoose.Schema(
         type: [busStopSchema],
         default: [],
       },
+      stageFares: {
+        type: [busStageFareSchema],
+        default: [],
+      },
     },
     returnRouteEnabled: {
       type: Boolean,
@@ -532,6 +594,10 @@ const busServiceSchema = new mongoose.Schema(
       },
       stops: {
         type: [busStopSchema],
+        default: [],
+      },
+      stageFares: {
+        type: [busStageFareSchema],
         default: [],
       },
     },

@@ -172,11 +172,25 @@ const BusConfirm = () => {
               <div className="mt-3 space-y-3">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600">Pickup</p>
-                  <p className="mt-1 text-sm font-black text-slate-900">{booking.bus?.pickupLocation || booking.bus?.fromCity || fromCity}</p>
+                  <p className="mt-1 text-sm font-black text-slate-900">
+                    {booking.routeSnapshot?.pickupStop?.pointName
+                      ? `${booking.routeSnapshot.pickupStop.pointName}, ${booking.routeSnapshot.pickupStop.city || booking.bus?.fromCity || fromCity}`
+                      : booking.bus?.pickupLocation || booking.bus?.fromCity || fromCity}
+                  </p>
+                  {booking.routeSnapshot?.pickupStop?.time && (
+                    <p className="text-xs font-semibold text-slate-500">Departure: {booking.routeSnapshot.pickupStop.time}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-rose-600">Drop</p>
-                  <p className="mt-1 text-sm font-black text-slate-900">{booking.bus?.dropLocation || booking.bus?.toCity || toCity}</p>
+                  <p className="mt-1 text-sm font-black text-slate-900">
+                    {booking.routeSnapshot?.dropStop?.pointName
+                      ? `${booking.routeSnapshot.dropStop.pointName}, ${booking.routeSnapshot.dropStop.city || booking.bus?.toCity || toCity}`
+                      : booking.bus?.dropLocation || booking.bus?.toCity || toCity}
+                  </p>
+                  {booking.routeSnapshot?.dropStop?.time && (
+                    <p className="text-xs font-semibold text-slate-500">Arrival: {booking.routeSnapshot.dropStop.time}</p>
+                  )}
                 </div>
               </div>
             </div>

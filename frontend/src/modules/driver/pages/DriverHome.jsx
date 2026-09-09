@@ -34,6 +34,7 @@ import api from '../../../shared/api/axiosInstance';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { uploadService } from '../../../shared/services/uploadService';
 import { BACKEND_ORIGIN } from '../../../shared/api/runtimeConfig';
+import { DRIVER_RIDE_REQUEST_PUSH_EVENT } from '../../../shared/push/driverRideRequestPush';
 
 // Vehicle Icons for Map
 import BikeIcon from '@/assets/icons/bike.png';
@@ -1551,6 +1552,9 @@ const DriverHome = () => {
 
             const onRideRequest = (data) => {
                 console.info('[driver-home] rideRequest received', data);
+                if (currentRequestRef.current?.rideId === data?.rideId) {
+                    return;
+                }
                 const requestType = normalizeJobType(data);
                 const request = {
                     type: requestType,
@@ -1567,6 +1571,7 @@ const DriverHome = () => {
                     bidding: data.bidding || { enabled: false },
                     raw: data,
                 };
+                currentRequestRef.current = request;
                 setCurrentRequest(request);
                 setShowRequest(true);
                 playRideRequestAlertSound();
@@ -1733,6 +1738,8 @@ const DriverHome = () => {
             };
 
             socketService.on('rideRequest', onRideRequest);
+            const onFcmRideRequest = (event) => onRideRequest(event.detail || {});
+            window.addEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
             socketService.on('rideRequestClosed', onRideRequestClosed);
             socketService.on('errorMessage', onSocketError);
             socketService.on('rideAccepted', openAcceptedRide);
@@ -1768,6 +1775,7 @@ const DriverHome = () => {
             return () => {
                 console.info('[driver-home] cleaning up socket listeners');
                 socketService.off('rideRequest', onRideRequest);
+                window.removeEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
                 socketService.off('rideRequestClosed', onRideRequestClosed);
                 socketService.off('errorMessage', onSocketError);
                 socketService.off('rideAccepted', openAcceptedRide);
