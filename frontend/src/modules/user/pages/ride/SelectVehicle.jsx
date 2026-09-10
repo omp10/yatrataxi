@@ -523,6 +523,98 @@ const estimateDurationMinutes = (distanceMeters = 0) => {
   return Math.max(1, Math.round(Number(distanceMeters) / metersPerMinute));
 };
 
+const getSetPriceRows = (response) => {
+  const data = unwrap(response);
+  return (data?.paginator?.data || data?.results || []).filter((row) => {
+    const scope = String(row?.pricing_scope || 'ride').trim().toLowerCase();
+    return scope === 'ride';
+  });
+};
+
+const normalizeId = (value) => String(value?._id || value?.id || value || '').trim();
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+const getRuleServiceLocationId = (rule) => normalizeId(
+  rule?.service_location_id?._id
+  || rule?.service_location_id?.id
+  || rule?.service_location_id
+  || rule?.zone?.service_location?._id
+  || rule?.zone?.service_location?.id
+  || rule?.zone?.service_location_id
+  || '',
+);
+
+const sortPricingRules = (rules = []) => (
+  [...rules].sort((first, second) => {
+    const firstUpdatedAt = new Date(first?.updatedAt || first?.createdAt || 0).getTime();
+    const secondUpdatedAt = new Date(second?.updatedAt || second?.createdAt || 0).getTime();
+    return secondUpdatedAt - firstUpdatedAt;
+  })
+);
+
+const isActiveRidePricingRule = (rule) => {
+  const isActive = Number(rule?.active ?? 1) === 1 && String(rule?.status || 'active').toLowerCase() !== 'inactive';
+  const scope = String(rule?.pricing_scope || 'ride').trim().toLowerCase();
+  return isActive && scope === 'ride';
+};
+
+const matchesTransportType = (rule, transportType) => {
+  const normalizedRuleTransport = String(rule?.transport_type || 'taxi').trim().toLowerCase();
+  const normalizedTransportType = String(transportType || 'taxi').trim().toLowerCase() || 'taxi';
+
+  return normalizedRuleTransport === normalizedTransportType
+    || normalizedRuleTransport === 'both';
+};
+
+const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transportType }) => {
+  const normalizedVehicleTypeId = normalizeId(vehicleTypeId);
+  const normalizedServiceLocationId = normalizeId(serviceLocationId);
+  const normalizedTransportType = String(transportType || 'taxi').trim().toLowerCase() || 'taxi';
+
+  const candidates = sortPricingRules(rules.filter((rule) => {
+    const matchesVehicle = normalizeId(rule?.vehicle_type?._id || rule?.vehicle_type || rule?.type_id) === normalizedVehicleTypeId;
+    return matchesVehicle && isActiveRidePricingRule(rule) && matchesTransportType(rule, normalizedTransportType);
+  }));
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  const exactTransportMatch = (rule) => String(rule?.transport_type || 'taxi').trim().toLowerCase() === normalizedTransportType;
+  const exactServiceLocation = candidates.find((rule) => (
+    normalizedServiceLocationId
+    && getRuleServiceLocationId(rule) === normalizedServiceLocationId
+    && exactTransportMatch(rule)
+  ));
+
+  if (exactServiceLocation) {
+    return exactServiceLocation;
+  }
+
+  const exactServiceLocationAnyTransport = candidates.find((rule) => (
+    normalizedServiceLocationId && getRuleServiceLocationId(rule) === normalizedServiceLocationId
+  ));
+
+  if (exactServiceLocationAnyTransport) {
+    return exactServiceLocationAnyTransport;
+  }
+
+  const genericTransportMatch = candidates.find((rule) => (
+    !getRuleServiceLocationId(rule) && exactTransportMatch(rule)
+  ));
+
+  if (genericTransportMatch) {
+    return genericTransportMatch;
+  }
+
+  const genericBoth = candidates.find((rule) => !getRuleServiceLocationId(rule));
+  return genericBoth || candidates[0];
+};
+
 const calculateEstimatedFare = ({ pricingRule, distanceMeters, durationMinutes }) => {
   if (!pricingRule) {
     return 0;
