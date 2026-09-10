@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { PageGuideDropdown } from '../PageGuideDropdown';
 
 const AdminPageHeader = ({
   module = 'Admin',
@@ -8,6 +9,7 @@ const AdminPageHeader = ({
   title = '',
   backTo = null,
   right = null,
+  showGuide = true,
 }) => {
   const navigate = useNavigate();
 

@@ -6,6 +6,7 @@ import { useSettings } from '../../../shared/context/SettingsContext';
 import { getSupportConversations, markSupportMessagesRead } from '../../shared/chat/chatApi';
 import { adminService } from '../services/adminService';
 import { hasAdminPermission } from '../constants/adminAccess';
+import { PageGuideDropdown } from './PageGuideDropdown';
 import toast from 'react-hot-toast';
 import {
   BarChart3,
@@ -1552,11 +1553,12 @@ const AdminLayout = () => {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f0f4f8]">
         <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-slate-200/60 bg-white/80 backdrop-blur-md px-8 shadow-sm">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
               <div className="h-4 w-1 rounded-full bg-slate-900" />
               <h2 className="text-[17px] font-bold tracking-tight text-slate-900">{pageTitle}</h2>
             </div>
+            <PageGuideDropdown />
           </div>
 
           <div className="flex items-center gap-4">
