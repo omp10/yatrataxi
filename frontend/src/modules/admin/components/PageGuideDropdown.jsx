@@ -26,7 +26,7 @@ const TABS = [
   { id: 'tips', label: 'Pro Tips', icon: Lightbulb },
 ];
 
-export const PageGuideDropdown = ({ buttonClassName = '', showTextLabel = true }) => {
+export const PageGuideDropdown = ({ buttonClassName = '', showTextLabel = true, align = 'left' }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -132,7 +132,9 @@ export const PageGuideDropdown = ({ buttonClassName = '', showTextLabel = true }
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.96 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="absolute right-0 top-full z-[80] mt-3 w-[92vw] max-w-[540px] overflow-hidden rounded-[2rem] border border-slate-200/90 bg-white shadow-[0_25px_60px_-15px_rgba(15,23,42,0.25)] ring-1 ring-black/5"
+            className={`absolute top-full z-[80] mt-3 w-[92vw] sm:w-[500px] md:w-[520px] max-w-[calc(100vw-5rem)] overflow-hidden rounded-[2rem] border border-slate-200/90 bg-white shadow-[0_25px_60px_-15px_rgba(15,23,42,0.25)] ring-1 ring-black/5 ${
+              align === 'right' ? 'right-0' : 'left-0'
+            }`}
           >
             {/* Header section */}
             <div className="relative border-b border-slate-100 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-5 text-white">
