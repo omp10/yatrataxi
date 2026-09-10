@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, X, Banknote, CreditCard, ChevronDown, Clock3, LoaderCircle, Eye, TicketPercent, CheckCircle2 } from 'lucide-react';
 import { GoogleMap, MarkerF, OverlayView, PolylineF } from '@react-google-maps/api';
+import toast from 'react-hot-toast';
 import api from '../../../../shared/api/axiosInstance';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { userService } from '../../services/userService';
@@ -522,126 +523,9 @@ const estimateDurationMinutes = (distanceMeters = 0) => {
   return Math.max(1, Math.round(Number(distanceMeters) / metersPerMinute));
 };
 
-const getFallbackVehicleEstimate = (type) => {
-  const value = getIconValue(type);
-  const label = getTypeLabel(type).toLowerCase();
-
-  if (value.includes('bike') || label.includes('bike')) {
-    return 22;
-  }
-
-  if (value.includes('auto') || label.includes('auto')) {
-    return 40;
-  }
-
-  if (value.includes('premium') || value.includes('lux') || label.includes('premium') || label.includes('lux')) {
-    return 130;
-  }
-
-  if (value.includes('suv') || label.includes('suv')) {
-    return 150;
-  }
-
-  return 106;
-};
-
-const getSetPriceRows = (response) => {
-  const data = unwrap(response);
-  return (data?.paginator?.data || data?.results || []).filter((row) => {
-    const scope = String(row?.pricing_scope || 'ride').trim().toLowerCase();
-    return scope === 'ride';
-  });
-};
-
-const normalizeId = (value) => String(value?._id || value?.id || value || '').trim();
-
-const toFiniteNumber = (value, fallback = 0) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-};
-
-const getRuleServiceLocationId = (rule) => normalizeId(
-  rule?.service_location_id?._id
-  || rule?.service_location_id?.id
-  || rule?.service_location_id
-  || rule?.zone?.service_location?._id
-  || rule?.zone?.service_location?.id
-  || rule?.zone?.service_location_id
-  || '',
-);
-
-const sortPricingRules = (rules = []) => (
-  [...rules].sort((first, second) => {
-    const firstUpdatedAt = new Date(first?.updatedAt || first?.createdAt || 0).getTime();
-    const secondUpdatedAt = new Date(second?.updatedAt || second?.createdAt || 0).getTime();
-    return secondUpdatedAt - firstUpdatedAt;
-  })
-);
-
-const isActiveRidePricingRule = (rule) => {
-  const isActive = Number(rule?.active ?? 1) === 1 && String(rule?.status || 'active').toLowerCase() !== 'inactive';
-  const scope = String(rule?.pricing_scope || 'ride').trim().toLowerCase();
-  return isActive && scope === 'ride';
-};
-
-const matchesTransportType = (rule, transportType) => {
-  const normalizedRuleTransport = String(rule?.transport_type || 'taxi').trim().toLowerCase();
-  const normalizedTransportType = String(transportType || 'taxi').trim().toLowerCase() || 'taxi';
-
-  return normalizedRuleTransport === normalizedTransportType
-    || normalizedRuleTransport === 'both';
-};
-
-const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId, transportType }) => {
-  const normalizedVehicleTypeId = normalizeId(vehicleTypeId);
-  const normalizedServiceLocationId = normalizeId(serviceLocationId);
-  const normalizedTransportType = String(transportType || 'taxi').trim().toLowerCase() || 'taxi';
-
-  const candidates = sortPricingRules(rules.filter((rule) => {
-    const matchesVehicle = normalizeId(rule?.vehicle_type?._id || rule?.vehicle_type || rule?.type_id) === normalizedVehicleTypeId;
-    return matchesVehicle && isActiveRidePricingRule(rule) && matchesTransportType(rule, normalizedTransportType);
-  }));
-
-  if (!candidates.length) {
-    return null;
-  }
-
-  const exactTransportMatch = (rule) => String(rule?.transport_type || 'taxi').trim().toLowerCase() === normalizedTransportType;
-  const exactServiceLocation = candidates.find((rule) => (
-    normalizedServiceLocationId
-    && getRuleServiceLocationId(rule) === normalizedServiceLocationId
-    && exactTransportMatch(rule)
-  ));
-
-  if (exactServiceLocation) {
-    return exactServiceLocation;
-  }
-
-  const exactServiceLocationAnyTransport = candidates.find((rule) => (
-    normalizedServiceLocationId && getRuleServiceLocationId(rule) === normalizedServiceLocationId
-  ));
-
-  if (exactServiceLocationAnyTransport) {
-    return exactServiceLocationAnyTransport;
-  }
-
-  const genericTransportMatch = candidates.find((rule) => (
-    !getRuleServiceLocationId(rule) && exactTransportMatch(rule)
-  ));
-
-  if (genericTransportMatch) {
-    return genericTransportMatch;
-  }
-
-  const genericBoth = candidates.find((rule) => !getRuleServiceLocationId(rule));
-  return genericBoth || candidates[0];
-};
-
-const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, durationMinutes }) => {
-  const fallbackFare = getFallbackVehicleEstimate(vehicle?.raw || vehicle);
-
+const calculateEstimatedFare = ({ pricingRule, distanceMeters, durationMinutes }) => {
   if (!pricingRule) {
-    return fallbackFare;
+    return 0;
   }
 
   const distanceKm = Math.max(0, Number(distanceMeters || 0) / 1000);
@@ -657,7 +541,7 @@ const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, duration
     : basePrice + (extraDistanceKm * pricePerDistance) + (Math.max(0, Number(durationMinutes || 0)) * timePrice);
 
   if (subtotal <= 0) {
-    return fallbackFare;
+    return 0;
   }
 
   const total = subtotal + (subtotal * serviceTax) / 100;
@@ -751,6 +635,11 @@ const getBidFareBounds = (vehicle, stepCount) => {
 };
 
 const formatVehicleFare = (vehicle, stepCount) => {
+  const fare = Number(vehicle?.price || 0);
+  if (!fare || fare <= 0) {
+    return 'Price not set';
+  }
+
   if (!vehicle?.supportsBidding) {
     return formatCurrency(vehicle?.price);
   }
@@ -854,7 +743,7 @@ const normalizeVehicleType = (type, index) => {
     badge: null,
     badgeColor: 'bg-orange-50 text-orange-500 border-orange-100',
     sublabel: type?.short_description || type?.description || 'Available ride',
-    price: getFallbackVehicleEstimate(type),
+    price: 0,
     dispatchType,
     supportsBidding: dispatchType === 'bidding' || dispatchType === 'both',
     bidStepAmount: 10,
@@ -1131,7 +1020,6 @@ const SelectVehicle = () => {
           ...vehicle,
           pricingRule,
           price: calculateEstimatedFare({
-            vehicle,
             pricingRule,
             distanceMeters: tripMetrics.distanceMeters,
             durationMinutes: tripMetrics.durationMinutes,
@@ -1209,7 +1097,8 @@ const SelectVehicle = () => {
   );
   const selectedAvailability = selectedVehicle ? (availabilityByVehicleId[selectedVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
   const previewAvailability = previewVehicle ? (availabilityByVehicleId[previewVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
-  const canProceed = Boolean(selectedVehicle) && !isFarePending && (rideMode === 'schedule' || Boolean(selectedAvailability.totalDrivers));
+  const hasValidSelectedFare = Boolean(selectedVehicle) && Number(selectedVehicle?.price || 0) > 0;
+  const canProceed = hasValidSelectedFare && !isFarePending && (rideMode === 'schedule' || Boolean(selectedAvailability.totalDrivers));
   const hasBookableVehicles = useMemo(
     () => displayedVehicles.some((vehicle) => (availabilityByVehicleId[vehicle.id]?.totalDrivers || 0) > 0),
     [availabilityByVehicleId, displayedVehicles],
@@ -1591,7 +1480,7 @@ const SelectVehicle = () => {
   };
 
   const proceedToBooking = () => {
-    if (!selectedVehicle) {
+    if (!selectedVehicle || Number(selectedVehicle.price || 0) <= 0) {
       return;
     }
 
@@ -1641,6 +1530,27 @@ const SelectVehicle = () => {
 
   const handleBook = () => {
     if (!selectedVehicle) {
+      toast.error('Please select a vehicle to proceed.');
+      return;
+    }
+
+    if (isFarePending) {
+      toast('Calculating estimated fare for this route, please wait...', { icon: '⏳' });
+      return;
+    }
+
+    const fare = Number(selectedVehicle.price || 0);
+    if (fare <= 0) {
+      toast.error(`Pricing for "${selectedVehicle.name}" is not set by the admin for this location.`, {
+        duration: 4500,
+      });
+      return;
+    }
+
+    if (rideMode !== 'schedule' && !selectedAvailability.totalDrivers) {
+      toast.error(`No ${selectedVehicle.name} drivers are online nearby. Switch to "Schedule" or choose another vehicle.`, {
+        duration: 4500,
+      });
       return;
     }
 
@@ -1648,22 +1558,30 @@ const SelectVehicle = () => {
       const parsedSchedule = new Date(scheduledAt);
 
       if (!scheduledAt || Number.isNaN(parsedSchedule.getTime())) {
-        setScheduleError('Choose a valid schedule date and time.');
+        const msg = 'Choose a valid schedule date and time.';
+        setScheduleError(msg);
+        toast.error(msg);
         return;
       }
 
       if (parsedSchedule.getTime() <= Date.now() + 60 * 1000) {
-        setScheduleError('Schedule time must be at least 1 minute ahead.');
+        const msg = 'Schedule time must be at least 1 minute ahead.';
+        setScheduleError(msg);
+        toast.error(msg);
         return;
       }
 
       if (scheduledAt < minScheduledAt) {
-        setScheduleError('Schedule time cannot be earlier than now.');
+        const msg = 'Schedule time cannot be earlier than now.';
+        setScheduleError(msg);
+        toast.error(msg);
         return;
       }
 
       if (scheduledAt > maxScheduledAt) {
-        setScheduleError('Advance booking is available for up to 7 days only.');
+        const msg = 'Advance booking is available for up to 7 days only.';
+        setScheduleError(msg);
+        toast.error(msg);
         return;
       }
     }
@@ -1964,26 +1882,28 @@ const SelectVehicle = () => {
           )}
 
           <motion.button
-            whileHover={canProceed ? { scale: 1.01 } : {}}
-            whileTap={canProceed ? { scale: 0.98 } : undefined}
-            disabled={!canProceed}
+            whileHover={{ scale: 1.008 }}
+            whileTap={{ scale: 0.985 }}
+            type="button"
             onClick={handleBook}
             className={`mt-3 flex w-full items-center justify-center rounded-[8px] px-4 py-3.5 text-[16px] font-medium transition ${
               canProceed
-                ? 'bg-[#1f1f1f] text-white'
-                : 'bg-slate-200 text-slate-400'
+                ? 'bg-[#1f1f1f] text-white shadow-md active:bg-black'
+                : 'bg-slate-200 text-slate-500 hover:bg-slate-300'
             }`}
           >
             {selectedVehicle
               ? isFarePending
                 ? 'Calculating fare...'
-                : selectedVehicle.supportsBidding && shouldUseDriverBidding
-                  ? `Request Bid for ${selectedVehicle.name}`
-                  : rideMode === 'schedule'
-                    ? `Schedule ${selectedVehicle.name}`
-                    : selectedAvailability.totalDrivers
-                      ? `Book ${selectedVehicle.name}`
-                      : `${selectedVehicle.name} Unavailable`
+                : Number(selectedVehicle.price || 0) <= 0
+                  ? 'Price not configured'
+                  : selectedVehicle.supportsBidding && shouldUseDriverBidding
+                    ? `Request Bid for ${selectedVehicle.name}`
+                    : rideMode === 'schedule'
+                      ? `Schedule ${selectedVehicle.name}`
+                      : selectedAvailability.totalDrivers
+                        ? `Book ${selectedVehicle.name}`
+                        : `${selectedVehicle.name} Unavailable`
               : rideMode !== 'schedule' && !hasBookableVehicles
                 ? 'No Vehicles Available'
                 : 'Select Vehicle'}
