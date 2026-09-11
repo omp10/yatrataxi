@@ -998,9 +998,16 @@ const SelectVehicle = () => {
       setIsLoadingPricingRules(true);
 
       try {
-        const response = await api.get('/admin/types/set-prices', {
-          params: { scope: 'ride' },
-        });
+        let response;
+        try {
+          response = await api.get('/users/set-prices', {
+            params: { scope: 'ride' },
+          });
+        } catch {
+          response = await api.get('/admin/types/set-prices', {
+            params: { scope: 'ride' },
+          });
+        }
 
         if (!active) {
           return;
