@@ -150,6 +150,14 @@ const poolingBookingSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      commissionReversed: {
+        type: Boolean,
+        default: false,
+      },
+      commissionReversedAt: {
+        type: Date,
+        default: null,
+      },
     },
   },
   { timestamps: true },

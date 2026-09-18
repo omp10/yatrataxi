@@ -152,68 +152,92 @@ const createAnonymousWalkInCustomer = async ({ agent, session = null }) => {
   throw new ApiError(500, 'Unable to create walk-in customer for seat reservation');
 };
 
-const serializeAgentRideBooking = (ride = {}) => ({
-  id: String(ride._id || ''),
-  kind: 'ride',
-  serviceType: ride.serviceType || 'ride',
-  status: ride.status || '',
-  liveStatus: ride.liveStatus || '',
-  fare: Number(ride.fare || 0),
-  amount: Number(ride.fare || 0),
-  paymentMethod: ride.paymentMethod || '',
-  pickupAddress: ride.pickupAddress || '',
-  dropAddress: ride.dropAddress || '',
-  customerName: ride.agentMeta?.customerName || '',
-  customerPhone: ride.agentMeta?.customerPhone || '',
-  commissionAmount: Number(ride.agentMeta?.commissionAmount || 0),
-  commissionMode: ride.agentMeta?.commissionMode || '',
-  commissionCreditedAt: ride.agentMeta?.commissionCreditedAt || null,
-  createdAt: ride.createdAt || null,
-});
+const serializeAgentRideBooking = (ride = {}) => {
+  const isCancelled = String(ride.status || '').toLowerCase() === 'cancelled';
+  const commissionReversed = Boolean(ride.agentMeta?.commissionReversed || isCancelled);
+  const commissionAmount = commissionReversed ? 0 : Number(ride.agentMeta?.commissionAmount || 0);
 
-const serializeAgentBusBooking = (booking = {}) => ({
-  id: String(booking._id || ''),
-  kind: 'bus',
-  bookingCode: booking.bookingCode || '',
-  status: booking.status || '',
-  travelDate: booking.travelDate || '',
-  amount: Number(booking.amount || 0),
-  seatLabels: Array.isArray(booking.seatLabels) ? booking.seatLabels : [],
-  customerName: booking.agentMeta?.customerName || booking.passenger?.name || '',
-  customerPhone: booking.agentMeta?.customerPhone || booking.passenger?.phone || '',
-  route: {
-    fromCity: booking.routeSnapshot?.originCity || '',
-    toCity: booking.routeSnapshot?.destinationCity || '',
-    busName: booking.routeSnapshot?.busName || '',
-    operatorName: booking.routeSnapshot?.operatorName || '',
-  },
-  commissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
-  commissionMode: booking.agentMeta?.commissionMode || '',
-  commissionCreditedAt: booking.agentMeta?.commissionCreditedAt || null,
-  createdAt: booking.createdAt || null,
-});
+  return {
+    id: String(ride._id || ''),
+    kind: 'ride',
+    serviceType: ride.serviceType || 'ride',
+    status: ride.status || '',
+    liveStatus: ride.liveStatus || '',
+    fare: Number(ride.fare || 0),
+    amount: Number(ride.fare || 0),
+    paymentMethod: ride.paymentMethod || '',
+    pickupAddress: ride.pickupAddress || '',
+    dropAddress: ride.dropAddress || '',
+    customerName: ride.agentMeta?.customerName || '',
+    customerPhone: ride.agentMeta?.customerPhone || '',
+    commissionAmount,
+    originalCommissionAmount: Number(ride.agentMeta?.commissionAmount || 0),
+    commissionReversed,
+    commissionMode: ride.agentMeta?.commissionMode || '',
+    commissionCreditedAt: ride.agentMeta?.commissionCreditedAt || null,
+    createdAt: ride.createdAt || null,
+  };
+};
 
-const serializeAgentPoolingBooking = (booking = {}) => ({
-  id: String(booking._id || ''),
-  kind: 'pooling',
-  bookingCode: booking.bookingId || '',
-  status: booking.bookingStatus || '',
-  travelDate: booking.travelDate || '',
-  amount: Number(booking.fare || 0),
-  seatLabels: Array.isArray(booking.selectedSeats) ? booking.selectedSeats : [],
-  customerName: booking.user?.name || '',
-  customerPhone: booking.user?.phone || '',
-  route: {
-    fromCity: booking.pickupLabel || booking.route?.originLabel || '',
-    toCity: booking.dropLabel || booking.route?.destinationLabel || '',
-    busName: booking.route?.routeName || '',
-    operatorName: '',
-  },
-  commissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
-  commissionMode: booking.agentMeta?.commissionMode || '',
-  commissionCreditedAt: booking.agentMeta?.commissionCreditedAt || null,
-  createdAt: booking.createdAt || null,
-});
+const serializeAgentBusBooking = (booking = {}) => {
+  const isCancelled = String(booking.status || '').toLowerCase() === 'cancelled';
+  const commissionReversed = Boolean(booking.agentMeta?.commissionReversed || isCancelled);
+  const commissionAmount = commissionReversed ? 0 : Number(booking.agentMeta?.commissionAmount || 0);
+
+  return {
+    id: String(booking._id || ''),
+    kind: 'bus',
+    bookingCode: booking.bookingCode || '',
+    status: booking.status || '',
+    travelDate: booking.travelDate || '',
+    amount: Number(booking.amount || 0),
+    seatLabels: Array.isArray(booking.seatLabels) ? booking.seatLabels : [],
+    customerName: booking.agentMeta?.customerName || booking.passenger?.name || '',
+    customerPhone: booking.agentMeta?.customerPhone || booking.passenger?.phone || '',
+    route: {
+      fromCity: booking.routeSnapshot?.originCity || '',
+      toCity: booking.routeSnapshot?.destinationCity || '',
+      busName: booking.routeSnapshot?.busName || '',
+      operatorName: booking.routeSnapshot?.operatorName || '',
+    },
+    commissionAmount,
+    originalCommissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
+    commissionReversed,
+    commissionMode: booking.agentMeta?.commissionMode || '',
+    commissionCreditedAt: booking.agentMeta?.commissionCreditedAt || null,
+    createdAt: booking.createdAt || null,
+  };
+};
+
+const serializeAgentPoolingBooking = (booking = {}) => {
+  const isCancelled = String(booking.bookingStatus || '').toLowerCase() === 'cancelled';
+  const commissionReversed = Boolean(booking.agentMeta?.commissionReversed || isCancelled);
+  const commissionAmount = commissionReversed ? 0 : Number(booking.agentMeta?.commissionAmount || 0);
+
+  return {
+    id: String(booking._id || ''),
+    kind: 'pooling',
+    bookingCode: booking.bookingId || '',
+    status: booking.bookingStatus || '',
+    travelDate: booking.travelDate || '',
+    amount: Number(booking.fare || 0),
+    seatLabels: Array.isArray(booking.selectedSeats) ? booking.selectedSeats : [],
+    customerName: booking.user?.name || '',
+    customerPhone: booking.user?.phone || '',
+    route: {
+      fromCity: booking.pickupLabel || booking.route?.originLabel || '',
+      toCity: booking.dropLabel || booking.route?.destinationLabel || '',
+      busName: booking.route?.routeName || '',
+      operatorName: '',
+    },
+    commissionAmount,
+    originalCommissionAmount: Number(booking.agentMeta?.commissionAmount || 0),
+    commissionReversed,
+    commissionMode: booking.agentMeta?.commissionMode || '',
+    commissionCreditedAt: booking.agentMeta?.commissionCreditedAt || null,
+    createdAt: booking.createdAt || null,
+  };
+};
 
 const flattenBusBlueprintSeats = (blueprint = {}) =>
   ['lowerDeck', 'upperDeck']
@@ -602,7 +626,7 @@ export const getAgentReferralSummary = async (req, res) => {
 // Commission actually credited per channel, summed from the bookings themselves so
 // the dashboard cannot drift from what was paid into the wallet.
 const summariseAgentCommission = async (agentId) => {
-  const match = { 'agentMeta.bookedByAgentId': new mongoose.Types.ObjectId(String(agentId)) };
+  const baseMatch = { 'agentMeta.bookedByAgentId': new mongoose.Types.ObjectId(String(agentId)) };
   const group = {
     _id: '$agentMeta.commissionMode',
     commission: { $sum: '$agentMeta.commissionAmount' },
@@ -610,9 +634,9 @@ const summariseAgentCommission = async (agentId) => {
   };
 
   const [rideRows, busRows, poolRows] = await Promise.all([
-    Ride.aggregate([{ $match: match }, { $group: group }]),
-    BusBooking.aggregate([{ $match: match }, { $group: group }]),
-    PoolingBooking.aggregate([{ $match: match }, { $group: group }]),
+    Ride.aggregate([{ $match: { ...baseMatch, status: { $ne: 'cancelled' } } }, { $group: group }]),
+    BusBooking.aggregate([{ $match: { ...baseMatch, status: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: group }]),
+    PoolingBooking.aggregate([{ $match: { ...baseMatch, bookingStatus: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: group }]),
   ]);
 
   const pick = (rows, mode) => {
@@ -694,6 +718,9 @@ export const listAgentBookings = async (req, res) => {
   const serializedBuses = buses.map(serializeAgentBusBooking);
   const serializedPooling = pooling.map(serializeAgentPoolingBooking);
   const everything = [...serializedRides, ...serializedBuses, ...serializedPooling];
+  const activeBookings = everything.filter(
+    (item) => String(item.status || '').toLowerCase() !== 'cancelled'
+  );
 
   res.json({
     success: true,
@@ -702,12 +729,12 @@ export const listAgentBookings = async (req, res) => {
       buses: serializedBuses,
       pooling: serializedPooling,
       summary: {
-        totalBookings: everything.length,
+        totalBookings: activeBookings.length,
         totalCommission: roundMoney(
-          everything.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
+          activeBookings.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
         ),
         totalBookingValue: roundMoney(
-          everything.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+          activeBookings.reduce((sum, item) => sum + Number(item.amount || 0), 0),
         ),
       },
     },

@@ -10,7 +10,7 @@ import { Notification } from '../../admin/promotions/models/Notification.js';
 import { BusService } from '../../admin/models/BusService.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Agent } from '../../agent/models/Agent.js';
-import { creditAgentCommission } from '../../agent/services/agentCommissionService.js';
+import { creditAgentCommission, handleBusBookingCommissionReversal } from '../../agent/services/agentCommissionService.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { env } from '../../../../config/env.js';
 import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js';
@@ -4008,6 +4008,15 @@ export const cancelMyBusBooking = async (req, res) => {
   booking.payment.status = refundPayload
     ? (remainingActiveSeatCount <= 0 ? 'refunded' : 'partially_refunded')
     : (remainingActiveSeatCount <= 0 ? 'cancelled' : booking.payment.status || 'paid');
+
+  await handleBusBookingCommissionReversal({
+    booking,
+    seatsToCancel,
+    activeSeats,
+    isFullCancellation: remainingActiveSeatCount <= 0,
+    cancelledAt,
+  });
+
   await booking.save();
 
   await BusSeatHold.deleteMany({

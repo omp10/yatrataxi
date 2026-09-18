@@ -15,7 +15,7 @@ import { AgentNeededDocument } from '../models/AgentNeededDocument.js';
 import { AgentWithdrawalRequest } from '../../agent/models/AgentWithdrawalRequest.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { listAgentWalletTransactions, applyAgentWalletAdjustment } from '../../agent/services/agentWalletService.js';
-import { getDefaultAgentCommissionConfig, saveDefaultAgentCommissionConfig } from '../../agent/services/agentCommissionService.js';
+import { getDefaultAgentCommissionConfig, saveDefaultAgentCommissionConfig, handleBusBookingCommissionReversal } from '../../agent/services/agentCommissionService.js';
 import { getPublicActivePaymentGateway } from '../../services/paymentGatewayService.js';
 
 const ok = (res, data, extra = {}) =>
@@ -1914,6 +1914,15 @@ export const cancelAdminBusBookingSeats = asyncHandler(async (req, res) => {
   if (!booking.notes?.includes(adminNote)) {
     booking.notes = [booking.notes, adminNote].filter(Boolean).join(' | ');
   }
+
+  await handleBusBookingCommissionReversal({
+    booking,
+    seatsToCancel,
+    activeSeats,
+    isFullCancellation: remainingActiveSeatCount <= 0,
+    cancelledAt,
+  });
+
   await booking.save();
 
   await BusSeatHold.deleteMany({

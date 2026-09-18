@@ -11,40 +11,50 @@ const MODE_LABEL = { direct: 'Booked by you', referral: 'Your referral' };
 // Every booking row shows what the agent actually earned on it. A zero here is
 // real information (commission disabled, or the rule evaluated to nothing), so
 // it is shown as "no commission" rather than hidden.
-const BookingRow = ({ title, subtitle, meta, amount, commissionAmount, commissionMode, status }) => (
-  <div className="rounded-[22px] border border-[#dfebf5] bg-white px-4 py-3">
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-black text-[#143a5a]">{title}</p>
-        <p className="mt-1 truncate text-xs font-semibold text-slate-500">{subtitle}</p>
-        {meta ? <p className="mt-1 truncate text-[11px] font-semibold text-slate-400">{meta}</p> : null}
-      </div>
-      <span className="shrink-0 rounded-full bg-[#eff7ff] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-[#0f6aa8]">
-        {status || '--'}
-      </span>
-    </div>
+const BookingRow = ({ title, subtitle, meta, amount, commissionAmount, commissionMode, status }) => {
+  const isCancelled = String(status || '').toLowerCase() === 'cancelled';
 
-    <div className="mt-3 flex items-end justify-between gap-3 border-t border-dashed border-[#e6eff7] pt-3">
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Booking value</p>
-        <p className="mt-0.5 text-sm font-black text-[#143a5a]">{formatMoney(amount)}</p>
+  return (
+    <div className={`rounded-[22px] border ${isCancelled ? 'border-rose-100 bg-rose-50/20' : 'border-[#dfebf5] bg-white'} px-4 py-3`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-[#143a5a]">{title}</p>
+          <p className="mt-1 truncate text-xs font-semibold text-slate-500">{subtitle}</p>
+          {meta ? <p className="mt-1 truncate text-[11px] font-semibold text-slate-400">{meta}</p> : null}
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+            isCancelled ? 'bg-rose-100 text-rose-600' : 'bg-[#eff7ff] text-[#0f6aa8]'
+          }`}
+        >
+          {status || '--'}
+        </span>
       </div>
-      <div className="text-right">
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Your commission</p>
-        {Number(commissionAmount) > 0 ? (
-          <>
-            <p className="mt-0.5 text-base font-black text-emerald-600">+{formatMoney(commissionAmount)}</p>
-            {commissionMode ? (
-              <p className="text-[10px] font-bold text-slate-400">{MODE_LABEL[commissionMode] || commissionMode}</p>
-            ) : null}
-          </>
-        ) : (
-          <p className="mt-0.5 text-sm font-bold text-slate-400">No commission</p>
-        )}
+
+      <div className="mt-3 flex items-end justify-between gap-3 border-t border-dashed border-[#e6eff7] pt-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Booking value</p>
+          <p className={`mt-0.5 text-sm font-black ${isCancelled ? 'line-through text-slate-400' : 'text-[#143a5a]'}`}>{formatMoney(amount)}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Your commission</p>
+          {isCancelled ? (
+            <p className="mt-0.5 text-sm font-bold text-rose-500">Cancelled (Rs 0.00)</p>
+          ) : Number(commissionAmount) > 0 ? (
+            <>
+              <p className="mt-0.5 text-base font-black text-emerald-600">+{formatMoney(commissionAmount)}</p>
+              {commissionMode ? (
+                <p className="text-[10px] font-bold text-slate-400">{MODE_LABEL[commissionMode] || commissionMode}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-0.5 text-sm font-bold text-slate-400">No commission</p>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Section = ({ icon, label, count, children, empty }) => (
   <section className={cardClass}>
@@ -82,10 +92,11 @@ const AgentBookings = () => {
   const summary = useMemo(() => {
     if (payload.summary) return payload.summary;
     const all = [...payload.rides, ...payload.buses, ...payload.pooling];
+    const active = all.filter((item) => String(item.status || '').toLowerCase() !== 'cancelled');
     return {
-      totalBookings: all.length,
-      totalCommission: all.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
-      totalBookingValue: all.reduce((sum, item) => sum + Number(item.amount || item.fare || 0), 0),
+      totalBookings: active.length,
+      totalCommission: active.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
+      totalBookingValue: active.reduce((sum, item) => sum + Number(item.amount || item.fare || 0), 0),
     };
   }, [payload]);
 

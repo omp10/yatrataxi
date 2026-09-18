@@ -54,6 +54,7 @@ export const applyAgentWalletAdjustment = async ({
   agentId,
   amount,
   kind = 'credit',
+  isReversal = false,
   title = '',
   source = '',
   bookingType = '',
@@ -89,23 +90,28 @@ export const applyAgentWalletAdjustment = async ({
     }
   }
 
-  const signedAmount = normalizedKind === 'debit' ? -normalizedAmount : normalizedAmount;
   const wallet = await AgentWallet.findOne({ agentId }).session(session);
   if (!wallet) {
     throw new ApiError(404, 'Agent wallet not found');
   }
 
-  const nextBalance = roundMoney(Number(wallet.balance || 0) + signedAmount);
-  if (nextBalance < 0) {
-    throw new ApiError(400, 'Agent wallet balance cannot go negative');
-  }
-
-  wallet.balance = nextBalance;
-  if (normalizedKind === 'credit') {
+  if (normalizedKind === 'debit') {
+    if (isReversal) {
+      wallet.balance = Math.max(0, roundMoney(Number(wallet.balance || 0) - normalizedAmount));
+      wallet.lifetimeEarned = Math.max(0, roundMoney(Number(wallet.lifetimeEarned || 0) - normalizedAmount));
+      agent.metrics.totalEarnings = Math.max(0, roundMoney(Number(agent.metrics?.totalEarnings || 0) - normalizedAmount));
+    } else {
+      const nextBalance = roundMoney(Number(wallet.balance || 0) - normalizedAmount);
+      if (nextBalance < 0) {
+        throw new ApiError(400, 'Agent wallet balance cannot go negative');
+      }
+      wallet.balance = nextBalance;
+      wallet.lifetimePaidOut = roundMoney(Number(wallet.lifetimePaidOut || 0) + normalizedAmount);
+    }
+  } else {
+    wallet.balance = roundMoney(Number(wallet.balance || 0) + normalizedAmount);
     wallet.lifetimeEarned = roundMoney(Number(wallet.lifetimeEarned || 0) + normalizedAmount);
     agent.metrics.totalEarnings = roundMoney(Number(agent.metrics?.totalEarnings || 0) + normalizedAmount);
-  } else {
-    wallet.lifetimePaidOut = roundMoney(Number(wallet.lifetimePaidOut || 0) + normalizedAmount);
   }
 
   wallet.transactions.push({

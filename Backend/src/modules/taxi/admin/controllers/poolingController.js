@@ -5,6 +5,7 @@ import { PoolingSeatReservation } from '../models/PoolingSeatReservation.js';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
 import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js';
+import { revertAgentCommission } from '../../agent/services/agentCommissionService.js';
 
 const ok = (res, data, message) => res.status(200).json({ success: true, data, message });
 const created = (res, data, message) => res.status(201).json({ success: true, data, message });
@@ -55,6 +56,24 @@ export const updatePoolingBookingStatus = asyncHandler(async (req, res) => {
 
   if (['cancelled', 'no_show'].includes(String(status || '').toLowerCase())) {
     await PoolingSeatReservation.deleteMany({ booking: booking._id });
+    if (booking.agentMeta?.bookedByAgentId && Number(booking.agentMeta?.commissionAmount || 0) > 0) {
+      await revertAgentCommission({
+        agentId: booking.agentMeta.bookedByAgentId,
+        bookingType: 'pooling',
+        commissionMode: booking.agentMeta.commissionMode || 'direct',
+        amount: Number(booking.agentMeta.commissionAmount || 0),
+        referenceKey: `agent:pooling:reversal:${String(booking._id)}`,
+        title: `Commission reversed for cancelled pooling booking ${booking.bookingId || String(booking._id).slice(-6)}`,
+        metadata: {
+          bookingId: String(booking._id),
+          bookingCode: booking.bookingId,
+        },
+      });
+      booking.agentMeta.commissionAmount = 0;
+      booking.agentMeta.commissionReversed = true;
+      booking.agentMeta.commissionReversedAt = new Date();
+      await booking.save();
+    }
   }
 
   return ok(res, booking, 'Booking status updated successfully');

@@ -16,6 +16,7 @@ import { BusSeatHold } from "../../user/models/BusSeatHold.js";
 import { Owner } from "../../admin/models/Owner.js";
 import { OwnerWalletTransaction } from "../../admin/models/OwnerWalletTransaction.js";
 import { BusService } from "../../admin/models/BusService.js";
+import { handleBusBookingCommissionReversal } from "../../agent/services/agentCommissionService.js";
 import { ServiceLocation } from "../../admin/models/ServiceLocation.js";
 import { ServiceStore } from "../../admin/models/ServiceStore.js";
 import { ServiceCenterStaff } from "../../admin/models/ServiceCenterStaff.js";
@@ -8052,6 +8053,15 @@ export const cancelOwnerBusBookingSeats = async (req, res) => {
   if (!booking.notes?.includes(ownerNote)) {
     booking.notes = [booking.notes, ownerNote].filter(Boolean).join(" | ");
   }
+
+  await handleBusBookingCommissionReversal({
+    booking,
+    seatsToCancel,
+    activeSeats,
+    isFullCancellation: remainingActiveSeatCount <= 0,
+    cancelledAt,
+  });
+
   await booking.save();
 
   await BusSeatHold.deleteMany({
