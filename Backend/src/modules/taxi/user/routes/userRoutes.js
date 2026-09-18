@@ -118,9 +118,9 @@ userRouter.post('/rental-advance/razorpay/verify', authenticateOrResolveUser(['u
 userRouter.post('/rental-advance/phonepe/order', authenticateOrResolveUser(['user']), asyncHandler(createPhonePeRentalAdvancePaymentOrder));
 userRouter.get('/rental-advance/phonepe/status/:merchantTransactionId', authenticateOrResolveUser(['user']), asyncHandler(verifyPhonePeRentalAdvancePayment));
 userRouter.post('/rental-advance/wallet', authenticateOrResolveUser(['user']), asyncHandler(payRentalAdvanceWithWallet));
-userRouter.get('/buses/routes', authenticateOrResolveUser(['user']), asyncHandler(getBusRouteSuggestions));
-userRouter.get('/buses/search', authenticateOrResolveUser(['user']), asyncHandler(searchBuses));
-userRouter.get('/buses/:id/seats', authenticateOrResolveUser(['user']), asyncHandler(getBusSeatLayout));
+userRouter.get('/buses/routes', asyncHandler(getBusRouteSuggestions));
+userRouter.get('/buses/search', asyncHandler(searchBuses));
+userRouter.get('/buses/:id/seats', asyncHandler(getBusSeatLayout));
 userRouter.get('/bus-bookings', authenticateOrResolveUser(['user']), asyncHandler(listMyBusBookings));
 userRouter.get('/bus-bookings/:id/check-in-qr', authenticateOrResolveUser(['user']), asyncHandler(getMyBusBookingCheckInQr));
 userRouter.get('/bus-bookings/:id', authenticateOrResolveUser(['user']), asyncHandler(getMyBusBookingById));
@@ -129,8 +129,8 @@ userRouter.post('/bus-bookings/order', authenticateOrResolveUser(['user']), asyn
 userRouter.post('/bus-bookings/verify', authenticateOrResolveUser(['user']), asyncHandler(verifyBusBookingPayment));
 userRouter.post('/bus-bookings/:id/cancel', authenticateOrResolveUser(['user']), asyncHandler(cancelMyBusBooking));
 
-userRouter.get('/pooling/search', authenticateOrResolveUser(['user']), asyncHandler(searchPoolingRoutes));
-userRouter.get('/pooling/routes/:id', authenticateOrResolveUser(['user']), asyncHandler(getPoolingRouteDetails));
+userRouter.get('/pooling/search', asyncHandler(searchPoolingRoutes));
+userRouter.get('/pooling/routes/:id', asyncHandler(getPoolingRouteDetails));
 userRouter.post('/pooling/bookings/order', authenticateOrResolveUser(['user']), asyncHandler(createPoolingBookingOrder));
 userRouter.post('/pooling/bookings/verify', authenticateOrResolveUser(['user']), asyncHandler(verifyPoolingBookingPayment));
 userRouter.post('/pooling/bookings', authenticateOrResolveUser(['user']), asyncHandler(createPoolingBooking));
