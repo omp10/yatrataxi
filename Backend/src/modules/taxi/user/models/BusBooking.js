@@ -282,6 +282,14 @@ const busBookingSchema = new mongoose.Schema(
         enum: ['direct', 'referral', ''],
         default: '',
       },
+      commissionReversed: {
+        type: Boolean,
+        default: false,
+      },
+      commissionReversedAt: {
+        type: Date,
+        default: null,
+      },
     },
   },
   { timestamps: true },

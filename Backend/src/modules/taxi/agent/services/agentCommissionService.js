@@ -158,3 +158,131 @@ export const creditAgentCommission = async ({
 
   return result;
 };
+
+export const revertAgentCommission = async ({
+  agentId,
+  bookingType,
+  commissionMode,
+  amount,
+  referenceKey,
+  title,
+  metadata = {},
+  session = null,
+}) => {
+  if (!agentId || !referenceKey || !amount || Number(amount) <= 0) {
+    return null;
+  }
+
+  const agent = await Agent.findById(agentId).session(session);
+  if (!agent) {
+    return null;
+  }
+
+  const normalizedBookingType = String(bookingType || '').trim().toLowerCase();
+  const normalizedMode = String(commissionMode || 'direct').trim().toLowerCase() === 'referral' ? 'referral' : 'direct';
+  const reversalAmount = roundMoney(amount);
+
+  const result = await applyAgentWalletAdjustment({
+    agentId: agent._id,
+    amount: reversalAmount,
+    kind: 'debit',
+    isReversal: true,
+    title: title || `Commission reversed for cancelled ${normalizedBookingType} booking`,
+    source: `agent_reversal_${normalizedMode}_${normalizedBookingType}`,
+    bookingType: normalizedBookingType,
+    referenceKey,
+    metadata: {
+      ...metadata,
+      commissionMode: normalizedMode,
+      reversedAmount: reversalAmount,
+    },
+    session,
+  });
+
+  if (result) {
+    const metricsUpdate = {};
+    if (normalizedBookingType === 'bus' || normalizedBookingType === 'pooling') {
+      const metricKey = normalizedMode === 'referral' ? 'metrics.referredBusBookings' : 'metrics.directBusBookings';
+      if (Number(agent.metrics?.[normalizedMode === 'referral' ? 'referredBusBookings' : 'directBusBookings'] || 0) > 0) {
+        metricsUpdate[metricKey] = -1;
+      }
+    } else {
+      const metricKey = normalizedMode === 'referral' ? 'metrics.referredRideBookings' : 'metrics.directRideBookings';
+      if (Number(agent.metrics?.[normalizedMode === 'referral' ? 'referredRideBookings' : 'directRideBookings'] || 0) > 0) {
+        metricsUpdate[metricKey] = -1;
+      }
+    }
+
+    if (Object.keys(metricsUpdate).length > 0) {
+      await Agent.updateOne(
+        { _id: agent._id },
+        { $inc: metricsUpdate },
+        { session },
+      );
+    }
+  }
+
+  return result;
+};
+
+export const handleBusBookingCommissionReversal = async ({
+  booking,
+  seatsToCancel = [],
+  activeSeats = [],
+  isFullCancellation = false,
+  cancelledAt = new Date(),
+  session = null,
+}) => {
+  if (!booking?.agentMeta?.bookedByAgentId) {
+    return null;
+  }
+
+  const currentCommission = Number(booking.agentMeta?.commissionAmount || 0);
+  if (currentCommission <= 0) {
+    return null;
+  }
+
+  const activeCount = Array.isArray(activeSeats) && activeSeats.length > 0 ? activeSeats.length : 1;
+  const cancelCount = Array.isArray(seatsToCancel) && seatsToCancel.length > 0 ? seatsToCancel.length : 1;
+
+  const amountToReverse = isFullCancellation
+    ? currentCommission
+    : Math.min(
+        currentCommission,
+        roundMoney((currentCommission / activeCount) * cancelCount),
+      );
+
+  if (amountToReverse <= 0) {
+    return null;
+  }
+
+  const cancelledCount = Array.isArray(booking.cancelledSeats) ? booking.cancelledSeats.length : 0;
+  const refSuffix = isFullCancellation ? 'full' : `partial_${cancelledCount}`;
+  const reversalRef = `agent:bus:reversal:${String(booking._id)}:${refSuffix}`;
+
+  const result = await revertAgentCommission({
+    agentId: booking.agentMeta.bookedByAgentId,
+    bookingType: 'bus',
+    commissionMode: booking.agentMeta.commissionMode || 'direct',
+    amount: amountToReverse,
+    referenceKey: reversalRef,
+    title: `Commission reversed for cancelled bus booking ${booking.bookingCode || String(booking._id).slice(-6)}`,
+    metadata: {
+      bookingId: String(booking._id),
+      bookingCode: booking.bookingCode,
+      isFullCancellation,
+      cancelledSeats: seatsToCancel.map((s) => s.seatLabel || s.seatId),
+    },
+    session,
+  });
+
+  booking.agentMeta.commissionAmount = isFullCancellation
+    ? 0
+    : Math.max(0, roundMoney(currentCommission - amountToReverse));
+  if (isFullCancellation) {
+    booking.agentMeta.commissionReversed = true;
+    booking.agentMeta.commissionReversedAt = cancelledAt;
+  }
+
+  return result;
+};
