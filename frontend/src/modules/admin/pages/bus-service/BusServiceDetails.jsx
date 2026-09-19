@@ -242,8 +242,8 @@ const BusServiceDetails = () => {
                             <p className="text-sm font-black text-slate-900">{stop.city || 'City not set'}</p>
                             <p className="mt-1 text-xs font-semibold text-slate-500">{stop.pointName || 'Point not set'}</p>
                           </div>
-                          <span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${stopTypeTone[stop.stopType] || stopTypeTone.both}`}>
-                            {stop.stopType === 'both' ? 'BP + DP' : 'BP'}
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${stopTypeTone[stop.stopType] || stopTypeTone.both}`}>
+                            {stop.stopType === 'both' ? 'Boarding & Drop' : 'Boarding Only'}
                           </span>
                         </div>
                         <p className="mt-3 text-[11px] font-semibold text-slate-500">
@@ -268,8 +268,8 @@ const BusServiceDetails = () => {
                             <p className="text-sm font-black text-slate-900">{stop.city || 'City not set'}</p>
                             <p className="mt-1 text-xs font-semibold text-slate-500">{stop.pointName || 'Point not set'}</p>
                           </div>
-                          <span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${stopTypeTone[stop.stopType] || stopTypeTone.both}`}>
-                            {stop.stopType === 'both' ? 'BP + DP' : 'DP'}
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${stopTypeTone[stop.stopType] || stopTypeTone.both}`}>
+                            {stop.stopType === 'both' ? 'Boarding & Drop' : 'Drop Only'}
                           </span>
                         </div>
                         <p className="mt-3 text-[11px] font-semibold text-slate-500">
