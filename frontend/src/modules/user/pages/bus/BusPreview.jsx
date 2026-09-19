@@ -230,8 +230,8 @@ const BusPreview = () => {
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${stopBadgeTone[stop.stopType] || stopBadgeTone.both}`}>
-                      {stop.stopType === 'both' ? 'BP + DP' : stop.stopType === 'drop' ? 'DP' : 'BP'}
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${stopBadgeTone[stop.stopType] || stopBadgeTone.both}`}>
+                      {stop.stopType === 'both' ? 'Boarding & Drop' : stop.stopType === 'drop' ? 'Drop Only' : 'Boarding Only'}
                     </span>
                     <p className="mt-1 text-[11px] font-bold text-slate-500">{stop.arrivalTime || stop.departureTime || '--:--'}</p>
                   </div>
