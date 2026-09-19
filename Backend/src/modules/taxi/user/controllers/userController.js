@@ -1098,6 +1098,16 @@ const serializeBusSearchResult = ({
     amenities: Array.isArray(busService.amenities) ? busService.amenities : [],
     cancellationPolicy: busService.cancellationPolicy || '',
     cancellationRules: Array.isArray(busService.cancellationRules) ? busService.cancellationRules : [],
+    image: busService.image || '',
+    coverImage: busService.coverImage || busService.image || '',
+    galleryImages: Array.isArray(busService.galleryImages) ? busService.galleryImages : [],
+    busColor: busService.busColor || '#f97316',
+    driverName: busService.driverName || '',
+    driverPhone: busService.driverPhone || '',
+    boardingPolicy: busService.boardingPolicy || '',
+    luggagePolicy: busService.luggagePolicy || '',
+    route: activeRoute ? { ...activeRoute, stops: allStops.length > 0 ? allStops : (activeRoute.stops || []) } : null,
+    stops: allStops.length > 0 ? allStops : (Array.isArray(activeRoute?.stops) ? activeRoute.stops : []),
   };
 };
 
@@ -3298,7 +3308,6 @@ export const getBusRouteSuggestions = async (_req, res) => {
   await ensureBusServiceEnabled();
 
   const items = await BusService.find({ status: 'active' })
-    .select('route returnRoute returnRouteEnabled operatorName seatPrice createdAt')
     .sort({ createdAt: -1 })
     .lean();
 

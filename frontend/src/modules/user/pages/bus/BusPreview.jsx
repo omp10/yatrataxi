@@ -67,7 +67,13 @@ const BusPreview = () => {
     bus?.coverImage || bus?.image || '',
     ...(Array.isArray(bus?.galleryImages) ? bus.galleryImages : []),
   ].filter(Boolean).filter((image, index, list) => list.indexOf(image) === index);
-  const routeStops = Array.isArray(bus?.route?.stops) ? bus.route.stops : [];
+
+  // Retrieve route stops reliably from any available stops array
+  const routeStops = Array.isArray(bus?.stops) && bus.stops.length > 0
+    ? bus.stops
+    : (Array.isArray(bus?.allStops) && bus.allStops.length > 0
+      ? bus.allStops
+      : (Array.isArray(bus?.route?.stops) ? bus.route.stops : []));
 
   return (
     <div className="min-h-screen max-w-lg mx-auto bg-[linear-gradient(180deg,#fff7ed_0%,#ffffff_18%,#f8fafc_100%)] font-sans pb-28">
@@ -76,7 +82,7 @@ const BusPreview = () => {
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm active:scale-95 transition-all"
           >
             <ArrowLeft size={18} className="text-slate-900" />
           </button>
@@ -112,11 +118,11 @@ const BusPreview = () => {
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">{bus.busName || 'Coach Service'}</p>
                   <h2 className="mt-1 truncate text-[22px] font-black">{bus.operator}</h2>
-                  <p className="mt-1 text-sm font-semibold text-white/75">{bus.type} • {bus.routeName || 'Direct route'}</p>
+                  <p className="mt-1 text-sm font-semibold text-white/75">{bus.type} • {bus.routeName || `${fromCity} to ${toCity}`}</p>
                 </div>
                 <div className="rounded-2xl bg-white/12 px-4 py-3 text-right backdrop-blur-sm">
                   <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/70">Starts at</p>
-                  <p className="mt-1 text-2xl font-black">Rs {Number(bus.price || 0)}</p>
+                  <p className="mt-1 text-2xl font-black">₹{Number(bus.price || 0)}</p>
                 </div>
               </div>
             </div>
@@ -188,7 +194,7 @@ const BusPreview = () => {
               </div>
               <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                 <Ticket size={14} className="text-slate-400" />
-                Rs {Number(bus.price || 0)} per seat
+                ₹{Number(bus.price || 0)} per seat
               </div>
             </div>
             {(bus.driverName || bus.driverPhone) ? (
@@ -219,7 +225,9 @@ const BusPreview = () => {
                       <MapPin size={14} className="text-orange-500" />
                       <p className="truncate text-sm font-black text-slate-900">{stop.city || stop.pointName || `Stop ${index + 1}`}</p>
                     </div>
-                    <p className="mt-1 truncate text-[12px] font-semibold text-slate-500">{stop.pointName || 'Point not set'}</p>
+                    <p className="mt-1 truncate text-[12px] font-semibold text-slate-500">
+                      {stop.pointName || (stop.distanceFromOriginKm ? `${stop.distanceFromOriginKm} km from start` : 'Point not set')}
+                    </p>
                   </div>
                   <div className="shrink-0 text-right">
                     <span className={`inline-flex rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${stopBadgeTone[stop.stopType] || stopBadgeTone.both}`}>
@@ -280,7 +288,7 @@ const BusPreview = () => {
         <button
           type="button"
           onClick={() => navigate(`${routePrefix}/bus/seats`, { state })}
-          className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-slate-900 py-4 text-base font-black text-white shadow-lg"
+          className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-slate-900 py-4 text-base font-black text-white shadow-lg active:scale-95 transition-all"
         >
           Select Seats <ChevronRight size={18} />
         </button>

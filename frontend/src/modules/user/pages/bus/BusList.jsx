@@ -1,23 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
-  Check,
   ChevronRight,
-  Clock3,
   Loader2,
-  Star,
   BusFront,
-  Sparkles,
-  TicketPercent,
-  SlidersHorizontal,
-  BadgePercent,
+  Star,
+  Clock3,
 } from 'lucide-react';
 import userBusService from '../../services/busService';
 
 const SORT_OPTIONS = [
-  { id: 'recommended', label: 'Filter & Sort' },
+  { id: 'recommended', label: 'Recommended' },
   { id: 'price-asc', label: 'Price: Low to High' },
   { id: 'departure-asc', label: 'Early Departure' },
   { id: 'rating-desc', label: 'Top Rated' },
@@ -29,7 +24,7 @@ const formatTravelDate = (dateStr) => {
   if (!dateStr) return '';
   try {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('en-IN', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -57,35 +52,11 @@ const getNumericValue = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const getBusCompany = (bus) =>
-  String(bus?.operator || bus?.busName || bus?.travels || bus?.company || '')
-    .trim();
-
-const getBusRating = (bus) => getNumericValue(bus?.rating, 0);
-const getBusRatingCount = (bus) => getNumericValue(bus?.ratingCount, 0);
-const hasBusRating = (bus) => getBusRatingCount(bus) > 0;
-const isHighlyRatedBus = (bus) => hasBusRating(bus) && getBusRating(bus) >= 4.5;
-
-const hasBusDeal = (bus) => {
-  const searchableText = [
-    bus?.cancellationPolicy,
-    bus?.offerText,
-    bus?.badge,
-    Array.isArray(bus?.tags) ? bus.tags.join(' ') : bus?.tags,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  return searchableText.includes('free') || searchableText.includes('deal') || searchableText.includes('save');
-};
-
 const getDepartureSortValue = (bus) => {
   const raw = String(bus?.departure || '').trim();
   const match = raw.match(/(\d{1,2}):(\d{2})/);
   if (!match) return Number.MAX_SAFE_INTEGER;
-
-  return (Number(match[1]) * 60) + Number(match[2]);
+  return Number(match[1]) * 60 + Number(match[2]);
 };
 
 const BusList = () => {
@@ -98,11 +69,6 @@ const BusList = () => {
   const [error, setError] = useState('');
   const [buses, setBuses] = useState([]);
   const [sortBy, setSortBy] = useState('recommended');
-  const [showDealsOnly, setShowDealsOnly] = useState(false);
-  const [showHighlyRatedOnly, setShowHighlyRatedOnly] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState('all');
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
-  const sortMenuRef = useRef(null);
 
   useEffect(() => {
     if (!fromCity || !toCity || !date) {
@@ -133,88 +99,33 @@ const BusList = () => {
     };
   }, [date, fromCity, navigate, routePrefix, toCity]);
 
-  useEffect(() => {
-    if (!isSortMenuOpen) {
-      return undefined;
-    }
-
-    const handlePointerDown = (event) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
-        setIsSortMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setIsSortMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isSortMenuOpen]);
-
-  const sortOption = useMemo(
-    () => SORT_OPTIONS.find((option) => option.id === sortBy) || SORT_OPTIONS[0],
-    [sortBy],
-  );
-
-  const busCompanies = useMemo(() => {
-    const uniqueCompanies = Array.from(
-      new Set(
-        (Array.isArray(buses) ? buses : [])
-          .map((bus) => getBusCompany(bus))
-          .filter(Boolean),
-      ),
-    );
-
-    return uniqueCompanies.sort((left, right) => left.localeCompare(right));
-  }, [buses]);
-
   const visibleBuses = useMemo(() => {
     const nextBuses = Array.isArray(buses) ? [...buses] : [];
-    const filteredBuses = nextBuses.filter((bus) => {
-      if (showDealsOnly && !hasBusDeal(bus)) {
-        return false;
-      }
-
-      if (showHighlyRatedOnly && !isHighlyRatedBus(bus)) {
-        return false;
-      }
-
-      if (selectedCompany !== 'all' && getBusCompany(bus) !== selectedCompany) {
-        return false;
-      }
-
-      return true;
-    });
 
     if (sortBy === 'price-asc') {
-      filteredBuses.sort(
-        (left, right) => getNumericValue(left?.price, Number.MAX_SAFE_INTEGER) - getNumericValue(right?.price, Number.MAX_SAFE_INTEGER),
+      nextBuses.sort(
+        (left, right) =>
+          getNumericValue(left?.price, Number.MAX_SAFE_INTEGER) -
+          getNumericValue(right?.price, Number.MAX_SAFE_INTEGER),
       );
     } else if (sortBy === 'departure-asc') {
-      filteredBuses.sort((left, right) => getDepartureSortValue(left) - getDepartureSortValue(right));
+      nextBuses.sort((left, right) => getDepartureSortValue(left) - getDepartureSortValue(right));
     } else if (sortBy === 'rating-desc') {
-      filteredBuses.sort((left, right) => {
-        const ratingDelta = getBusRating(right) - getBusRating(left);
-        if (ratingDelta !== 0) {
-          return ratingDelta;
-        }
-
-        return getBusRatingCount(right) - getBusRatingCount(left);
+      nextBuses.sort((left, right) => {
+        const ratingDelta = getNumericValue(right?.rating, 0) - getNumericValue(left?.rating, 0);
+        if (ratingDelta !== 0) return ratingDelta;
+        return getNumericValue(right?.ratingCount, 0) - getNumericValue(left?.ratingCount, 0);
       });
     }
 
-    return filteredBuses;
-  }, [buses, selectedCompany, showDealsOnly, showHighlyRatedOnly, sortBy]);
+    return nextBuses;
+  }, [buses, sortBy]);
+
+  const lowestPrice = useMemo(() => {
+    if (!buses.length) return null;
+    const prices = buses.map((b) => Number(b.price || 0)).filter((p) => p > 0);
+    return prices.length ? Math.min(...prices) : null;
+  }, [buses]);
 
   const handleSelect = (bus) => {
     navigate(`${routePrefix}/bus/details`, {
@@ -225,305 +136,175 @@ const BusList = () => {
     });
   };
 
-  const handleSortSelect = (nextSortId) => {
-    setSortBy(nextSortId);
-    setIsSortMenuOpen(false);
-  };
-
   return (
-    <div className="min-h-screen max-w-lg mx-auto bg-[linear-gradient(180deg,#fff7ed_0%,#fffaf7_16%,#f8fafc_100%)] font-sans pb-10">
-      <div className="sticky top-0 z-20 border-b border-orange-100/70 bg-white/92 px-4 pb-4 pt-10 shadow-[0_6px_20px_rgba(15,23,42,0.05)] backdrop-blur-md">
+    <div className="min-h-screen bg-slate-50 max-w-lg mx-auto font-sans pb-32 relative overflow-hidden">
+      {/* Sticky Header matching BusHome */}
+      <header className="bg-white px-5 pt-10 pb-4 sticky top-0 z-20 border-b border-slate-100 shadow-sm">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm active:scale-95 transition-all"
+            className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center shadow-sm active:scale-95 transition-all"
           >
             <ArrowLeft size={18} className="text-slate-900" />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-black text-slate-900">
-              {fromCity} <span className="text-slate-300">→</span> {toCity}
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Available Buses</p>
+            <h1 className="text-xl font-bold text-slate-900 truncate">
+              {fromCity} → {toCity}
             </h1>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">{visibleBuses.length || 0} buses</p>
           </div>
-          <div className="rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 text-right">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-400">{formatTravelDate(date)}</p>
+          <div className="text-right shrink-0">
+            <span className="inline-block rounded-xl bg-slate-50 border border-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
+              {formatTravelDate(date)}
+            </span>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="space-y-4 px-4 pt-5">
-        {loading ? (
-          <div className="rounded-3xl border border-slate-100 bg-white p-12 text-slate-500 shadow-sm">
-            <Loader2 size={32} className="mx-auto animate-spin text-slate-400" />
-            <p className="mt-4 text-center text-sm font-bold text-slate-400">Finding available buses...</p>
-          </div>
-        ) : null}
-
-        {!loading && error ? (
-          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-bold text-rose-600">
-            {error}
-          </div>
-        ) : null}
-
-        {!loading && !error && visibleBuses.length === 0 ? (
-          <div className="rounded-3xl border border-slate-100 bg-white p-12 text-center shadow-sm">
-            <h2 className="text-xl font-bold text-slate-900">No buses found</h2>
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              {showDealsOnly || showHighlyRatedOnly || sortBy !== 'recommended' || selectedCompany !== 'all'
-                ? 'Try changing your filters to see more buses.'
-                : 'Try searching for a different date or route.'}
-            </p>
-          </div>
-        ) : null}
-
-        {!loading && !error && buses.length > 0 ? (
-          <>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="overflow-hidden rounded-[22px] bg-[linear-gradient(135deg,#f59e0b_0%,#f97316_100%)] p-4 text-white shadow-[0_10px_24px_rgba(249,115,22,0.18)]">
-                <div className="flex items-center justify-between">
-                  <BusFront size={22} />
-                  <Sparkles size={16} className="text-white/80" />
-                </div>
-                <p className="mt-6 text-lg font-black leading-none">Bus</p>
-                <p className="mt-1 text-xs font-semibold text-white/80">Best routes today</p>
-              </div>
-              <div className="rounded-[22px] border border-rose-100 bg-[radial-gradient(circle_at_top_left,#ffe4e6_0%,#fff1f2_45%,#ffffff_100%)] p-4 shadow-sm">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-100 text-rose-500">
-                  <TicketPercent size={16} />
-                </div>
-                <p className="mt-4 text-sm font-black leading-tight text-slate-900">Free Cancellation</p>
-                <p className="mt-1 text-[11px] font-semibold text-slate-500">On selected buses</p>
-              </div>
-              <div className="rounded-[22px] border border-emerald-100 bg-[radial-gradient(circle_at_top_left,#dcfce7_0%,#f0fdf4_45%,#ffffff_100%)] p-4 shadow-sm">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                  <BadgePercent size={16} />
-                </div>
-                <p className="mt-4 text-sm font-black leading-tight text-slate-900">Special Deals</p>
-                <p className="mt-1 text-[11px] font-semibold text-slate-500">Save more today</p>
-              </div>
+      <div className="px-5 pt-6 space-y-6">
+        {/* Top Dark Hero Card matching BusHome */}
+        <div className="rounded-3xl bg-slate-900 p-6 text-white shadow-xl shadow-slate-200">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold leading-tight">Direct Buses</h2>
+              <p className="mt-2 text-sm text-slate-300 font-medium">
+                {fromCity} to {toCity}
+              </p>
             </div>
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0">
+              <BusFront size={24} className="text-white" />
+            </div>
+          </div>
 
-            <div ref={sortMenuRef} className="relative pb-1">
-              <div className="flex gap-2 overflow-x-auto">
-                <div className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setIsSortMenuOpen((current) => !current)}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold shadow-sm transition ${
-                      isSortMenuOpen
-                        ? 'border-slate-300 bg-slate-50 text-slate-900'
-                        : 'border-slate-200 bg-white text-slate-700'
-                    }`}
-                  >
-                    <SlidersHorizontal size={14} />
-                    {sortOption.label}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDealsOnly((current) => !current)}
-                  className={`inline-flex shrink-0 items-center rounded-xl border px-4 py-2 text-xs font-bold shadow-sm transition ${
-                    showDealsOnly
-                      ? 'border-orange-200 bg-orange-50 text-orange-700'
-                      : 'border-slate-200 bg-white text-slate-700'
-                  }`}
-                >
-                  Deals
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowHighlyRatedOnly((current) => !current)}
-                  className={`inline-flex shrink-0 items-center rounded-xl border px-4 py-2 text-xs font-bold shadow-sm transition ${
-                    showHighlyRatedOnly
-                      ? 'border-amber-200 bg-amber-50 text-amber-700'
-                      : 'border-slate-200 bg-white text-slate-700'
-                  }`}
-                >
-                  Highly Rated
-                </button>
-              </div>
+          <div className="mt-6 grid grid-cols-3 gap-4 border-t border-white/10 pt-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Buses</p>
+              <p className="mt-1 text-lg font-bold">{loading ? '...' : visibleBuses.length}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Travel Date</p>
+              <p className="mt-1 text-sm font-bold truncate">{formatTravelDate(date)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400">Starting From</p>
+              <p className="mt-1 text-lg font-bold">
+                {lowestPrice ? `₹${lowestPrice}` : '--'}
+              </p>
+            </div>
+          </div>
+        </div>
 
-              {isSortMenuOpen ? (
-                <div
-                  className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-[min(20rem,calc(100vw-2rem))] rounded-[20px] border border-slate-200 bg-white p-2 shadow-[0_18px_48px_rgba(15,23,42,0.14)]"
-                >
-                  <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                    Sort buses by
-                  </p>
-                  <div className="space-y-1">
-                    {SORT_OPTIONS.map((option) => {
-                      const isActive = sortBy === option.id;
+        {/* Quick Filter Chips matching BusHome */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Filter & Sort</p>
+          <div className="flex flex-wrap gap-2">
+            {SORT_OPTIONS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSortBy(item.id)}
+                className={`rounded-full px-4 py-2 text-xs font-bold transition-all active:scale-95 ${
+                  sortBy === item.id
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300 shadow-sm'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => handleSortSelect(option.id)}
-                          className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-xs font-bold transition ${
-                            isActive
-                              ? 'bg-slate-900 text-white'
-                              : 'bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span>{option.label}</span>
-                          {isActive ? <Check size={14} /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
+        {/* Bus List Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-slate-900">
+              {loading ? 'Searching...' : `${visibleBuses.length} ${visibleBuses.length === 1 ? 'Bus' : 'Buses'} Available`}
+            </h3>
+            {loading && <Loader2 size={18} className="animate-spin text-slate-400" />}
+          </div>
 
-                  {busCompanies.length > 0 ? (
-                    <>
-                      <div className="mx-1 my-2 h-px bg-slate-100" />
-                      <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        Bus company
-                      </p>
-                      <div className="max-h-56 space-y-1 overflow-y-auto">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCompany('all')}
-                          className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-xs font-bold transition ${
-                            selectedCompany === 'all'
-                              ? 'bg-slate-900 text-white'
-                              : 'bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span>All companies</span>
-                          {selectedCompany === 'all' ? <Check size={14} /> : null}
-                        </button>
-                        {busCompanies.map((company) => {
-                          const isActive = selectedCompany === company;
+          {error && (
+            <div className="rounded-2xl bg-rose-50 border border-rose-100 p-4 text-xs font-bold text-rose-600">
+              {error}
+            </div>
+          )}
 
-                          return (
-                            <button
-                              key={company}
-                              type="button"
-                              onClick={() => setSelectedCompany(company)}
-                              className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-xs font-bold transition ${
-                                isActive
-                                  ? 'bg-slate-900 text-white'
-                                  : 'bg-white text-slate-700 hover:bg-slate-50'
-                              }`}
+          {!loading && !visibleBuses.length && !error && (
+            <div className="rounded-3xl bg-white p-8 text-center border border-slate-100 shadow-sm">
+              <BusFront size={40} className="mx-auto text-slate-300 mb-3" />
+              <h4 className="text-base font-bold text-slate-900">No buses found</h4>
+              <p className="mt-1 text-xs text-slate-500 font-medium">
+                There are no scheduled buses between {fromCity} and {toCity} on this date.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {visibleBuses.map((bus) => (
+              <button
+                key={bus.id}
+                type="button"
+                onClick={() => handleSelect(bus)}
+                className="w-full rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm active:scale-[0.99] transition-transform hover:border-slate-200"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    {/* Timings row */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold text-slate-900">{bus.departure}</span>
+                      <span className="text-slate-400 font-medium">→</span>
+                      <span className="text-xl font-bold text-slate-700">{bus.arrival}</span>
+                      <span className="ml-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
+                        {formatDurationBrief(bus.duration)}
+                      </span>
+                    </div>
+
+                    {/* Operator and coach type */}
+                    <h4 className="mt-2 text-base font-bold text-slate-900 truncate">
+                      {bus.operator || bus.busName || 'Bus Service'}
+                    </h4>
+                    <p className="mt-0.5 text-xs font-medium text-slate-500 truncate">
+                      {bus.type} • {bus.busName || bus.routeName || `${fromCity} to ${toCity}`}
+                    </p>
+
+                    {/* Seats & Amenities badges */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {bus.availableSeats > 0 ? (
+                        <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 border border-emerald-100">
+                          {bus.availableSeats} seats left
+                        </span>
+                      ) : null}
+                      {Array.isArray(bus.amenities)
+                        ? bus.amenities.slice(0, 3).map((amenity) => (
+                            <span
+                              key={amenity}
+                              className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 border border-slate-100"
                             >
-                              <span className="truncate pr-3">{company}</span>
-                              {isActive ? <Check size={14} className="shrink-0" /> : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  ) : null}
+                              {amenity}
+                            </span>
+                          ))
+                        : null}
+                    </div>
+                  </div>
+
+                  {/* Right side: Price & details chevron */}
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] font-bold uppercase text-slate-400">From</p>
+                    <p className="text-xl font-bold text-slate-900">
+                      ₹{Number(bus.price || 0).toLocaleString('en-IN')}
+                    </p>
+                    <div className="mt-3 flex items-center justify-end gap-1 text-xs font-bold text-slate-400 hover:text-slate-700">
+                      <span>Details</span>
+                      <ChevronRight size={14} />
+                    </div>
+                  </div>
                 </div>
-              ) : null}
-            </div>
-          </>
-        ) : null}
-
-        {!loading && !error
-          ? visibleBuses.map((bus, index) => {
-              const rated = hasBusRating(bus);
-              const topAmenities = Array.isArray(bus.amenities) ? bus.amenities.slice(0, 2) : [];
-
-              return (
-                <motion.button
-                  key={bus.id}
-                  type="button"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => handleSelect(bus)}
-                  className="w-full rounded-[24px] border border-slate-200/80 bg-white p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-transform active:scale-[0.98]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-end gap-2">
-                            <p className="text-2xl font-black leading-none text-slate-900">{bus.departure}</p>
-                            <p className="pb-0.5 text-sm font-bold text-slate-400">→</p>
-                            <p className="text-2xl font-black leading-none text-slate-700">{bus.arrival}</p>
-                          </div>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
-                            {formatDurationBrief(bus.duration)} {bus.availableSeats > 0 ? `• ${bus.availableSeats} Seats` : ''}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-2xl font-black leading-none text-slate-900">₹{Number(bus.price || 0).toLocaleString('en-IN')}</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-400">Onwards</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-500">
-                    <Clock3 size={13} className="text-slate-400" />
-                    <span>{bus.type}</span>
-                    <span>•</span>
-                    <span>{bus.busName || getBusCompany(bus)}</span>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-[15px] font-black text-slate-900">{getBusCompany(bus) || 'Bus Service'}</h3>
-                      <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-                        {topAmenities.length > 0 ? topAmenities.join(' • ') : (bus.routeName || `${fromCity} to ${toCity}`)}
-                      </p>
-                    </div>
-                    {rated ? (
-                      <div className="shrink-0 rounded-xl bg-amber-400 px-2.5 py-1.5 text-white shadow-sm">
-                        <div className="flex items-center gap-1">
-                          <Star size={12} className="fill-current" />
-                          <span className="text-sm font-black">{getBusRating(bus).toFixed(1)}</span>
-                        </div>
-                        <p className="mt-0.5 text-center text-[10px] font-bold text-white/90">{getBusRatingCount(bus)}</p>
-                      </div>
-                    ) : (
-                      <div className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-700">
-                        New
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {bus.availableSeats > 0 ? (
-                      <span className="rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black text-orange-600">
-                        {bus.availableSeats} seats left
-                      </span>
-                    ) : null}
-                    {topAmenities.map((amenity) => (
-                      <span key={amenity} className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">
-                        {amenity}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 flex-wrap gap-2">
-                      {isHighlyRatedBus(bus) ? (
-                        <span className="rounded-full bg-pink-50 px-3 py-1 text-[10px] font-black text-pink-600">
-                          Highly rated
-                        </span>
-                      ) : null}
-                      {String(bus.cancellationPolicy || '').toLowerCase().includes('free') ? (
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black text-emerald-600">
-                          Free cancellation
-                        </span>
-                      ) : null}
-                      {!rated ? (
-                        <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700">
-                          New
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs font-black uppercase tracking-[0.14em] text-slate-900">
-                      Details <ChevronRight size={16} />
-                    </div>
-                  </div>
-                </motion.button>
-              );
-            })
-          : null}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
