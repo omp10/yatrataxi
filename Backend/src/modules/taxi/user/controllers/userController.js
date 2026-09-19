@@ -666,15 +666,42 @@ const resolveBusSegmentFare = (busService = {}, routeData = {}, fromStopIndex = 
     (sf) => Number(sf.fromStopIndex) === Number(fromStopIndex) && Number(sf.toStopIndex) === Number(toStopIndex),
   );
 
-  const seatVariant = String(seat?.variant || 'seat').trim().toLowerCase();
+  const seatVariant = seat && seat.variant ? String(seat.variant).trim().toLowerCase() : null;
 
-  if (foundStage && Number(foundStage.baseFare) > 0) {
+  if (foundStage) {
     const variantPricing = foundStage.variantPricing || {};
-    const price = Number(variantPricing?.[seatVariant] ?? variantPricing?.seat ?? foundStage.baseFare);
-    if (Number.isFinite(price) && price > 0) {
-      return price;
+    if (seatVariant) {
+      const price = Number(variantPricing?.[seatVariant] ?? foundStage.baseFare);
+      if (Number.isFinite(price) && price > 0) {
+        return price;
+      }
+    } else {
+      // For route suggestions and search cards without a pre-selected seat:
+      // Derive starting price from the lowest valid fare among active seat variants in blueprint
+      const blueprintSeats = flattenBusBlueprintSeats(busService?.blueprint || {});
+      const activeVariants = new Set(blueprintSeats.map((s) => String(s.variant || 'seat').trim().toLowerCase()));
+
+      const candidatePrices = [];
+      for (const v of activeVariants) {
+        const p = Number(variantPricing?.[v]);
+        if (Number.isFinite(p) && p > 0) {
+          candidatePrices.push(p);
+        }
+      }
+
+      const stageBase = Number(foundStage.baseFare);
+      if (stageBase > 0 && (!activeVariants.size || activeVariants.has('seat'))) {
+        candidatePrices.push(stageBase);
+      }
+
+      if (candidatePrices.length > 0) {
+        return Math.min(...candidatePrices);
+      }
+
+      if (stageBase > 0) {
+        return stageBase;
+      }
     }
-    return Number(foundStage.baseFare);
   }
 
   return resolveBusSeatPrice(busService, seat);
@@ -990,6 +1017,88 @@ export const getIntercityPackageCatalog = async (_req, res) => {
     success: true,
     results,
   });
+};
+
+const serializeBusSearchResult = ({
+  busService = {},
+  schedule = {},
+  availableSeats = 0,
+  travelDate = '',
+  fromCity = '',
+  toCity = '',
+  fromStopIndex = 0,
+  toStopIndex = 1,
+  departureTime = '',
+  arrivalTime = '',
+  durationHours = '',
+  stagePrice = null,
+  pickupStop = null,
+  dropStop = null,
+  allStops = [],
+  isReturnRoute = false,
+}) => {
+  const activeRoute = isReturnRoute && busService.returnRouteEnabled && busService.returnRoute
+    ? busService.returnRoute
+    : busService.route;
+
+  const stageFares = Array.isArray(activeRoute?.stageFares) ? activeRoute.stageFares : [];
+  const foundStage = stageFares.find(
+    (sf) => Number(sf.fromStopIndex) === Number(fromStopIndex) && Number(sf.toStopIndex) === Number(toStopIndex),
+  );
+
+  const effectiveVariantPricing = foundStage?.variantPricing
+    ? { ...(busService.variantPricing || {}), ...foundStage.variantPricing }
+    : (busService.variantPricing || null);
+
+  const price = Number.isFinite(Number(stagePrice)) && Number(stagePrice) > 0
+    ? Number(stagePrice)
+    : resolveBusSegmentFare(busService, activeRoute, fromStopIndex, toStopIndex);
+
+  const depTime = departureTime || schedule?.departureTime || '';
+  const arrTime = arrivalTime || schedule?.arrivalTime || '';
+  const duration = durationHours || activeRoute?.durationHours || '';
+  const seatsCount = Math.max(0, Number(availableSeats || 0));
+
+  return {
+    id: `${String(busService._id)}:${String(schedule?.id || '')}:${travelDate}:${fromStopIndex}:${toStopIndex}`,
+    busServiceId: String(busService._id),
+    scheduleId: String(schedule?.id || ''),
+    travelDate,
+    operator: busService.operatorName || '',
+    operatorName: busService.operatorName || '',
+    busName: busService.busName || '',
+    type: busService.coachType || busService.busCategory || 'Bus',
+    coachType: busService.coachType || '',
+    busCategory: busService.busCategory || '',
+    departure: depTime,
+    departureTime: depTime,
+    arrival: arrTime,
+    arrivalTime: arrTime,
+    duration,
+    durationHours: duration,
+    routeName: activeRoute?.routeName || `${fromCity || activeRoute?.originCity || ''} to ${toCity || activeRoute?.destinationCity || ''}`,
+    fromCity: fromCity || activeRoute?.originCity || '',
+    toCity: toCity || activeRoute?.destinationCity || '',
+    fromStopIndex: Number(fromStopIndex || 0),
+    toStopIndex: Number(toStopIndex || 1),
+    pickupStop: pickupStop || null,
+    dropStop: dropStop || null,
+    allStops: Array.isArray(allStops) ? allStops : [],
+    isReturnRoute: Boolean(isReturnRoute),
+    seats: seatsCount,
+    availableSeats: seatsCount,
+    price,
+    startingPrice: price,
+    stagePrice: price,
+    variantPricing: effectiveVariantPricing,
+    fareCurrency: busService.fareCurrency || 'INR',
+    rating: Number(busService.rating || 4.5),
+    ratingCount: Number(busService.ratingCount || 12),
+    hasLiveTracking: Boolean(busService.liveTracking?.enabled || busService.driverId),
+    amenities: Array.isArray(busService.amenities) ? busService.amenities : [],
+    cancellationPolicy: busService.cancellationPolicy || '',
+    cancellationRules: Array.isArray(busService.cancellationRules) ? busService.cancellationRules : [],
+  };
 };
 
 const serializeBusRouteSuggestion = (busService) => ({

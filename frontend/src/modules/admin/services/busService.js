@@ -102,10 +102,16 @@ export const generateDefaultStageFares = (stops = [], baseSeatPrice = 0, variant
     return [];
   }
 
-  const basePrice = Math.max(0, Number(baseSeatPrice || 0));
-  const sleeperPrice = Number(variantPricing?.sleeper || (basePrice > 0 ? basePrice * 1.3 : 0));
-  const windowPrice = Number(variantPricing?.window || basePrice);
-  const aislePrice = Number(variantPricing?.aisle || basePrice);
+  const rawBase = Number(baseSeatPrice || 0);
+  const rawSleeper = Number(variantPricing?.sleeper || 0);
+  const rawWindow = Number(variantPricing?.window || 0);
+  const rawAisle = Number(variantPricing?.aisle || 0);
+
+  // Derive effective pricing without hardcoded fallbacks
+  const effectiveBase = rawBase > 0 ? rawBase : (rawSleeper > 0 ? rawSleeper : 0);
+  const effectiveSleeper = rawSleeper > 0 ? rawSleeper : effectiveBase;
+  const effectiveWindow = rawWindow > 0 ? rawWindow : effectiveBase;
+  const effectiveAisle = rawAisle > 0 ? rawAisle : effectiveBase;
 
   const stageFares = [];
   const totalSegments = stops.length - 1;
@@ -114,11 +120,12 @@ export const generateDefaultStageFares = (stops = [], baseSeatPrice = 0, variant
     for (let j = i + 1; j < stops.length; j += 1) {
       const fromStop = stops[i];
       const toStop = stops[j];
-      const segmentRatio = (j - i) / totalSegments;
-      const stageBase = Math.max(50, Math.round((basePrice * segmentRatio) / 10) * 10);
-      const stageSleeper = Math.max(stageBase, Math.round((sleeperPrice * segmentRatio) / 10) * 10);
-      const stageWindow = Math.max(stageBase, Math.round((windowPrice * segmentRatio) / 10) * 10);
-      const stageAisle = Math.max(stageBase, Math.round((aislePrice * segmentRatio) / 10) * 10);
+      const segmentRatio = totalSegments > 0 ? (j - i) / totalSegments : 1;
+
+      const stageBase = Math.round(effectiveBase * segmentRatio);
+      const stageSleeper = rawSleeper > 0 ? Math.round(effectiveSleeper * segmentRatio) : stageBase;
+      const stageWindow = rawWindow > 0 ? Math.round(effectiveWindow * segmentRatio) : stageBase;
+      const stageAisle = rawAisle > 0 ? Math.round(effectiveAisle * segmentRatio) : stageBase;
 
       stageFares.push({
         fromStopIndex: Number.isFinite(Number(fromStop.stopIndex)) ? Number(fromStop.stopIndex) : i,

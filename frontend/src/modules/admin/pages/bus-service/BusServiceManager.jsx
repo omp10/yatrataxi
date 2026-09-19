@@ -1004,7 +1004,7 @@ const BusServiceManager = ({
       toast.error('Add at least 2 stops to generate stage fares.');
       return;
     }
-    const generated = generateDefaultStageFares(stops, draft.baseSeatPrice, draft.variantPricing);
+    const generated = generateDefaultStageFares(stops, draft.seatPrice, draft.variantPricing);
     setDraft((current) => {
       if (isReturn) {
         return {
@@ -1055,7 +1055,7 @@ const BusServiceManager = ({
           toStopIndex: Number(toStopIndex),
           fromCity: String(fromCity || '').trim(),
           toCity: String(toCity || '').trim(),
-          baseFare: field === 'baseFare' ? Math.max(0, Number(value || 0)) : Math.max(0, Number(current.baseSeatPrice || 0)),
+          baseFare: field === 'baseFare' ? Math.max(0, Number(value || 0)) : Math.max(0, Number(current.seatPrice || current.variantPricing?.seat || current.variantPricing?.sleeper || 0)),
           variantPricing: field.startsWith('variantPricing.')
             ? { [field.split('.')[1]]: Math.max(0, Number(value || 0)) }
             : {},
@@ -2664,7 +2664,7 @@ const BusServiceManager = ({
                       const existingFare = (draft.route.stageFares || []).find(
                         (item) => Number(item.fromStopIndex) === i && Number(item.toStopIndex) === j
                       );
-                      const basePrice = existingFare?.baseFare ?? draft.baseSeatPrice ?? 0;
+                      const basePrice = existingFare?.baseFare ?? draft.seatPrice ?? draft.variantPricing?.seat ?? draft.variantPricing?.sleeper ?? '';
                       const sleeperPrice = existingFare?.variantPricing?.sleeper ?? draft.variantPricing?.sleeper ?? '';
 
                       return (
@@ -2758,7 +2758,7 @@ const BusServiceManager = ({
                       const existingFare = (draft.returnRoute.stageFares || []).find(
                         (item) => Number(item.fromStopIndex) === i && Number(item.toStopIndex) === j
                       );
-                      const basePrice = existingFare?.baseFare ?? draft.baseSeatPrice ?? 0;
+                      const basePrice = existingFare?.baseFare ?? draft.seatPrice ?? draft.variantPricing?.seat ?? draft.variantPricing?.sleeper ?? '';
                       const sleeperPrice = existingFare?.variantPricing?.sleeper ?? draft.variantPricing?.sleeper ?? '';
 
                       return (
