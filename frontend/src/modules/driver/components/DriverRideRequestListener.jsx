@@ -4,7 +4,7 @@ import IncomingRideRequest from '../pages/IncomingRideRequest';
 import api from '../../../shared/api/axiosInstance';
 import { socketService } from '../../../shared/api/socket';
 import { getLocalDriverToken } from '../services/registrationService';
-import { DRIVER_RIDE_REQUEST_PUSH_EVENT } from '../../../shared/push/driverRideRequestPush';
+import { DRIVER_RIDE_REQUEST_PUSH_EVENT, consumePendingRideRequest } from '../../../shared/push/driverRideRequestPush';
 import {
     playRideRequestAlertSound,
     stopRideRequestAlertSound,
@@ -286,9 +286,24 @@ const DriverRideRequestListener = () => {
             });
         };
 
+        const pendingPush = consumePendingRideRequest();
+        if (pendingPush?.rideId) {
+            onRideRequest(pendingPush);
+        }
+
+        const searchParams = new URLSearchParams(location.search);
+        const incomingRideId = searchParams.get('incomingRideId');
+        if (incomingRideId) {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('incomingRideId');
+            window.history.replaceState({}, '', cleanUrl.pathname + (cleanUrl.search || ''));
+        }
+
         const checkActiveRequest = async () => {
             try {
-                const response = await api.get('/taxi/driver/active-ride-request');
+                const response = await api.get('/taxi/driver/active-ride-request', {
+                    params: incomingRideId ? { rideId: incomingRideId } : {},
+                });
                 const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
                 if (rideRequest?.rideId) {
                     onRideRequest(rideRequest);
@@ -312,9 +327,16 @@ const DriverRideRequestListener = () => {
             }
         };
 
+        const onSwMessage = (event) => {
+            if (event.data?.type === 'driver_ride_request' && event.data.payload?.rideId) {
+                onRideRequest(event.data.payload);
+            }
+        };
+
         document.addEventListener('visibilitychange', onForegroundResume);
         window.addEventListener('pageshow', onForegroundResume);
         window.addEventListener('focus', onForegroundResume);
+        navigator.serviceWorker?.addEventListener('message', onSwMessage);
         socket.on('connect', onSocketConnect);
 
         socketService.on('rideRequest', onRideRequest);
@@ -337,9 +359,10 @@ const DriverRideRequestListener = () => {
             document.removeEventListener('visibilitychange', onForegroundResume);
             window.removeEventListener('pageshow', onForegroundResume);
             window.removeEventListener('focus', onForegroundResume);
+            navigator.serviceWorker?.removeEventListener('message', onSwMessage);
             socket.off('connect', onSocketConnect);
         };
-    }, [activeOnRoute, fetchActiveJob, navigate]);
+    }, [activeOnRoute, fetchActiveJob, location.search, navigate]);
 
     const handleAccept = useCallback(() => {
         if (!currentRequest?.rideId || acceptingRideId) return;

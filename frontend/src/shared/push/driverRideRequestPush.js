@@ -43,12 +43,36 @@ export const normalizeDriverRideRequestPush = (payload = {}) => {
   };
 };
 
+let lastPendingRideRequest = null;
+let lastPendingRideRequestTimestamp = 0;
+
 export const dispatchDriverRideRequestPush = (payload) => {
   const request = normalizeDriverRideRequestPush(payload);
-  if (!request || typeof window === 'undefined') return false;
+  if (!request) return false;
 
-  window.dispatchEvent(new CustomEvent(DRIVER_RIDE_REQUEST_PUSH_EVENT, {
-    detail: request,
-  }));
+  lastPendingRideRequest = request;
+  lastPendingRideRequestTimestamp = Date.now();
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(DRIVER_RIDE_REQUEST_PUSH_EVENT, {
+      detail: request,
+    }));
+  }
   return true;
+};
+
+export const consumePendingRideRequest = (maxAgeMs = 45000) => {
+  if (!lastPendingRideRequest) return null;
+  if (Date.now() - lastPendingRideRequestTimestamp > maxAgeMs) {
+    lastPendingRideRequest = null;
+    return null;
+  }
+  const request = lastPendingRideRequest;
+  lastPendingRideRequest = null;
+  return request;
+};
+
+export const clearPendingRideRequest = () => {
+  lastPendingRideRequest = null;
+  lastPendingRideRequestTimestamp = 0;
 };

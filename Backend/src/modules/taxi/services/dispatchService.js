@@ -417,19 +417,39 @@ const getDispatchState = (rideId) => {
   };
 };
 
-export const getActiveRideRequestForDriver = (driverId) => {
+export const getActiveRideRequestForDriver = (driverId, targetRideId = null) => {
   if (!driverId) return null;
   const driverKey = String(driverId);
+  const targetRideKey = targetRideId ? String(targetRideId) : null;
 
-  for (const [, state] of activeDispatches.entries()) {
+  if (targetRideKey) {
+    const state = activeDispatches.get(targetRideKey);
     if (
-      Array.isArray(state.driverIds) &&
-      state.driverIds.includes(driverKey) &&
+      state &&
+      (state.driverIds?.includes(driverKey) || state.notifiedDriverIds?.includes(driverKey)) &&
       !state.rejectedDriverIds?.includes(driverKey) &&
       state.lastPayload
     ) {
       const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
-      if (remainingMs > 1000) {
+      if (remainingMs > 500) {
+        const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
+        return {
+          ...state.lastPayload,
+          expiresInSeconds,
+          acceptRejectDurationSeconds: expiresInSeconds,
+        };
+      }
+    }
+  }
+
+  for (const [, state] of activeDispatches.entries()) {
+    if (
+      (state.driverIds?.includes(driverKey) || state.notifiedDriverIds?.includes(driverKey)) &&
+      !state.rejectedDriverIds?.includes(driverKey) &&
+      state.lastPayload
+    ) {
+      const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
+      if (remainingMs > 500) {
         const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
         return {
           ...state.lastPayload,

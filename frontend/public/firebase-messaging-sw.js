@@ -58,12 +58,20 @@ if (hasFirebaseConfig) {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/';
+  const messageData = event.notification?.data || {};
+  const isRideRequest = messageData.type === 'ride_request';
+  const targetUrl = messageData.url || (isRideRequest && messageData.rideId ? `/taxi/driver/home?incomingRideId=${messageData.rideId}` : '/taxi/driver/home');
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ('focus' in client) {
+          if (isRideRequest) {
+            client.postMessage({
+              type: 'driver_ride_request',
+              payload: messageData,
+            });
+          }
           client.navigate(targetUrl);
           return client.focus();
         }

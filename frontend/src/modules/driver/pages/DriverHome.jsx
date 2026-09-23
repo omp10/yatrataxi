@@ -22,7 +22,7 @@ import {
     Mail,
     BarChart2
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import toast from 'react-hot-toast';
 
@@ -34,7 +34,7 @@ import api from '../../../shared/api/axiosInstance';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { uploadService } from '../../../shared/services/uploadService';
 import { BACKEND_ORIGIN } from '../../../shared/api/runtimeConfig';
-import { DRIVER_RIDE_REQUEST_PUSH_EVENT } from '../../../shared/push/driverRideRequestPush';
+import { DRIVER_RIDE_REQUEST_PUSH_EVENT, consumePendingRideRequest } from '../../../shared/push/driverRideRequestPush';
 
 // Vehicle Icons for Map
 import BikeIcon from '@/assets/icons/bike.png';
@@ -450,6 +450,15 @@ const readStoredDriverInfo = () => {
     }
 };
 
+const readStoredDriverIsOnline = () => {
+    try {
+        const stored = readStoredDriverInfo();
+        return Boolean(stored?.isOnline);
+    } catch {
+        return false;
+    }
+};
+
 const persistStoredDriverInfo = (updates = {}) => {
     const current = readStoredDriverInfo();
     const next = {
@@ -569,12 +578,13 @@ const mapStyles = [
 
 const DriverHome = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { settings } = useSettings();
     const appName = settings.general?.app_name || 'App';
     const appLogo = settings.general?.logo || settings.customization?.logo;
     const storedDriverInfo = useMemo(() => readStoredDriverInfo(), []);
     const [isOwnerManagedDriver, setIsOwnerManagedDriver] = useState(() => isOwnerManagedDriverProfile(storedDriverInfo));
-    const [isOnline, setIsOnline] = useState(false);
+    const [isOnline, setIsOnline] = useState(() => readStoredDriverIsOnline());
     const [showRequest, setShowRequest] = useState(false);
 
     const [currentRequest, setCurrentRequest] = useState(null);
@@ -786,7 +796,7 @@ const DriverHome = () => {
     }, []);
 
     useEffect(() => {
-        if (!isOnline || !showRequest || !currentRequest?.rideId) {
+        if (!showRequest || !currentRequest?.rideId) {
             return undefined;
         }
 
@@ -807,7 +817,7 @@ const DriverHome = () => {
             window.removeEventListener('pageshow', replayAlert);
             document.removeEventListener('visibilitychange', replayAlert);
         };
-    }, [currentRequest?.rideId, isOnline, showRequest]);
+    }, [currentRequest?.rideId, showRequest]);
 
     const clearRecoveryBurst = useCallback(() => {
         recoveryTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
@@ -919,7 +929,8 @@ const DriverHome = () => {
 
         setVehicleIconType(driver?.vehicleIconType || driver?.vehicleType || 'car');
         setVehicleIconUrl(driver?.vehicleIconUrl || '');
-        setIsOnline(Boolean(driver?.isOnline));
+        const serverIsOnline = Boolean(driver?.isOnline);
+        setIsOnline((current) => (currentRequestRef.current?.rideId ? true : serverIsOnline));
         setIsOwnerManagedDriver(isOwnerManagedDriverProfile(driver));
         setTodaySummary(normalizeTodaySummary(driver?.todaySummary));
         if (driver?.wallet) {
@@ -944,6 +955,7 @@ const DriverHome = () => {
             vehicleIconType: driver?.vehicleIconType || storedDriverInfoSnapshot?.vehicleIconType || '',
             vehicleType: driver?.vehicleType || storedDriverInfoSnapshot?.vehicleType || '',
             vehicleIconUrl: driver?.vehicleIconUrl || storedDriverInfoSnapshot?.vehicleIconUrl || '',
+            isOnline: currentRequestRef.current?.rideId ? true : serverIsOnline,
         });
 
         if (Array.isArray(savedCoords) && savedCoords.length === 2) {
@@ -1209,6 +1221,7 @@ const DriverHome = () => {
                     coordinates: finalCoords,
                 },
                 coordinates: finalCoords,
+                isOnline: true,
             });
             socketService.emit('locationUpdate', { coordinates: finalCoords });
             
@@ -1221,6 +1234,7 @@ const DriverHome = () => {
         } catch (error) {
             console.error('[driver-home] goOnline failed', error);
             setIsOnline(false);
+            persistStoredDriverInfo({ isOnline: false });
             socketService.disconnect();
             const nextMessage = error?.response?.data?.message || error.message || 'Could not go online.';
             setStatusMessage(nextMessage);
@@ -1235,12 +1249,13 @@ const DriverHome = () => {
     const goOffline = useCallback(async () => {
         setIsTogglingDuty(true);
         setIsOnline(false);
+        persistStoredDriverInfo({ isOnline: false });
         try {
             setStatusMessage('Going offline...');
             const response = await api.patch('/drivers/offline');
             const driver = response?.data?.data || response?.data || response;
-            setIsOnline(Boolean(driver?.isOnline));
             setIsOnline(false);
+            persistStoredDriverInfo({ isOnline: false });
             setShowRequest(false);
             setCurrentRequest(null);
             setStatusMessage('You are offline.');
@@ -1248,6 +1263,7 @@ const DriverHome = () => {
             refreshTodaySummary().catch(() => {});
         } catch (error) {
             setIsOnline(true);
+            persistStoredDriverInfo({ isOnline: true });
             setStatusMessage(error.message || 'Could not go offline.');
         } finally {
             setIsTogglingDuty(false);
@@ -1520,10 +1536,128 @@ const DriverHome = () => {
         });
     }, [clearRecoveryBurst, isHydratingDriver, isOnline, isTogglingDuty, recoverRealtimeSession]);
 
+    const onRideRequest = useCallback((data) => {
+        console.info('[driver-home] rideRequest received', data);
+        if (!data?.rideId) {
+            return;
+        }
+        if (currentRequestRef.current?.rideId === data.rideId) {
+            return;
+        }
+        const requestType = normalizeJobType(data);
+        const request = {
+            type: requestType,
+            title: getJobTitle(requestType),
+            fare: `Rs ${data.fare || 0}`,
+            payment: data.paymentMethod || 'Cash',
+            pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
+            drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
+            distance: formatTripDistance(data),
+            requestId: data.rideId,
+            rideId: data.rideId,
+            attempt: data.attempt,
+            maxAttempts: data.maxAttempts,
+            acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
+            requestExpiresAt: data.requestExpiresAt || null,
+            customer: data.user || null,
+            bookingMode: data.bookingMode || 'normal',
+            bidding: data.bidding || { enabled: false },
+            raw: data,
+        };
+        currentRequestRef.current = request;
+        setCurrentRequest(request);
+        setShowRequest(true);
+        setIsOnline(true);
+        persistStoredDriverInfo({ isOnline: true });
+        socketService.connect({ role: 'driver' });
+        playRideRequestAlertSound();
+        setStatusMessage('New booking received.');
+    }, []);
+
+    const onRideRequestRef = useRef(onRideRequest);
+    useEffect(() => {
+        onRideRequestRef.current = onRideRequest;
+    }, [onRideRequest]);
+
+    const checkActiveRideRequest = useCallback(async (targetRideId = null) => {
+        const token = getLocalDriverToken();
+        if (!token) return;
+
+        try {
+            const queryRideId = targetRideId || new URLSearchParams(window.location.search).get('incomingRideId') || null;
+            const response = await api.get('/taxi/driver/active-ride-request', {
+                params: queryRideId ? { rideId: queryRideId } : {},
+            });
+            const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
+            if (rideRequest?.rideId) {
+                onRideRequestRef.current?.(rideRequest);
+            }
+        } catch {
+            // passive check
+        }
+    }, []);
+
+    // Global listener for FCM push events, direct service worker messages, URL deep links, and resume
+    useEffect(() => {
+        // 1. Consume any push notification data received while app was opening/killed
+        const pendingPush = consumePendingRideRequest();
+        if (pendingPush?.rideId) {
+            onRideRequestRef.current?.(pendingPush);
+        }
+
+        // 2. Check query params (?incomingRideId=...)
+        const searchParams = new URLSearchParams(location.search);
+        const incomingRideId = searchParams.get('incomingRideId');
+        if (incomingRideId) {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('incomingRideId');
+            window.history.replaceState({}, '', cleanUrl.pathname + (cleanUrl.search || ''));
+            checkActiveRideRequest(incomingRideId);
+        } else {
+            checkActiveRideRequest();
+        }
+
+        // 3. Listen to FCM push event on window
+        const onFcmPush = (event) => {
+            const detail = event?.detail;
+            if (detail?.rideId) {
+                onRideRequestRef.current?.(detail);
+            }
+        };
+        window.addEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmPush);
+
+        // 4. Listen to direct Service Worker postMessages
+        const onSwMessage = (event) => {
+            if (event.data?.type === 'driver_ride_request' && event.data.payload?.rideId) {
+                onRideRequestRef.current?.(event.data.payload);
+            }
+        };
+        navigator.serviceWorker?.addEventListener('message', onSwMessage);
+
+        // 5. Check on resume from background/killed state
+        const onResume = () => {
+            if (document.visibilityState === 'visible') {
+                checkActiveRideRequest();
+                socketService.emit('checkActiveRideRequest');
+            }
+        };
+        document.addEventListener('visibilitychange', onResume);
+        window.addEventListener('pageshow', onResume);
+        window.addEventListener('focus', onResume);
+
+        return () => {
+            window.removeEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmPush);
+            navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+            document.removeEventListener('visibilitychange', onResume);
+            window.removeEventListener('pageshow', onResume);
+            window.removeEventListener('focus', onResume);
+        };
+    }, [checkActiveRideRequest, location.search]);
+
     // Socket Integration
     useEffect(() => {
-        if (isOnline) {
-            console.info('[driver-home] socket effect starting for online driver');
+        if (isOnline || showRequest || currentRequest?.rideId) {
+            console.info('[driver-home] socket effect starting for driver');
             const socket = socketService.connect({ role: 'driver' });
 
             if (!socket) {
@@ -1555,32 +1689,8 @@ const DriverHome = () => {
                 scheduleRecoveryBurst({ reason: 'connect-error' });
             };
 
-            const onRideRequest = (data) => {
-                console.info('[driver-home] rideRequest received', data);
-                if (currentRequestRef.current?.rideId === data?.rideId) {
-                    return;
-                }
-                const requestType = normalizeJobType(data);
-                const request = {
-                    type: requestType,
-                    title: getJobTitle(requestType),
-                    fare: `Rs ${data.fare || 0}`,
-                    payment: data.paymentMethod || 'Cash',
-                    pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
-                    drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
-                    distance: formatTripDistance(data),
-                    requestId: data.rideId,
-                    rideId: data.rideId,
-                    acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
-                    bookingMode: data.bookingMode || 'normal',
-                    bidding: data.bidding || { enabled: false },
-                    raw: data,
-                };
-                currentRequestRef.current = request;
-                setCurrentRequest(request);
-                setShowRequest(true);
-                playRideRequestAlertSound();
-                setStatusMessage('New booking received.');
+            const handleRideRequest = (data) => {
+                onRideRequestRef.current?.(data);
             };
 
             const onRideRequestClosed = ({ rideId, reason, message }) => {
@@ -1742,51 +1852,19 @@ const DriverHome = () => {
                 }
             };
 
-            socketService.on('rideRequest', onRideRequest);
-            const onFcmRideRequest = (event) => onRideRequest(event.detail || {});
-            window.addEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
+            socketService.on('rideRequest', handleRideRequest);
             socketService.on('rideRequestClosed', onRideRequestClosed);
             socketService.on('errorMessage', onSocketError);
             socketService.on('rideAccepted', openAcceptedRide);
             socketService.on('rideBidSubmitted', onRideBidSubmitted);
             socketService.on('rideBiddingUpdated', onRideBiddingUpdated);
             socketService.on('driver:wallet:updated', onWalletUpdated);
-            const checkActiveRideRequest = async () => {
-                try {
-                    const response = await api.get('/taxi/driver/active-ride-request');
-                    const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
-                    if (rideRequest?.rideId) {
-                        onRideRequest(rideRequest);
-                    }
-                } catch {
-                    // passive check
-                }
-            };
-
-            checkActiveRideRequest();
-
-            if (typeof window !== 'undefined' && window.location.search.includes('incomingRideId')) {
-                const url = new URL(window.location.href);
-                url.searchParams.delete('incomingRideId');
-                window.history.replaceState({}, '', url.pathname + (url.search || ''));
-            }
 
             const handleSocketConnect = () => {
                 onSocketConnect();
                 socketService.emit('checkActiveRideRequest');
                 checkActiveRideRequest();
             };
-
-            const onForegroundResume = () => {
-                if (document.visibilityState === 'visible') {
-                    checkActiveRideRequest();
-                    socketService.emit('checkActiveRideRequest');
-                }
-            };
-
-            document.addEventListener('visibilitychange', onForegroundResume);
-            window.addEventListener('pageshow', onForegroundResume);
-            window.addEventListener('focus', onForegroundResume);
 
             socket.on('connect', handleSocketConnect);
             socket.on('disconnect', onSocketDisconnect);
@@ -1815,17 +1893,13 @@ const DriverHome = () => {
 
             return () => {
                 console.info('[driver-home] cleaning up socket listeners');
-                socketService.off('rideRequest', onRideRequest);
-                window.removeEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
+                socketService.off('rideRequest', handleRideRequest);
                 socketService.off('rideRequestClosed', onRideRequestClosed);
                 socketService.off('errorMessage', onSocketError);
                 socketService.off('rideAccepted', openAcceptedRide);
                 socketService.off('rideBidSubmitted', onRideBidSubmitted);
                 socketService.off('rideBiddingUpdated', onRideBiddingUpdated);
                 socketService.off('driver:wallet:updated', onWalletUpdated);
-                document.removeEventListener('visibilitychange', onForegroundResume);
-                window.removeEventListener('pageshow', onForegroundResume);
-                window.removeEventListener('focus', onForegroundResume);
                 socket.off('connect', handleSocketConnect);
                 socket.off('disconnect', onSocketDisconnect);
                 socket.off('connect_error', onSocketConnectError);
@@ -1839,7 +1913,7 @@ const DriverHome = () => {
             socketService.disconnect();
         }
         return undefined;
-    }, [clearRecoveryBurst, fetchActiveJob, isOnline, isOwnerManagedDriver, loadScheduledRides, navigate, scheduleRecoveryBurst]);
+    }, [checkActiveRideRequest, clearRecoveryBurst, currentRequest?.rideId, fetchActiveJob, isOnline, isOwnerManagedDriver, loadScheduledRides, navigate, scheduleRecoveryBurst, showRequest]);
 
     useEffect(() => {
         if (!isOnline) {

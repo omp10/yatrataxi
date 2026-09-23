@@ -187,7 +187,10 @@ const DriverLayout = () => {
         let active = true;
 
         const verifyDriver = async () => {
-            setIsChecking(true);
+            // Keep UI non-blocking on cold-start if token exists so driver sees home/incoming request instantly
+            if (!verifiedApprovalRef.current && !localStorage.getItem('driverInfo')) {
+                setIsChecking(true);
+            }
 
             try {
                 const response = await getCurrentDriver();
