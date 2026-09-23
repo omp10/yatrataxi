@@ -904,6 +904,11 @@ const DriverHome = () => {
         updateDriverLocation({ quiet: true }).catch(() => {});
     }, [updateDriverLocation]);
 
+    useEffect(() => {
+        window.__flushNativeFcmToken?.().catch?.(() => {});
+        window.__registerBrowserFcmToken?.({ interactive: true }).catch?.(() => {});
+    }, []);
+
     const hydrateDriverState = useCallback(async () => {
         const [response, templateResponse] = await Promise.all([
             getCurrentDriver(),
@@ -1746,8 +1751,44 @@ const DriverHome = () => {
             socketService.on('rideBidSubmitted', onRideBidSubmitted);
             socketService.on('rideBiddingUpdated', onRideBiddingUpdated);
             socketService.on('driver:wallet:updated', onWalletUpdated);
-            console.info('[driver-home] socket listeners registered');
-            socket.on('connect', onSocketConnect);
+            const checkActiveRideRequest = async () => {
+                try {
+                    const response = await api.get('/taxi/driver/active-ride-request');
+                    const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
+                    if (rideRequest?.rideId) {
+                        onRideRequest(rideRequest);
+                    }
+                } catch {
+                    // passive check
+                }
+            };
+
+            checkActiveRideRequest();
+
+            if (typeof window !== 'undefined' && window.location.search.includes('incomingRideId')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('incomingRideId');
+                window.history.replaceState({}, '', url.pathname + (url.search || ''));
+            }
+
+            const handleSocketConnect = () => {
+                onSocketConnect();
+                socketService.emit('checkActiveRideRequest');
+                checkActiveRideRequest();
+            };
+
+            const onForegroundResume = () => {
+                if (document.visibilityState === 'visible') {
+                    checkActiveRideRequest();
+                    socketService.emit('checkActiveRideRequest');
+                }
+            };
+
+            document.addEventListener('visibilitychange', onForegroundResume);
+            window.addEventListener('pageshow', onForegroundResume);
+            window.addEventListener('focus', onForegroundResume);
+
+            socket.on('connect', handleSocketConnect);
             socket.on('disconnect', onSocketDisconnect);
             socket.on('connect_error', onSocketConnectError);
             socket.io.on('reconnect_attempt', onSocketReconnectAttempt);
@@ -1782,7 +1823,10 @@ const DriverHome = () => {
                 socketService.off('rideBidSubmitted', onRideBidSubmitted);
                 socketService.off('rideBiddingUpdated', onRideBiddingUpdated);
                 socketService.off('driver:wallet:updated', onWalletUpdated);
-                socket.off('connect', onSocketConnect);
+                document.removeEventListener('visibilitychange', onForegroundResume);
+                window.removeEventListener('pageshow', onForegroundResume);
+                window.removeEventListener('focus', onForegroundResume);
+                socket.off('connect', handleSocketConnect);
                 socket.off('disconnect', onSocketDisconnect);
                 socket.off('connect_error', onSocketConnectError);
                 socket.io.off('reconnect_attempt', onSocketReconnectAttempt);

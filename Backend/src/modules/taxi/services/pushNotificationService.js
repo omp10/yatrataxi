@@ -159,6 +159,13 @@ const sendPushToTargets = async ({
     Object.entries(data || {}).map(([key, value]) => [key, String(value ?? '')]),
   );
 
+  const isRideRequest = safeData.type === 'ride_request';
+  const durationSeconds = Number(safeData.acceptRejectDurationSeconds || 60);
+  const ttlMs = Math.max(15, durationSeconds) * 1000;
+  const clickActionUrl = safeData.rideId
+    ? `/taxi/driver/home?incomingRideId=${safeData.rideId}`
+    : (safeData.url || '/taxi/driver/home');
+
   for (const batch of chunk(dedupedTargets, 500)) {
     const response = await messaging.sendEachForMulticast({
       tokens: batch.map((target) => target.token),
@@ -170,16 +177,57 @@ const sendPushToTargets = async ({
       data: {
         ...safeData,
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        url: clickActionUrl,
       },
       android: {
         priority: 'high',
-        notification: image ? { imageUrl: image } : undefined,
+        ttl: isRideRequest ? ttlMs : undefined,
+        notification: {
+          channelId: isRideRequest ? 'ride_requests' : 'default',
+          sound: 'default',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          priority: isRideRequest ? 'max' : 'high',
+          visibility: 'public',
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+          tag: isRideRequest && safeData.rideId ? `ride_request_${safeData.rideId}` : undefined,
+          ...(image ? { imageUrl: image } : {}),
+        },
       },
       webpush: {
+        headers: {
+          Urgency: isRideRequest ? 'high' : 'normal',
+          TTL: isRideRequest ? String(durationSeconds) : undefined,
+        },
         notification: {
           title,
           body,
+          icon: '/favicon.svg',
+          requireInteraction: isRideRequest,
+          tag: isRideRequest && safeData.rideId ? `ride_request_${safeData.rideId}` : undefined,
           ...(image ? { image } : {}),
+          data: {
+            ...safeData,
+            url: clickActionUrl,
+          },
+        },
+      },
+      apns: {
+        headers: {
+          'apns-priority': isRideRequest ? '10' : '5',
+          ...(isRideRequest
+            ? { 'apns-expiration': String(Math.floor(Date.now() / 1000) + durationSeconds) }
+            : {}),
+        },
+        payload: {
+          aps: {
+            alert: {
+              title,
+              body,
+            },
+            sound: 'default',
+            contentAvailable: true,
+          },
         },
       },
     });

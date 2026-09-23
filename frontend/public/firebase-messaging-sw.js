@@ -22,18 +22,28 @@ if (hasFirebaseConfig) {
 
   messaging.onBackgroundMessage((payload) => {
     const messageData = payload?.data || {};
-    const notificationTitle = payload?.notification?.title || 'New notification';
+    const notificationTitle = payload?.notification?.title || 'New ride request';
+    const isRideRequest = messageData.type === 'ride_request';
+    const clickUrl = isRideRequest && messageData.rideId
+      ? `/taxi/driver/home?incomingRideId=${messageData.rideId}`
+      : (messageData.url || '/taxi/driver/home');
+
     const notificationOptions = {
-      body: payload?.notification?.body || '',
+      body: payload?.notification?.body || (isRideRequest ? 'A new booking is waiting for your response.' : ''),
       icon: '/favicon.svg',
+      badge: '/favicon.svg',
       image: payload?.notification?.image || '',
+      tag: isRideRequest && messageData.rideId ? `ride_request_${messageData.rideId}` : 'general',
+      renotify: isRideRequest,
+      requireInteraction: isRideRequest,
+      vibrate: isRideRequest ? [300, 100, 300, 100, 500] : [200, 100, 200],
       data: {
         ...messageData,
-        url: messageData.type === 'ride_request' ? '/taxi/driver/home' : (messageData.url || '/'),
+        url: clickUrl,
       },
     };
 
-    if (messageData.type === 'ride_request') {
+    if (isRideRequest) {
       clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
         clientList.forEach((client) => client.postMessage({
           type: 'driver_ride_request',

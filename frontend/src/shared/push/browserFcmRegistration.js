@@ -182,6 +182,10 @@ const registerBrowserFcmToken = async ({ interactive = false } = {}) => {
   };
 };
 
+export const requestAndSaveDriverFcmToken = async () => {
+  return registerBrowserFcmToken({ interactive: true });
+};
+
 export const installBrowserFcmRegistration = () => {
   window.__registerBrowserFcmToken = (options) => registerBrowserFcmToken(options);
 

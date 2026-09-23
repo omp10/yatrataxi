@@ -122,6 +122,8 @@ const OTPVerification = () => {
                 }
                 clearDriverRegistrationSession();
                 const normalizedRole = normalizeDriverRole(role);
+                window.__flushNativeFcmToken?.().catch?.(() => {});
+                window.__registerBrowserFcmToken?.({ interactive: true }).catch?.(() => {});
                 const nextPath = getPostLoginRoute(normalizedRole, payload?.driver, routePrefix);
                 navigate(nextPath, { replace: true });
                 return;

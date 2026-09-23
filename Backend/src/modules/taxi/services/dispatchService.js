@@ -412,7 +412,35 @@ const getDispatchState = (rideId) => {
     driverIds: Array.isArray(state.driverIds) ? state.driverIds : [],
     notifiedDriverIds: Array.isArray(state.notifiedDriverIds) ? state.notifiedDriverIds : [],
     rejectedDriverIds: Array.isArray(state.rejectedDriverIds) ? state.rejectedDriverIds : [],
+    lastPayload: state.lastPayload || null,
+    requestExpiresAt: state.requestExpiresAt || null,
   };
+};
+
+export const getActiveRideRequestForDriver = (driverId) => {
+  if (!driverId) return null;
+  const driverKey = String(driverId);
+
+  for (const [, state] of activeDispatches.entries()) {
+    if (
+      Array.isArray(state.driverIds) &&
+      state.driverIds.includes(driverKey) &&
+      !state.rejectedDriverIds?.includes(driverKey) &&
+      state.lastPayload
+    ) {
+      const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
+      if (remainingMs > 1000) {
+        const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
+        return {
+          ...state.lastPayload,
+          expiresInSeconds,
+          acceptRejectDurationSeconds: expiresInSeconds,
+        };
+      }
+    }
+  }
+
+  return null;
 };
 
 const saveDispatchState = (rideId, nextState = {}) => {
@@ -453,59 +481,66 @@ const emitRideRequestToDrivers = async ({
 
   const requestExpiresAt = new Date(Date.now() + dispatchConfig.retryDelayMs).toISOString();
 
+  const payload = {
+    rideId: String(ride._id),
+    type: ride.serviceType || 'ride',
+    serviceType: ride.serviceType || 'ride',
+    userId: String(ride.userId),
+    user: {
+      id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
+      name: ride.userId?.name || 'Customer',
+      phone: ride.userId?.phone || '',
+      countryCode: ride.userId?.countryCode || '',
+    },
+    pickupLocation: ride.pickupLocation,
+    pickupAddress: ride.pickupAddress || '',
+    dropLocation: ride.dropLocation,
+    dropAddress: ride.dropAddress || '',
+    scheduledAt: ride.scheduledAt || null,
+    estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
+    estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
+    vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
+    vehicleTypeIds: dispatchVehicleTypeIds,
+    vehicleIconType: ride.vehicleIconType,
+    vehicleIconUrl: ride.vehicleIconUrl || '',
+    fare: ride.fare,
+    baseFare: Number(ride.baseFare || ride.fare || 0),
+    bookingMode: ride.bookingMode || 'normal',
+    pricingNegotiationMode: ride.pricingNegotiationMode || 'none',
+    biddingStatus: ride.biddingStatus || 'none',
+    bidding: ride.pricingNegotiationMode === 'driver_bid'
+      ? {
+          enabled: true,
+          baseFare: Number(ride.baseFare || ride.fare || 0),
+          bidFloorFare: Number(ride.bidFloorFare ?? ride.baseFare ?? ride.fare ?? 0),
+          userMaxBidFare: Number(ride.userMaxBidFare || ride.fare || 0),
+          bidCeilingMaxFare: Number(ride.bidCeilingMaxFare || ride.userMaxBidFare || ride.fare || 0),
+          bidStepAmount: Number(ride.bidStepAmount || 10),
+        }
+      : {
+          enabled: false,
+        },
+    fareIncreaseWaitMinutes: Number(ride.fareIncreaseWaitMinutes || 0),
+    nextFareIncreaseAt: ride.nextFareIncreaseAt || null,
+    paymentMethod: ride.paymentMethod,
+    parcel: ride.parcel || null,
+    intercity: ride.intercity || null,
+    radius: effectiveRadius,
+    attempt: attemptIndex + 1,
+    maxAttempts: dispatchConfig.maxAttempts,
+    acceptRejectDurationSeconds: dispatchConfig.retryWindowSeconds,
+    expiresInSeconds: dispatchConfig.retryWindowSeconds,
+    requestExpiresAt,
+    zoneId: zone?._id ? String(zone._id) : null,
+  };
+
+  saveDispatchState(ride._id, {
+    lastPayload: payload,
+    requestExpiresAt,
+  });
+
   for (const driver of targetDrivers) {
-    emitToDriver(driver._id, 'rideRequest', {
-      rideId: String(ride._id),
-      type: ride.serviceType || 'ride',
-      serviceType: ride.serviceType || 'ride',
-      userId: String(ride.userId),
-      user: {
-        id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
-        name: ride.userId?.name || 'Customer',
-        phone: ride.userId?.phone || '',
-        countryCode: ride.userId?.countryCode || '',
-      },
-      pickupLocation: ride.pickupLocation,
-      pickupAddress: ride.pickupAddress || '',
-      dropLocation: ride.dropLocation,
-      dropAddress: ride.dropAddress || '',
-      scheduledAt: ride.scheduledAt || null,
-      estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
-      estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
-      vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
-      vehicleTypeIds: dispatchVehicleTypeIds,
-      vehicleIconType: ride.vehicleIconType,
-      vehicleIconUrl: ride.vehicleIconUrl || '',
-      fare: ride.fare,
-      baseFare: Number(ride.baseFare || ride.fare || 0),
-      bookingMode: ride.bookingMode || 'normal',
-      pricingNegotiationMode: ride.pricingNegotiationMode || 'none',
-      biddingStatus: ride.biddingStatus || 'none',
-      bidding: ride.pricingNegotiationMode === 'driver_bid'
-        ? {
-            enabled: true,
-            baseFare: Number(ride.baseFare || ride.fare || 0),
-            bidFloorFare: Number(ride.bidFloorFare ?? ride.baseFare ?? ride.fare ?? 0),
-            userMaxBidFare: Number(ride.userMaxBidFare || ride.fare || 0),
-            bidCeilingMaxFare: Number(ride.bidCeilingMaxFare || ride.userMaxBidFare || ride.fare || 0),
-            bidStepAmount: Number(ride.bidStepAmount || 10),
-          }
-        : {
-            enabled: false,
-          },
-      fareIncreaseWaitMinutes: Number(ride.fareIncreaseWaitMinutes || 0),
-      nextFareIncreaseAt: ride.nextFareIncreaseAt || null,
-      paymentMethod: ride.paymentMethod,
-      parcel: ride.parcel || null,
-      intercity: ride.intercity || null,
-      radius: effectiveRadius,
-      attempt: attemptIndex + 1,
-      maxAttempts: dispatchConfig.maxAttempts,
-      acceptRejectDurationSeconds: dispatchConfig.retryWindowSeconds,
-      expiresInSeconds: dispatchConfig.retryWindowSeconds,
-      requestExpiresAt,
-      zoneId: zone?._id ? String(zone._id) : null,
-    });
+    emitToDriver(driver._id, 'rideRequest', payload);
   }
 
   sendPushNotificationToEntities({
@@ -1067,6 +1102,23 @@ export const notifyLateAvailableDriver = async (driverId) => {
 
     const dispatchState = getDispatchState(rideId);
     const driverKey = String(driver._id);
+
+    if (
+      dispatchState.driverIds.includes(driverKey) &&
+      !dispatchState.rejectedDriverIds.includes(driverKey) &&
+      dispatchState.lastPayload
+    ) {
+      const remainingMs = new Date(dispatchState.requestExpiresAt).getTime() - Date.now();
+      if (remainingMs > 1000) {
+        const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
+        emitToDriver(driverKey, 'rideRequest', {
+          ...dispatchState.lastPayload,
+          expiresInSeconds,
+          acceptRejectDurationSeconds: expiresInSeconds,
+        });
+      }
+      continue;
+    }
 
     if (
       dispatchState.notifiedDriverIds.includes(driverKey) ||

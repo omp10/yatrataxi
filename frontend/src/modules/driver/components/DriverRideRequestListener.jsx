@@ -286,6 +286,37 @@ const DriverRideRequestListener = () => {
             });
         };
 
+        const checkActiveRequest = async () => {
+            try {
+                const response = await api.get('/taxi/driver/active-ride-request');
+                const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
+                if (rideRequest?.rideId) {
+                    onRideRequest(rideRequest);
+                }
+            } catch {
+                // passive check
+            }
+        };
+
+        checkActiveRequest();
+
+        const onSocketConnect = () => {
+            socketService.emit('checkActiveRideRequest');
+            checkActiveRequest();
+        };
+
+        const onForegroundResume = () => {
+            if (document.visibilityState === 'visible') {
+                checkActiveRequest();
+                socketService.emit('checkActiveRideRequest');
+            }
+        };
+
+        document.addEventListener('visibilitychange', onForegroundResume);
+        window.addEventListener('pageshow', onForegroundResume);
+        window.addEventListener('focus', onForegroundResume);
+        socket.on('connect', onSocketConnect);
+
         socketService.on('rideRequest', onRideRequest);
         const onFcmRideRequest = (event) => onRideRequest(event.detail || {});
         window.addEventListener(DRIVER_RIDE_REQUEST_PUSH_EVENT, onFcmRideRequest);
@@ -303,6 +334,10 @@ const DriverRideRequestListener = () => {
             socketService.off('rideAccepted', openAcceptedRide);
             socketService.off('rideBidSubmitted', onRideBidSubmitted);
             socketService.off('rideBiddingUpdated', onRideBiddingUpdated);
+            document.removeEventListener('visibilitychange', onForegroundResume);
+            window.removeEventListener('pageshow', onForegroundResume);
+            window.removeEventListener('focus', onForegroundResume);
+            socket.off('connect', onSocketConnect);
         };
     }, [activeOnRoute, fetchActiveJob, navigate]);
 

@@ -50,6 +50,7 @@ import {
   getServiceCenterStaffMembers,
   getServiceCenterVehicles,
   listOwnerBusServices,
+  getActiveDriverRideRequest,
   saveDriverFcmToken,
   getOwnerFleetDrivers,
   getOwnerFleetDashboard,
@@ -213,6 +214,11 @@ driverRouter.post(
     "service_center_staff",
   ]),
   asyncHandler(saveDriverFcmToken),
+);
+driverRouter.get(
+  "/active-ride-request",
+  authenticate(["driver"]),
+  asyncHandler(getActiveDriverRideRequest),
 );
 driverRouter.get(
   "/wallet",

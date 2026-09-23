@@ -33,7 +33,7 @@ import {
   hashPassword,
   signAccessToken,
 } from "../services/authService.js";
-import { cancelScheduledRideByDriver, emitToDriver } from "../../services/dispatchService.js";
+import { cancelScheduledRideByDriver, emitToDriver, getActiveRideRequestForDriver } from "../../services/dispatchService.js";
 import { notifyLateAvailableDriver } from "../../services/dispatchService.js";
 import { findZoneByPickup } from "../services/locationService.js";
 import { listDriverServiceLocations } from "../services/serviceLocationService.js";
@@ -3060,6 +3060,18 @@ export const saveDriverFcmToken = async (req, res) => {
       platform: saved.platform,
       field: saved.fieldName,
       role: String(req.auth?.role || "").toLowerCase(),
+    },
+  });
+};
+
+export const getActiveDriverRideRequest = async (req, res) => {
+  const driverId = req.auth?.sub;
+  const rideRequest = getActiveRideRequestForDriver(driverId);
+
+  res.json({
+    success: true,
+    data: {
+      rideRequest: rideRequest || null,
     },
   });
 };

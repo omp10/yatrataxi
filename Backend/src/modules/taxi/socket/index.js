@@ -14,6 +14,7 @@ import {
 } from '../chat/services/supportChatService.js';
 import {
   addSocketSubscriptions,
+  getActiveRideRequestForDriver,
   joinRideRoom,
   markDriverRejectedFromDispatch,
   notifyLateAvailableDriver,
@@ -64,6 +65,13 @@ export const configureTaxiSocketServer = (httpServer) => {
       await Driver.findByIdAndUpdate(identity.sub, { socketId: socket.id });
       notifyLateAvailableDriver(identity.sub).catch((error) => {
         console.error('Failed to notify late-available driver on socket connect', error);
+      });
+
+      socket.on('checkActiveRideRequest', () => {
+        const activeRequest = getActiveRideRequestForDriver(identity.sub);
+        if (activeRequest) {
+          socket.emit('rideRequest', activeRequest);
+        }
       });
     }
 
