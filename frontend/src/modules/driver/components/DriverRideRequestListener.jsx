@@ -303,6 +303,7 @@ const DriverRideRequestListener = () => {
             try {
                 const response = await api.get('/taxi/driver/active-ride-request', {
                     params: incomingRideId ? { rideId: incomingRideId } : {},
+                    ...withDriverAuthorization(driverToken),
                 });
                 const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
                 if (rideRequest?.rideId) {

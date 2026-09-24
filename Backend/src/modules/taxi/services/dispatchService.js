@@ -417,11 +417,12 @@ const getDispatchState = (rideId) => {
   };
 };
 
-export const getActiveRideRequestForDriver = (driverId, targetRideId = null) => {
+export const getActiveRideRequestForDriver = async (driverId, targetRideId = null) => {
   if (!driverId) return null;
   const driverKey = String(driverId);
   const targetRideKey = targetRideId ? String(targetRideId) : null;
 
+  // 1. Check in-memory active dispatches first
   if (targetRideKey) {
     const state = activeDispatches.get(targetRideKey);
     if (
@@ -430,34 +431,132 @@ export const getActiveRideRequestForDriver = (driverId, targetRideId = null) => 
       !state.rejectedDriverIds?.includes(driverKey) &&
       state.lastPayload
     ) {
-      const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
-      if (remainingMs > 500) {
-        const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
+      const ride = await Ride.findById(targetRideKey).select('status driverId');
+      if (ride && ride.status === RIDE_STATUS.SEARCHING && !ride.driverId) {
+        const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
+        const expiresInSeconds = remainingMs > 3000 ? Math.round(remainingMs / 1000) : 25;
         return {
           ...state.lastPayload,
           expiresInSeconds,
           acceptRejectDurationSeconds: expiresInSeconds,
+          requestExpiresAt: new Date(Date.now() + (expiresInSeconds * 1000)).toISOString(),
         };
       }
     }
   }
 
-  for (const [, state] of activeDispatches.entries()) {
+  for (const [rideKey, state] of activeDispatches.entries()) {
     if (
       (state.driverIds?.includes(driverKey) || state.notifiedDriverIds?.includes(driverKey)) &&
       !state.rejectedDriverIds?.includes(driverKey) &&
       state.lastPayload
     ) {
-      const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
-      if (remainingMs > 500) {
-        const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
+      const ride = await Ride.findById(rideKey).select('status driverId');
+      if (ride && ride.status === RIDE_STATUS.SEARCHING && !ride.driverId) {
+        const remainingMs = new Date(state.requestExpiresAt).getTime() - Date.now();
+        const expiresInSeconds = remainingMs > 3000 ? Math.round(remainingMs / 1000) : 25;
         return {
           ...state.lastPayload,
           expiresInSeconds,
           acceptRejectDurationSeconds: expiresInSeconds,
+          requestExpiresAt: new Date(Date.now() + (expiresInSeconds * 1000)).toISOString(),
         };
       }
     }
+  }
+
+  // 2. Database fallback: check if targetRide or any active ride in SEARCHING status exists for driver
+  try {
+    const driver = await Driver.findById(driverId).select('_id isOnline isOnRide wallet vehicleTypeId vehicleType vehicleIconType');
+    if (!driver || driver.isOnRide || driver.wallet?.isBlocked) {
+      return null;
+    }
+
+    const rideQuery = {
+      status: RIDE_STATUS.SEARCHING,
+      driverId: null,
+      rejectedDrivers: { $ne: driver._id },
+    };
+
+    if (targetRideKey) {
+      rideQuery._id = targetRideKey;
+    }
+
+    const matchingRide = await Ride.findOne(rideQuery)
+      .populate('userId', 'name phone countryCode')
+      .sort({ createdAt: -1 });
+
+    if (matchingRide) {
+      const dispatchState = getDispatchState(matchingRide._id);
+      if (!dispatchState.rejectedDriverIds?.includes(driverKey)) {
+        if (dispatchState.lastPayload) {
+          return {
+            ...dispatchState.lastPayload,
+            expiresInSeconds: 25,
+            acceptRejectDurationSeconds: 25,
+            requestExpiresAt: new Date(Date.now() + 25000).toISOString(),
+          };
+        }
+
+        const freshPayload = {
+          rideId: String(matchingRide._id),
+          type: matchingRide.serviceType || 'ride',
+          serviceType: matchingRide.serviceType || 'ride',
+          userId: String(matchingRide.userId?._id || matchingRide.userId),
+          user: {
+            id: matchingRide.userId?._id ? String(matchingRide.userId._id) : String(matchingRide.userId || ''),
+            name: matchingRide.userId?.name || 'Customer',
+            phone: matchingRide.userId?.phone || '',
+            countryCode: matchingRide.userId?.countryCode || '',
+          },
+          pickupLocation: matchingRide.pickupLocation,
+          pickupAddress: matchingRide.pickupAddress || '',
+          dropLocation: matchingRide.dropLocation,
+          dropAddress: matchingRide.dropAddress || '',
+          scheduledAt: matchingRide.scheduledAt || null,
+          estimatedDistanceMeters: matchingRide.estimatedDistanceMeters || 0,
+          estimatedDurationMinutes: matchingRide.estimatedDurationMinutes || 0,
+          vehicleTypeId: matchingRide.vehicleTypeId ? String(matchingRide.vehicleTypeId) : null,
+          vehicleIconType: matchingRide.vehicleIconType,
+          vehicleIconUrl: matchingRide.vehicleIconUrl || '',
+          fare: matchingRide.fare,
+          baseFare: Number(matchingRide.baseFare || matchingRide.fare || 0),
+          bookingMode: matchingRide.bookingMode || 'normal',
+          pricingNegotiationMode: matchingRide.pricingNegotiationMode || 'none',
+          biddingStatus: matchingRide.biddingStatus || 'none',
+          bidding: matchingRide.pricingNegotiationMode === 'driver_bid'
+            ? {
+                enabled: true,
+                baseFare: Number(matchingRide.baseFare || matchingRide.fare || 0),
+                bidFloorFare: Number(matchingRide.bidFloorFare ?? matchingRide.baseFare ?? matchingRide.fare ?? 0),
+                userMaxBidFare: Number(matchingRide.userMaxBidFare || matchingRide.fare || 0),
+                bidCeilingMaxFare: Number(matchingRide.bidCeilingMaxFare || matchingRide.userMaxBidFare || matchingRide.fare || 0),
+                bidStepAmount: Number(matchingRide.bidStepAmount || 10),
+              }
+            : {
+                enabled: false,
+              },
+          paymentMethod: matchingRide.paymentMethod,
+          parcel: matchingRide.parcel || null,
+          intercity: matchingRide.intercity || null,
+          radius: matchingRide.radius || 5000,
+          acceptRejectDurationSeconds: 25,
+          expiresInSeconds: 25,
+          requestExpiresAt: new Date(Date.now() + 25000).toISOString(),
+        };
+
+        saveDispatchState(matchingRide._id, {
+          driverIds: [...new Set([...dispatchState.driverIds, driverKey])],
+          notifiedDriverIds: [...new Set([...dispatchState.notifiedDriverIds, driverKey])],
+          lastPayload: freshPayload,
+          requestExpiresAt: freshPayload.requestExpiresAt,
+        });
+
+        return freshPayload;
+      }
+    }
+  } catch (err) {
+    console.error('Error finding active ride request for driver', err);
   }
 
   return null;
@@ -1124,19 +1223,18 @@ export const notifyLateAvailableDriver = async (driverId) => {
     const driverKey = String(driver._id);
 
     if (
-      dispatchState.driverIds.includes(driverKey) &&
+      (dispatchState.driverIds.includes(driverKey) || dispatchState.notifiedDriverIds.includes(driverKey)) &&
       !dispatchState.rejectedDriverIds.includes(driverKey) &&
       dispatchState.lastPayload
     ) {
       const remainingMs = new Date(dispatchState.requestExpiresAt).getTime() - Date.now();
-      if (remainingMs > 1000) {
-        const expiresInSeconds = Math.max(1, Math.round(remainingMs / 1000));
-        emitToDriver(driverKey, 'rideRequest', {
-          ...dispatchState.lastPayload,
-          expiresInSeconds,
-          acceptRejectDurationSeconds: expiresInSeconds,
-        });
-      }
+      const expiresInSeconds = remainingMs > 3000 ? Math.round(remainingMs / 1000) : 25;
+      emitToDriver(driverKey, 'rideRequest', {
+        ...dispatchState.lastPayload,
+        expiresInSeconds,
+        acceptRejectDurationSeconds: expiresInSeconds,
+        requestExpiresAt: new Date(Date.now() + (expiresInSeconds * 1000)).toISOString(),
+      });
       continue;
     }
 

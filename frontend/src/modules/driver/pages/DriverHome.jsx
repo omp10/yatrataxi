@@ -1071,6 +1071,8 @@ const DriverHome = () => {
                     openActiveJob(currentJob);
                     return;
                 }
+
+                checkActiveRideRequest();
             } catch {
                 if (active) {
                     setStatusMessage('Could not restore driver status.');
@@ -1085,7 +1087,7 @@ const DriverHome = () => {
         return () => {
             active = false;
         };
-    }, [fetchActiveJob, hydrateDriverState, navigate, openActiveJob]);
+    }, [checkActiveRideRequest, fetchActiveJob, hydrateDriverState, navigate, openActiveJob]);
 
     useEffect(() => {
         let intervalId;
