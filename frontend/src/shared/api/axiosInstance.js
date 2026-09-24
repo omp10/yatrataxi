@@ -233,9 +233,9 @@ api.interceptors.request.use(
     const isAdminRoute =
       /^\/admin(\/|$)/.test(requestPath) ||
       /^\/(countries|common\/ride_modules|types\/|on-boarding(?:-|\/|$)|roles\/|permissions\/)/.test(requestPath);
-    const isDriverRoute = /^\/drivers?(\/|$)/.test(requestPath);
+    const isDriverRoute = /^\/(?:taxi\/)?drivers?(\/|$)/.test(requestPath);
     const isAgentRoute = /^\/agents?(\/|$)/.test(requestPath);
-    const isUserRoute = /^\/(users|rides|deliveries|promos)(\/|$)/.test(requestPath);
+    const isUserRoute = /^\/(?:taxi\/)?(users|rides|deliveries|promos)(\/|$)/.test(requestPath);
     const isSupportRoute = /^\/support(\/|$)/.test(requestPath);
     const isChatRoute = /^\/chats?(\/|$)/.test(requestPath);
     const pathRole = getRoleFromPathname();

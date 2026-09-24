@@ -67,10 +67,14 @@ export const configureTaxiSocketServer = (httpServer) => {
         console.error('Failed to notify late-available driver on socket connect', error);
       });
 
-      socket.on('checkActiveRideRequest', () => {
-        const activeRequest = getActiveRideRequestForDriver(identity.sub);
-        if (activeRequest) {
-          socket.emit('rideRequest', activeRequest);
+      socket.on('checkActiveRideRequest', async () => {
+        try {
+          const activeRequest = await getActiveRideRequestForDriver(identity.sub);
+          if (activeRequest) {
+            socket.emit('rideRequest', activeRequest);
+          }
+        } catch (err) {
+          console.error('Failed to check active ride request on socket', err);
         }
       });
     }

@@ -3067,7 +3067,7 @@ export const saveDriverFcmToken = async (req, res) => {
 export const getActiveDriverRideRequest = async (req, res) => {
   const driverId = req.auth?.sub;
   const rideId = req.query?.rideId || req.query?.incomingRideId || null;
-  const rideRequest = getActiveRideRequestForDriver(driverId, rideId);
+  const rideRequest = await getActiveRideRequestForDriver(driverId, rideId);
 
   res.json({
     success: true,

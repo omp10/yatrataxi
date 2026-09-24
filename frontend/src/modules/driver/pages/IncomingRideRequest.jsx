@@ -25,11 +25,12 @@ const getRequestExpiryTime = (data, requestDurationSeconds) => {
   const rawExpiryTime = safeData.requestExpiresAt || safeData.raw?.requestExpiresAt;
   const expiryTimestamp = rawExpiryTime ? new Date(rawExpiryTime).getTime() : NaN;
 
-  if (Number.isFinite(expiryTimestamp) && expiryTimestamp > Date.now()) {
+  if (Number.isFinite(expiryTimestamp) && expiryTimestamp > Date.now() + 5000) {
     return expiryTimestamp;
   }
 
-  return Date.now() + (requestDurationSeconds * 1000);
+  const duration = Math.max(20, Number(requestDurationSeconds) || 20);
+  return Date.now() + (duration * 1000);
 };
 
 const getRequestDurationSeconds = (data) => {
