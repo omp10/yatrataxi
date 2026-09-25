@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Sparkles } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
 
-const SPIRITUAL_DESTINATIONS = [
+const FALLBACK_DESTINATIONS = [
   { id: 'ujjain', name: 'Ujjain Mahakaleshwar', subtitle: 'Jyotirlinga Darshan & Bhasma Aarti', dist: '55 km', baseFare: 999, emoji: '🛕' },
   { id: 'omkareshwar', name: 'Omkareshwar Jyotirlinga', subtitle: 'Holy Island on River Narmada', dist: '77 km', baseFare: 1299, emoji: '🙏' },
   { id: 'maheshwar', name: 'Maheshwar & Mandu', subtitle: 'Ahilya Fort, Ghats & Historic Mandu', dist: '95 km', baseFare: 1499, emoji: '⛵' },
@@ -23,7 +23,9 @@ const VEHICLE_TIERS = [
 
 export const AgentSpiritualTripBooking = () => {
   const navigate = useNavigate();
-  const [selectedDest, setSelectedDest] = useState(SPIRITUAL_DESTINATIONS[0]);
+  const [destinations, setDestinations] = useState(FALLBACK_DESTINATIONS);
+  const [loading, setLoading] = useState(true);
+  const [selectedDest, setSelectedDest] = useState(FALLBACK_DESTINATIONS[0]);
   const [selectedVehicle, setSelectedVehicle] = useState(VEHICLE_TIERS[0]);
   const [pickupAddress, setPickupAddress] = useState('');
   const [travelDate, setTravelDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -32,7 +34,41 @@ export const AgentSpiritualTripBooking = () => {
   const [submitting, setSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  const totalFare = Math.round(selectedDest.baseFare * selectedVehicle.multiplier);
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDestinations = async () => {
+      try {
+        const origin = globalThis.__LEGACY_BACKEND_ORIGIN__ || '';
+        const res = await fetch(`${origin}/api/v1/explore-destinations?category=spiritual`);
+        if (res.ok) {
+          const data = await res.json();
+          const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || []);
+          if (isMounted && items.length > 0) {
+            const mapped = items.map((dest, idx) => ({
+              id: dest._id || dest.id || `dest-${idx}`,
+              name: dest.title || dest.name,
+              subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
+              dist: dest.distance || dest.dist || '55 km',
+              baseFare: Number(dest.baseFare) || 999,
+              emoji: dest.emoji || '🛕',
+              image: dest.image || '',
+              dropLocation: dest.dropLocation || dest.drop,
+            }));
+            setDestinations(mapped);
+            setSelectedDest(mapped[0]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load spiritual destinations for agent:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchDestinations();
+    return () => { isMounted = false; };
+  }, []);
+
+  const totalFare = Math.round((selectedDest?.baseFare || 999) * selectedVehicle.multiplier);
   const estimatedCommission = Math.round(totalFare * 0.05 * 100) / 100; // 5% commission
 
   const handleBooking = async () => {
@@ -50,7 +86,7 @@ export const AgentSpiritualTripBooking = () => {
       const payload = {
         customer,
         pickupAddress,
-        dropAddress: `${selectedDest.name} (${selectedDest.subtitle})`,
+        dropAddress: selectedDest?.dropLocation || `${selectedDest.name} (${selectedDest.subtitle})`,
         pickup: [75.8577, 22.7196],
         drop: [75.7873, 23.1765],
         fare: totalFare,
@@ -118,23 +154,40 @@ export const AgentSpiritualTripBooking = () => {
 
         {/* Destination Selection */}
         <div className="rounded-[24px] border border-white/70 bg-white/90 p-4 shadow-[0_12px_28px_rgba(20,58,90,0.06)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93] mb-3">1. Select Holy Destination</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">1. Select Holy Destination</p>
+            {loading && <Loader2 size={14} className="animate-spin text-purple-600" />}
+          </div>
           <div className="grid grid-cols-2 gap-2.5">
-            {SPIRITUAL_DESTINATIONS.map((dest) => {
-              const isSelected = selectedDest.id === dest.id;
+            {destinations.map((dest) => {
+              const isSelected = selectedDest?.id === dest.id;
               return (
                 <div
                   key={dest.id}
                   onClick={() => setSelectedDest(dest)}
-                  className={`cursor-pointer rounded-[20px] border p-3 transition-all flex flex-col justify-between ${
+                  className={`cursor-pointer rounded-[20px] border p-3 transition-all flex flex-col justify-between overflow-hidden relative ${
                     isSelected
                       ? 'border-purple-600 bg-purple-50/60 shadow-sm ring-1 ring-purple-600'
                       : 'border-slate-100 bg-white hover:border-slate-300'
                   }`}
                 >
-                  <div>
+                  {dest.image ? (
+                    <div className="h-16 -mx-3 -mt-3 mb-2 overflow-hidden relative bg-slate-100 rounded-t-[19px]">
+                      <img
+                        src={dest.image}
+                        alt={dest.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-xs bg-white/90 shadow-sm">
+                        {dest.emoji}
+                      </div>
+                    </div>
+                  ) : (
                     <span className="text-2xl">{dest.emoji}</span>
-                    <h4 className="mt-1 text-xs font-black text-slate-900 leading-snug">{dest.name}</h4>
+                  )}
+                  <div>
+                    <h4 className="mt-1 text-xs font-black text-slate-900 leading-snug line-clamp-1">{dest.name}</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5">{dest.dist}</p>
                   </div>
                   <p className="mt-2 text-xs font-black text-purple-700">From ₹{dest.baseFare}</p>

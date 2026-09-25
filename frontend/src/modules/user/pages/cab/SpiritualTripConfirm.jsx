@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, MapPin, Calendar, User, ArrowLeft, Star } from 'lucide-react';
+import { CheckCircle2, ChevronRight, MapPin, Calendar, User, ArrowLeft, Star, Home } from 'lucide-react';
 
 const SpiritualTripConfirm = () => {
   const navigate = useNavigate();

@@ -39,6 +39,26 @@ const exploreDestinationSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    category: {
+      type: String,
+      default: 'spiritual',
+      trim: true,
+      index: true,
+    },
+    baseFare: {
+      type: Number,
+      default: 999,
+    },
+    distance: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    emoji: {
+      type: String,
+      default: '🛕',
+      trim: true,
+    },
     order: {
       type: Number,
       default: 0,
@@ -57,7 +77,7 @@ const exploreDestinationSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-exploreDestinationSchema.index({ active: 1, order: 1, createdAt: -1 });
+exploreDestinationSchema.index({ active: 1, category: 1, order: 1, createdAt: -1 });
 
 export const ExploreDestination =
   mongoose.models.TaxiExploreDestination ||

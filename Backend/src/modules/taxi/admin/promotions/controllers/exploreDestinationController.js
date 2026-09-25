@@ -7,8 +7,8 @@ export const getAdminExploreDestinations = asyncHandler(async (req, res) =>
   ok(res, await exploreService.listAdminDestinations(req.query)),
 );
 
-export const getPublicExploreDestinations = asyncHandler(async (_req, res) =>
-  ok(res, await exploreService.listActivePublicDestinations()),
+export const getPublicExploreDestinations = asyncHandler(async (req, res) =>
+  ok(res, await exploreService.listActivePublicDestinations(req.query)),
 );
 
 export const getExploreDestinationById = asyncHandler(async (req, res) =>

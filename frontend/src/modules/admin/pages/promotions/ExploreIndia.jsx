@@ -38,6 +38,10 @@ const createInitialFormData = () => ({
   imageUrl: '',
   useUrl: false,
   description: '',
+  category: 'spiritual',
+  baseFare: 999,
+  distance: '55 km',
+  emoji: '🛕',
   order: 0,
   active: true,
   isFeatured: false,
@@ -53,6 +57,7 @@ const ExploreIndia = () => {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
+  const [categoryFilter, setCategoryFilter] = useState('all'); // all, spiritual, heritage, nature, general
   const [viewMode, setViewMode] = useState('grid'); // grid, table
 
   // Modal state
@@ -127,6 +132,10 @@ const ExploreIndia = () => {
       imageUrl: dest.image || '',
       useUrl: Boolean(dest.image && !dest.image.startsWith('data:')),
       description: dest.description || '',
+      category: dest.category || 'spiritual',
+      baseFare: dest.baseFare ?? 999,
+      distance: dest.distance || dest.dist || '55 km',
+      emoji: dest.emoji || '🛕',
       order: dest.order ?? 0,
       active: dest.active !== false,
       isFeatured: Boolean(dest.isFeatured),
@@ -209,6 +218,10 @@ const ExploreIndia = () => {
         dropLocation: formData.dropLocation.trim(),
         image: effectiveImage,
         description: formData.description.trim(),
+        category: formData.category || 'spiritual',
+        baseFare: Number(formData.baseFare) || 999,
+        distance: formData.distance.trim(),
+        emoji: formData.emoji.trim() || '🛕',
         order: Number(formData.order) || 0,
         active: formData.active,
         isFeatured: formData.isFeatured,
@@ -307,22 +320,28 @@ const ExploreIndia = () => {
         item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.label?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.dropLocation?.toLowerCase().includes(searchQuery.toLowerCase());
+        item.dropLocation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus =
         statusFilter === 'all' ||
         (statusFilter === 'active' && item.active !== false) ||
         (statusFilter === 'inactive' && item.active === false);
 
-      return matchesSearch && matchesStatus;
+      const matchesCategory =
+        categoryFilter === 'all' ||
+        (item.category || 'spiritual').toLowerCase() === categoryFilter.toLowerCase();
+
+      return matchesSearch && matchesStatus && matchesCategory;
     });
-  }, [destinations, searchQuery, statusFilter]);
+  }, [destinations, searchQuery, statusFilter, categoryFilter]);
 
   const stats = useMemo(() => {
     const total = destinations.length;
     const active = destinations.filter((d) => d.active !== false).length;
     const inactive = total - active;
-    return { total, active, inactive };
+    const spiritual = destinations.filter((d) => (d.category || 'spiritual').toLowerCase() === 'spiritual').length;
+    return { total, active, inactive, spiritual };
   }, [destinations]);
 
   return (
@@ -363,7 +382,7 @@ const ExploreIndia = () => {
       </div>
 
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Destinations</p>
@@ -371,6 +390,16 @@ const ExploreIndia = () => {
           </div>
           <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
             <Globe2 size={22} />
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-purple-600 uppercase tracking-wider">Spiritual Tours</p>
+            <h3 className="text-2xl font-black text-purple-700 mt-1">{stats.spiritual}</h3>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-xl">
+            🛕
           </div>
         </div>
 
@@ -396,14 +425,14 @@ const ExploreIndia = () => {
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="relative w-full md:w-96">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div className="relative w-full lg:w-80">
           <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by title, city, code, drop address..."
+            placeholder="Search title, city, drop address..."
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
           />
           {searchQuery && (
@@ -417,41 +446,89 @@ const ExploreIndia = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+          {/* Category Filter */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                categoryFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All Types
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('spiritual')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                categoryFilter === 'spiritual'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              🛕 Spiritual
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('heritage')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                categoryFilter === 'heritage'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              🏛️ Heritage
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('nature')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                categoryFilter === 'nature'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              🏔️ Nature
+            </button>
+          </div>
+
           {/* Status Filter */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl">
             <button
               type="button"
               onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 statusFilter === 'all'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All ({stats.total})
+              All
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter('active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 statusFilter === 'active'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Active ({stats.active})
+              Active
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter('inactive')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 statusFilter === 'inactive'
                   ? 'bg-slate-700 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Inactive ({stats.inactive})
+              Hidden
             </button>
           </div>
 
@@ -595,13 +672,37 @@ const ExploreIndia = () => {
                     </div>
 
                     {/* Card Body Details */}
-                    <div className="p-4 space-y-3">
+                    <div className="p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          dest.category === 'spiritual'
+                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                            : dest.category === 'heritage'
+                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                            : dest.category === 'nature'
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          {dest.emoji || '🛕'} {dest.category || 'spiritual'}
+                        </span>
+                        <span className="text-xs font-black text-slate-900">
+                          From ₹{dest.baseFare ?? 999}
+                        </span>
+                      </div>
+
                       <div>
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Drop Location</p>
                         <p className="text-xs font-semibold text-slate-700 line-clamp-2 mt-0.5" title={dest.dropLocation || dest.drop}>
                           {dest.dropLocation || dest.drop || 'Address not set'}
                         </p>
                       </div>
+
+                      {dest.distance && (
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                          <span>Est. Distance</span>
+                          <span className="text-slate-800">{dest.distance}</span>
+                        </div>
+                      )}
 
                       {dest.description && (
                         <div>
@@ -647,8 +748,10 @@ const ExploreIndia = () => {
                 <tr>
                   <th className="py-3.5 px-4">Order</th>
                   <th className="py-3.5 px-4">Destination</th>
+                  <th className="py-3.5 px-4">Type</th>
                   <th className="py-3.5 px-4">City / State</th>
                   <th className="py-3.5 px-4">Code</th>
+                  <th className="py-3.5 px-4">Starting Fare</th>
                   <th className="py-3.5 px-4">Drop Location</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -688,12 +791,27 @@ const ExploreIndia = () => {
                         </div>
                       </td>
 
+                      <td className="py-3.5 px-4">
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                          dest.category === 'spiritual' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                          dest.category === 'heritage' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          'bg-slate-100 text-slate-700'
+                        }`}>
+                          {dest.emoji || '🛕'} {dest.category || 'spiritual'}
+                        </span>
+                      </td>
+
                       <td className="py-3.5 px-4 font-bold text-slate-700">{dest.label}</td>
 
                       <td className="py-3.5 px-4">
                         <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                           {dest.code}
                         </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-black text-slate-900">
+                        ₹{dest.baseFare ?? 999}
+                        {dest.distance && <span className="block text-[10px] font-medium text-slate-400">{dest.distance}</span>}
                       </td>
 
                       <td className="py-3.5 px-4 text-xs font-medium text-slate-600 max-w-xs truncate" title={dest.dropLocation || dest.drop}>
@@ -772,10 +890,10 @@ const ExploreIndia = () => {
               <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
-                    {editingDestination ? 'Edit Destination' : 'Add New Tourist Destination'}
+                    {editingDestination ? 'Edit Destination' : 'Add New Tourist / Pilgrimage Destination'}
                   </h3>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Fill in destination details for the Explore India section in the Taxi app.
+                    Syncs dynamically across User App and Agent Booking Desk
                   </p>
                 </div>
                 <button
@@ -800,7 +918,7 @@ const ExploreIndia = () => {
                       required
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      placeholder="e.g. Taj Mahal"
+                      placeholder="e.g. Ujjain Mahakaleshwar"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     />
                   </div>
@@ -815,7 +933,67 @@ const ExploreIndia = () => {
                       required
                       value={formData.label}
                       onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                      placeholder="e.g. Agra"
+                      placeholder="e.g. Ujjain"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Category & Starting Fare */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      Tour Category <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    >
+                      <option value="spiritual">🛕 Spiritual Pilgrimage (Darshan/Mandir)</option>
+                      <option value="heritage">🏛️ Heritage & Monuments</option>
+                      <option value="nature">🏔️ Nature & Hill Stations</option>
+                      <option value="general">🚗 General Sightseeing / Explore</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      Package Starting Fare (₹) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      required
+                      value={formData.baseFare}
+                      onChange={(e) => setFormData({ ...formData, baseFare: e.target.value })}
+                      placeholder="e.g. 999"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                    <p className="text-[10px] text-slate-400">Used for base vehicle pricing in User & Agent desks</p>
+                  </div>
+                </div>
+
+                {/* Distance and Emoji */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Approx. Distance</label>
+                    <input
+                      type="text"
+                      value={formData.distance}
+                      onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
+                      placeholder="e.g. 55 km"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Badge Emoji / Icon</label>
+                    <input
+                      type="text"
+                      value={formData.emoji}
+                      onChange={(e) => setFormData({ ...formData, emoji: e.target.value })}
+                      placeholder="e.g. 🛕, 🙏, 🏯"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     />
                   </div>
