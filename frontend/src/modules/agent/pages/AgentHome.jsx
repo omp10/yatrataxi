@@ -50,12 +50,12 @@ const AgentHome = () => {
         <div className="mt-6 grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => navigate('/taxi/agent/book-ride')}
+            onClick={() => navigate('/taxi/agent/services')}
             className="rounded-[24px] bg-white px-4 py-4 text-left text-[#143a5a] shadow-lg"
           >
             <CarFront size={20} />
-            <p className="mt-3 text-sm font-black uppercase tracking-[0.16em]">Book Ride</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Taxi and outstation</p>
+            <p className="mt-3 text-sm font-black uppercase tracking-[0.16em]">Book Service</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Taxi, Tours & Shared</p>
           </button>
           <button
             type="button"

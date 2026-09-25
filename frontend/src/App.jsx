@@ -183,6 +183,11 @@ const AgentRideBooking = lazy(() => import('./modules/agent/pages/AgentRideBooki
 const AgentBusBooking = lazy(() => import('./modules/agent/pages/AgentBusBooking'));
 const AgentBusResults = lazy(() => import('./modules/agent/pages/AgentBusResults'));
 const AgentBusSeats = lazy(() => import('./modules/agent/pages/AgentBusSeats'));
+const AgentChooseService = lazy(() => import('./modules/agent/pages/AgentChooseService'));
+const AgentSharedTaxiBooking = lazy(() => import('./modules/agent/pages/AgentSharedTaxiBooking'));
+const AgentAirportCabBooking = lazy(() => import('./modules/agent/pages/AgentAirportCabBooking'));
+const AgentSpiritualTripBooking = lazy(() => import('./modules/agent/pages/AgentSpiritualTripBooking'));
+const AgentOneWayBooking = lazy(() => import('./modules/agent/pages/AgentOneWayBooking'));
 
 // Admin Module Pages
 const AdminLayout = lazy(() => import('./modules/admin/components/AdminLayout'));
@@ -1083,7 +1088,12 @@ function App() {
                   <Route path="referral" element={<AgentReferral />} />
                   <Route path="wallet" element={<AgentWalletView />} />
                   <Route path="profile" element={<AgentProfile />} />
-                  <Route path="book-ride" element={<AgentRideBooking />} />
+                  <Route path="services" element={<AgentChooseService />} />
+                  <Route path="book-ride" element={<AgentChooseService />} />
+                  <Route path="book-shared-taxi" element={<AgentSharedTaxiBooking />} />
+                  <Route path="book-airport-cab" element={<AgentAirportCabBooking />} />
+                  <Route path="book-spiritual-trip" element={<AgentSpiritualTripBooking />} />
+                  <Route path="book-one-way" element={<AgentOneWayBooking />} />
                   <Route path="book-bus" element={<AgentBusBooking />} />
                   <Route path="book-bus/results" element={<AgentBusResults />} />
                   <Route path="book-bus/seats" element={<AgentBusSeats />} />

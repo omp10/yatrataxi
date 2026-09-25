@@ -120,4 +120,6 @@ export const agentService = {
   searchBuses: (params) => api.get('/agents/buses/search', withAgentAuth({ params })),
   getBusSeatLayout: (busServiceId, params) => api.get(`/agents/buses/${busServiceId}/seats`, withAgentAuth({ params })),
   createBusBooking: (payload) => api.post('/agents/buses/bookings', payload, withAgentAuth()),
+  getPoolingRoutes: () => api.get('/agents/pooling/routes', withAgentAuth()),
+  createPoolingBooking: (payload) => api.post('/agents/pooling/bookings', payload, withAgentAuth()),
 };

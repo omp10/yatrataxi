@@ -14,6 +14,8 @@ import {
   getAgentWallet,
   listAgentBookings,
   listAgentBusRoutes,
+  listAgentPoolingRoutes,
+  createAgentPoolingBooking,
   sendAgentLoginOtp,
   loginAgent,
   resolveAgentCustomer,
@@ -40,6 +42,8 @@ agentRouter.get('/referral', authenticate(['agent']), asyncHandler(getAgentRefer
 agentRouter.get('/bookings', authenticate(['agent']), asyncHandler(listAgentBookings));
 agentRouter.post('/customers/resolve', authenticate(['agent']), asyncHandler(resolveAgentCustomer));
 agentRouter.post('/bookings/rides', authenticate(['agent']), asyncHandler(createAgentRideBooking));
+agentRouter.get('/pooling/routes', authenticate(['agent']), asyncHandler(listAgentPoolingRoutes));
+agentRouter.post('/pooling/bookings', authenticate(['agent']), asyncHandler(createAgentPoolingBooking));
 agentRouter.get('/buses/routes', authenticate(['agent']), asyncHandler(listAgentBusRoutes));
 agentRouter.get('/buses/search', authenticate(['agent']), asyncHandler(searchAgentBuses));
 agentRouter.get('/buses/:id/seats', authenticate(['agent']), asyncHandler(getAgentBusSeatLayout));

@@ -12,12 +12,16 @@ import { BusService } from '../../admin/models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { BusBooking } from '../../user/models/BusBooking.js';
 import { PoolingBooking } from '../../admin/models/PoolingBooking.js';
+import { PoolingRoute } from '../../admin/models/PoolingRoute.js';
+import { PoolingSeatReservation } from '../../admin/models/PoolingSeatReservation.js';
+import { PoolingVehicle } from '../../admin/models/PoolingVehicle.js';
+import { Vehicle } from '../../admin/models/Vehicle.js';
 import { User } from '../../user/models/User.js';
 import { Ride } from '../../user/models/Ride.js';
 import { getRideDetails, createRideRecord } from '../../services/rideService.js';
 import { startDispatchFlow } from '../../services/dispatchService.js';
 import { listAgentWalletTransactions, serializeAgentWallet, ensureAgentWallet, withMongoSession } from '../services/agentWalletService.js';
-import { creditAgentCommission, getDefaultAgentCommissionConfig } from '../services/agentCommissionService.js';
+import { creditAgentCommission, getDefaultAgentCommissionConfig, computeAgentCommissionAmount } from '../services/agentCommissionService.js';
 import { startAgentLoginOtp, verifyAgentLoginOtp } from '../services/agentLoginOtpService.js';
 import { assignPushTokenToEntity } from '../../services/pushTokenService.js';
 
@@ -222,8 +226,8 @@ const serializeAgentPoolingBooking = (booking = {}) => {
     travelDate: booking.travelDate || '',
     amount: Number(booking.fare || 0),
     seatLabels: Array.isArray(booking.selectedSeats) ? booking.selectedSeats : [],
-    customerName: booking.user?.name || '',
-    customerPhone: booking.user?.phone || '',
+    customerName: booking.agentMeta?.customerName || booking.user?.name || '',
+    customerPhone: booking.agentMeta?.customerPhone || booking.user?.phone || '',
     route: {
       fromCity: booking.pickupLabel || booking.route?.originLabel || '',
       toCity: booking.dropLabel || booking.route?.destinationLabel || '',
@@ -290,6 +294,9 @@ const resolveBusSeatPrice = (busService = {}, seat = {}) => {
   const resolvedPrice = variantPricing?.[variantKey] ?? variantPricing?.seat ?? defaultPrice;
   return Number.isFinite(Number(resolvedPrice)) ? Number(resolvedPrice) : defaultPrice;
 };
+
+const createPoolingBookingCode = () =>
+  `POOL${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 const createBusBookingCode = () =>
   `BAG${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -773,26 +780,52 @@ export const createAgentRideBooking = async (req, res) => {
       session,
     }));
 
+  // Safe fallback coordinates for address-based bookings
+  const defaultPickup = [75.8577, 22.7196];
+  const defaultDrop = [75.8648, 22.7244];
+  const rawPickup = Array.isArray(req.body?.pickup) && req.body.pickup.length === 2 && req.body.pickup.every((v) => Number.isFinite(Number(v)))
+    ? req.body.pickup.map(Number)
+    : defaultPickup;
+  const rawDrop = Array.isArray(req.body?.drop) && req.body.drop.length === 2 && req.body.drop.every((v) => Number.isFinite(Number(v)))
+    ? req.body.drop.map(Number)
+    : defaultDrop;
+
+  let vehicleTypeId = req.body?.vehicleTypeId;
+  if (!vehicleTypeId || !mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
+    const defaultVehicle = await Vehicle.findOne({ status: 'active' }).select('_id').lean()
+      || await Vehicle.findOne().select('_id').lean();
+    vehicleTypeId = defaultVehicle?._id;
+  }
+
+  const rawFare = Number(req.body?.fare || 0);
+  const serviceType = String(req.body?.serviceType || 'ride').trim().toLowerCase();
+  const isIntercity = serviceType === 'intercity';
+
   const ride = await createRideRecord({
     userId: customer._id,
-    pickupCoords: normalizePoint(req.body?.pickup, 'pickup'),
-    dropCoords: normalizePoint(req.body?.drop, 'drop'),
-    pickupAddress: req.body?.pickupAddress,
-    dropAddress: req.body?.dropAddress,
-    fare: req.body?.fare,
-    estimatedDistanceMeters: req.body?.estimatedDistanceMeters,
-    estimatedDurationMinutes: req.body?.estimatedDurationMinutes,
-    vehicleTypeId: req.body?.vehicleTypeId,
+    pickupCoords: normalizePoint(rawPickup, 'pickup'),
+    dropCoords: normalizePoint(rawDrop, 'drop'),
+    pickupAddress: req.body?.pickupAddress || 'Pickup Location',
+    dropAddress: req.body?.dropAddress || 'Drop Location',
+    fare: rawFare,
+    estimatedDistanceMeters: Number(req.body?.estimatedDistanceMeters || 10000),
+    estimatedDurationMinutes: Number(req.body?.estimatedDurationMinutes || 25),
+    vehicleTypeId,
     vehicleTypeIds: req.body?.vehicleTypeIds,
     vehicleIconType: req.body?.vehicleIconType,
     vehicleIconUrl: req.body?.vehicleIconUrl,
-    paymentMethod: req.body?.paymentMethod,
-    serviceType: req.body?.serviceType,
+    paymentMethod: req.body?.paymentMethod || 'cash',
+    serviceType: isIntercity ? 'intercity' : 'ride',
     parcel: req.body?.parcel,
-    intercity: req.body?.intercity,
+    intercity: req.body?.intercity || (isIntercity ? {
+      fromCity: req.body?.fromCity || '',
+      toCity: req.body?.toCity || '',
+      tripType: req.body?.tripType || 'one_way',
+      travelDate: req.body?.travelDate || '',
+    } : undefined),
     promo_code: req.body?.promo_code,
     service_location_id: req.body?.service_location_id,
-    transport_type: req.body?.transport_type,
+    transport_type: req.body?.transport_type || (isIntercity ? 'intercity' : 'taxi'),
     scheduledAt: req.body?.scheduledAt,
     bookingMode: req.body?.bookingMode,
     userMaxBidFare: req.body?.userMaxBidFare,
@@ -802,9 +835,41 @@ export const createAgentRideBooking = async (req, res) => {
       customerName: customer.name || '',
       customerPhone: customer.phone || '',
       customerId: customer._id,
+      commissionMode: 'direct',
       referralCodeApplied: customer.referredByAgent ? agent.referralCode || '' : '',
     },
   });
+
+  // Credit agent commission directly upon confirmed agent booking
+  if (rawFare > 0) {
+    const bookingType = isIntercity ? 'intercity' : 'ride';
+    const commissionResult = await creditAgentCommission({
+      agentId: agent._id,
+      bookingType,
+      commissionMode: 'direct',
+      grossAmount: rawFare,
+      referenceKey: `agent:${bookingType}:${String(ride._id)}`,
+      title: `${isIntercity ? 'Intercity' : 'Ride'} commission for booking ${String(ride._id).slice(-6)}`,
+      metadata: {
+        rideId: String(ride._id),
+        userId: String(customer._id),
+      },
+    });
+
+    if (commissionResult?.transaction) {
+      ride.agentMeta = {
+        ...(ride.agentMeta || {}),
+        bookedByAgentId: agent._id,
+        customerId: customer._id,
+        customerName: customer.name || '',
+        customerPhone: customer.phone || '',
+        commissionAmount: Number(commissionResult.transaction.amount || 0),
+        commissionCreditedAt: commissionResult.transaction.createdAt || new Date(),
+        commissionMode: 'direct',
+      };
+      await ride.save();
+    }
+  }
 
   await startDispatchFlow(ride);
   const hydratedRide = await getRideDetails(ride._id);
@@ -812,6 +877,172 @@ export const createAgentRideBooking = async (req, res) => {
   res.status(201).json({
     success: true,
     data: hydratedRide,
+  });
+};
+
+export const listAgentPoolingRoutes = async (_req, res) => {
+  const routes = await PoolingRoute.find({ status: { $ne: 'draft' } })
+    .populate('assignedVehicleTypeIds')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({
+    success: true,
+    data: routes.map((r) => ({
+      id: String(r._id),
+      routeName: r.routeName || '',
+      originLabel: r.originLabel || '',
+      destinationLabel: r.destinationLabel || '',
+      farePerSeat: Number(r.farePerSeat || 0),
+      schedules: Array.isArray(r.schedules) ? r.schedules : [],
+      pickupPoints: Array.isArray(r.pickupPoints) ? r.pickupPoints : [],
+      dropPoints: Array.isArray(r.dropPoints) ? r.dropPoints : [],
+      stops: Array.isArray(r.stops) ? r.stops : [],
+    })),
+  });
+};
+
+export const createAgentPoolingBooking = async (req, res) => {
+  const agent = await Agent.findById(req.auth.sub);
+  if (!agent) {
+    throw new ApiError(404, 'Agent not found');
+  }
+
+  const { routeId, scheduleId, travelDate, pickupStopId, dropStopId, seatCount = 1, selectedSeats = [] } = req.body || {};
+  if (!routeId) {
+    throw new ApiError(400, 'routeId is required');
+  }
+
+  const route = await PoolingRoute.findById(routeId).populate('assignedVehicleTypeIds');
+  if (!route) {
+    throw new ApiError(404, 'Pooling route not found');
+  }
+
+  const requestedCustomer = req.body?.customer || {};
+  const requestedCustomerPhone = normalizePhone(requestedCustomer?.phone);
+  const customer = await withMongoSession((session) =>
+    (/^d{10}$/.test(requestedCustomerPhone)
+      ? resolveOrCreateCustomer({
+          agent,
+          customer: requestedCustomer,
+          session,
+        })
+      : createAnonymousWalkInCustomer({
+          agent,
+          session,
+        })));
+
+  const safeSeats = Array.isArray(selectedSeats) && selectedSeats.length > 0
+    ? selectedSeats.map(String)
+    : Array.from({ length: Math.max(1, Number(seatCount || 1)) }, (_, i) => `S-${i + 1}`);
+
+  const formattedTravelDate = normalizeBusTravelDate(travelDate || new Date().toISOString().slice(0, 10));
+
+  let vehicleId = route.assignedVehicleTypeIds?.[0]?._id || null;
+  if (!vehicleId) {
+    const fallbackVehicle = await PoolingVehicle.findOne().select('_id').lean();
+    vehicleId = fallbackVehicle?._id;
+  }
+
+  if (scheduleId && vehicleId) {
+    const existing = await PoolingSeatReservation.find({
+      route: route._id,
+      scheduleId: String(scheduleId),
+      travelDate: formattedTravelDate,
+      seatId: { $in: safeSeats },
+    }).lean();
+
+    if (existing.length > 0) {
+      throw new ApiError(409, `Seat(s) ${existing.map((e) => e.seatId).join(', ')} already reserved`);
+    }
+  }
+
+  const farePerSeat = Math.max(0, Number(req.body?.farePerSeat || route.farePerSeat || 199));
+  const baseFare = roundMoney(farePerSeat * safeSeats.length);
+  const serviceTaxAmount = roundMoney(baseFare * 0.05);
+  const totalFare = roundMoney(baseFare + serviceTaxAmount);
+
+  const pickupStop = (route.pickupPoints || []).find((s) => String(s.id) === String(pickupStopId))
+    || (route.stops || [])[0] || { name: route.originLabel || 'Origin' };
+  const dropStop = (route.dropPoints || []).find((s) => String(s.id) === String(dropStopId))
+    || (route.stops || [])[(route.stops || []).length - 1] || { name: route.destinationLabel || 'Destination' };
+
+  const booking = await PoolingBooking.create({
+    bookingId: createPoolingBookingCode(),
+    user: customer._id,
+    route: route._id,
+    vehicle: vehicleId,
+    scheduleId: String(scheduleId || 'SCH-1'),
+    pickupStopId: String(pickupStopId || pickupStop?.id || 'P1'),
+    dropStopId: String(dropStopId || dropStop?.id || 'D1'),
+    seatsBooked: safeSeats.length,
+    selectedSeats: safeSeats,
+    fare: totalFare,
+    baseFare,
+    serviceTaxPercentage: 5,
+    serviceTaxAmount,
+    currency: 'INR',
+    paymentStatus: 'paid',
+    bookingStatus: 'confirmed',
+    travelDate: new Date(`${formattedTravelDate}T00:00:00.000Z`),
+    pickupLabel: pickupStop?.name || pickupStop?.address || route.originLabel || '',
+    dropLabel: dropStop?.name || dropStop?.address || route.destinationLabel || '',
+    payment: {
+      provider: 'agent_desk',
+      status: 'paid',
+      paidAt: new Date(),
+    },
+    agentMeta: {
+      bookedByAgentId: agent._id,
+      customerId: customer._id,
+      customerName: customer.name || '',
+      customerPhone: customer.phone || '',
+      commissionMode: 'direct',
+    },
+  });
+
+  if (vehicleId) {
+    try {
+      await PoolingSeatReservation.insertMany(
+        safeSeats.map((seatId) => ({
+          route: route._id,
+          vehicle: vehicleId,
+          booking: booking._id,
+          scheduleId: String(scheduleId || 'SCH-1'),
+          travelDate: formattedTravelDate,
+          seatId,
+        })),
+        { ordered: false }
+      );
+    } catch (resErr) {
+      console.warn('PoolingSeatReservation insert warning:', resErr.message);
+    }
+  }
+
+  // Credit agent commission immediately
+  const commissionResult = await creditAgentCommission({
+    agentId: agent._id,
+    bookingType: 'pooling',
+    commissionMode: 'direct',
+    grossAmount: totalFare,
+    referenceKey: `agent:pooling:${String(booking._id)}`,
+    title: `Shared taxi commission for ${booking.bookingId}`,
+    metadata: {
+      bookingId: String(booking._id),
+      bookingCode: booking.bookingId,
+      userId: String(customer._id),
+    },
+  });
+
+  if (commissionResult?.transaction) {
+    booking.agentMeta.commissionAmount = Number(commissionResult.transaction.amount || 0);
+    booking.agentMeta.commissionCreditedAt = commissionResult.transaction.createdAt || new Date();
+    await booking.save();
+  }
+
+  res.status(201).json({
+    success: true,
+    data: serializeAgentPoolingBooking(booking),
   });
 };
 

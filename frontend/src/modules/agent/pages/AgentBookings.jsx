@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bus, CarFront, Users } from 'lucide-react';
+import { Bus, CarFront, Users, Sparkles, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { agentService } from '../services/agentService';
 
 const cardClass = 'rounded-[28px] border border-white/70 bg-white/85 p-5 shadow-[0_18px_34px_rgba(20,58,90,0.08)] backdrop-blur-xl';
@@ -72,6 +73,7 @@ const Section = ({ icon, label, count, children, empty }) => (
 );
 
 const AgentBookings = () => {
+  const navigate = useNavigate();
   const [payload, setPayload] = useState({ rides: [], buses: [], pooling: [], summary: null });
 
   useEffect(() => {
@@ -109,6 +111,25 @@ const AgentBookings = () => {
           across {summary.totalBookings} booking{summary.totalBookings === 1 ? '' : 's'} worth {formatMoney(summary.totalBookingValue)}
         </p>
       </section>
+      <button
+        type="button"
+        onClick={() => navigate('/taxi/agent/services')}
+        className="w-full flex items-center justify-between rounded-[24px] bg-white p-4 shadow-[0_12px_28px_rgba(20,58,90,0.08)] border border-[#d6e4f5] active:scale-98 transition-all text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-[16px] bg-[#eef7ff] flex items-center justify-center text-[#143a5a]">
+            <Sparkles size={20} className="text-[#0f6aa8]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-[#143a5a]">Book for Customer</h3>
+            <p className="text-xs font-semibold text-slate-500">Shared Taxi, Airport, Spiritual, One Way, Bus</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 rounded-full bg-[#143a5a] px-3.5 py-1.5 text-xs font-black text-white">
+          <span>Book Now</span>
+          <ArrowRight size={13} />
+        </div>
+      </button>
 
       <Section icon={<CarFront size={18} />} label="Ride bookings" count={payload.rides.length} empty="No ride bookings yet.">
         {payload.rides.map((ride) => (
