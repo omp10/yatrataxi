@@ -355,4 +355,12 @@ export const adminService = {
   createOnboardingScreen: (payload) => api.post('/on-boarding', payload),
   updateOnboardingScreen: (id, payload) => api.patch(`/on-boarding/${id}`, payload),
   deleteOnboardingScreen: (id) => api.delete(`/on-boarding/${id}`),
+
+  /**
+   * Centralized Unified Booking Management
+   */
+  getCentralizedBookings: (params = {}) => api.get('/admin/bookings/centralized', { params }),
+  getCentralizedBookingStats: () => api.get('/admin/bookings/centralized/stats'),
+  updateCentralizedBookingStatus: (serviceType, id, status, adminNote = '') =>
+    api.patch(`/admin/bookings/centralized/${serviceType}/${id}/status`, { status, adminNote }),
 };

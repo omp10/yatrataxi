@@ -193,6 +193,7 @@ const AgentOneWayBooking = lazy(() => import('./modules/agent/pages/AgentOneWayB
 const AdminLayout = lazy(() => import('./modules/admin/components/AdminLayout'));
 const AdminLogin = lazy(() => import('./modules/admin/pages/auth/AdminLogin'));
 const AdminDashboard = lazy(() => import('./modules/admin/pages/dashboard/MainDashboard'));
+const AdminCentralizedBookings = lazy(() => import('./modules/admin/pages/bookings/CentralizedBookings'));
 const AdminEarnings = lazy(() => import('./modules/admin/pages/dashboard/AdminEarnings'));
 const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
@@ -1161,6 +1162,8 @@ function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/admin/dashboard" />} />
                 <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="bookings" element={<AdminCentralizedBookings />} />
+                <Route path="centralized-bookings" element={<AdminCentralizedBookings />} />
                 <Route path="earnings" element={<AdminEarnings />} />
                 <Route path="chat" element={<AdminChat />} />
                 <Route path="trips" element={<AdminTrips />} />

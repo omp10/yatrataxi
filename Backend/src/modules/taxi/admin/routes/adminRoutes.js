@@ -233,6 +233,11 @@ import {
   updatePoolingBookingStatus,
   uploadImage,
 } from '../controllers/poolingController.js';
+import {
+  getCentralizedBookings,
+  getCentralizedBookingStats,
+  updateCentralizedBookingStatus,
+} from '../controllers/centralizedBookingController.js';
 import { promotionsRouter } from '../promotions/routes/index.js';
 import { listSafetyAlerts, resolveSafetyAlert } from '../../safety/controllers/safetyController.js';
 
@@ -249,6 +254,11 @@ adminRouter.post('/admin/reset-password', resetPassword);
 adminRouter.get('/admin/general-settings/:category', getGeneralSettingsCategory);
 
 adminRouter.use('/admin', authenticate(['admin']));
+
+// Centralized Booking Command Center
+adminRouter.get('/admin/bookings/centralized/stats', getCentralizedBookingStats);
+adminRouter.get('/admin/bookings/centralized', getCentralizedBookings);
+adminRouter.patch('/admin/bookings/centralized/:serviceType/:id/status', updateCentralizedBookingStatus);
 
 adminRouter.get('/admin/permissions', getAdminPermissions);
 adminRouter.get('/admin/admin-management/admins', getAdmins);
