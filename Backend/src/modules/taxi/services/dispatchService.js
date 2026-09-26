@@ -348,6 +348,23 @@ export const notifyUserAccountDeleted = (userId) => {
   });
 };
 
+export const notifyRideOtpResent = (ride, otp) => {
+  if (!ride) return;
+  const payload = {
+    rideId: String(ride._id),
+    otp: String(otp || ride.otp || ''),
+    message: `Your ride start OTP is ${otp || ride.otp || ''}`,
+  };
+  emitToRoom(getUserRoom(ride.userId), 'ride:otp:updated', payload);
+  emitToRoom(getRideRoom(ride._id), 'ride:otp:updated', payload);
+  emitToRoom(getUserRoom(ride.userId), SOCKET_EVENTS.RIDE_STATE, {
+    rideId: String(ride._id),
+    otp: String(otp || ride.otp || ''),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+  });
+};
+
 export const emitToDriver = (driverId, event, payload) => {
   if (driverId) {
     emitToRoom(getDriverRoom(driverId), event, payload);

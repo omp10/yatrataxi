@@ -116,6 +116,8 @@ const RideDetail = () => {
       ).trim().toLowerCase() === 'cash' ? 'Cash' : 'Online',
       rideCode,
       shortRideCode: rideCode.length > 14 ? `${rideCode.slice(0, 6)}...${rideCode.slice(-4)}` : rideCode,
+      otp: ride?.otp || '',
+      isActive: ['accepted', 'arriving'].includes(status),
     };
   }, [ride]);
 
@@ -196,6 +198,18 @@ const RideDetail = () => {
           <img src="/map image.avif" className="w-full h-full object-cover opacity-60" alt="Map View" />
           <div className="absolute inset-0 bg-gradient-to-t from-white/80 to-transparent" />
         </div>
+
+        {details.otp && details.isActive && (
+          <div className="bg-amber-50 border border-amber-200/90 rounded-[28px] p-4 flex items-center justify-between shadow-sm">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Start PIN / OTP</p>
+              <p className="text-[12px] font-bold text-slate-600 mt-0.5">Share with captain to start ride</p>
+            </div>
+            <div className="bg-white border border-amber-200/80 rounded-2xl px-4 py-2 shadow-sm">
+              <span className="font-mono text-[22px] font-black tracking-widest text-slate-900">{details.otp}</span>
+            </div>
+          </div>
+        )}
 
         <div className="relative pl-8 space-y-6">
           <div className="absolute left-[7px] top-2 bottom-2 w-0.5 border-l-2 border-dashed border-gray-100" />

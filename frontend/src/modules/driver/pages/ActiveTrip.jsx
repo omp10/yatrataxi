@@ -17,6 +17,7 @@ import {
     ArrowLeft,
     Clock3,
     MapPinned,
+    RefreshCw,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react-google-maps/api';
@@ -779,6 +780,9 @@ const ActiveTrip = () => {
     });
     const [otp, setOtp] = useState(['', '', '', '']);
     const [otpError, setOtpError] = useState('');
+    const [resendOtpLoading, setResendOtpLoading] = useState(false);
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const [resendFeedback, setResendFeedback] = useState(null);
     const [selectedRating, setSelectedRating] = useState(0);
     const [driverPaymentStatus, setDriverPaymentStatus] = useState('pending');
     const [selectedPaymentMode, setSelectedPaymentMode] = useState('');
@@ -1491,6 +1495,44 @@ const ActiveTrip = () => {
         return () => window.clearInterval(intervalId);
     }, [driverPaymentStatus, paymentQr?.id, rideId]);
 
+    useEffect(() => {
+        if (resendCooldown <= 0) return undefined;
+        const timer = setInterval(() => {
+            setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [resendCooldown]);
+
+    const handleResendOtp = async () => {
+        if (resendCooldown > 0 || resendOtpLoading || !rideId) return;
+        setResendOtpLoading(true);
+        setResendFeedback(null);
+        try {
+            const driverToken = getLocalDriverToken();
+            const res = await api.post(
+                `/rides/${rideId}/resend-otp`,
+                {},
+                withDriverAuthorization(driverToken),
+            );
+            const data = res?.data?.data || res?.data;
+            setResendCooldown(30);
+            setResendFeedback({ type: 'success', message: 'OTP resent to passenger successfully!' });
+            if (data?.otp) {
+                setHydratedTripState((prev) => ({
+                    ...(prev || {}),
+                    otp: data.otp,
+                }));
+            }
+        } catch (err) {
+            setResendFeedback({
+                type: 'error',
+                message: err?.response?.data?.message || err?.message || 'Could not resend OTP.',
+            });
+        } finally {
+            setResendOtpLoading(false);
+        }
+    };
+
     const startTripAfterOtp = async (enteredOtp) => {
         if (String(enteredOtp).length !== 4) {
             setOtpError('Enter the full 4 digit PIN.');
@@ -2144,8 +2186,29 @@ const ActiveTrip = () => {
                                     />
                                 ))}
                             </div>
+                            <div className="flex items-center justify-between mb-4 px-1">
+                                <button
+                                    type="button"
+                                    onClick={handleResendOtp}
+                                    disabled={resendOtpLoading || resendCooldown > 0}
+                                    className="inline-flex items-center gap-1.5 text-[12px] font-bold text-orange-600 active:scale-95 disabled:opacity-50 transition-all hover:text-orange-700 cursor-pointer"
+                                >
+                                    <RefreshCw size={13} className={resendOtpLoading ? 'animate-spin' : ''} />
+                                    {resendOtpLoading ? 'Resending...' : resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP to Passenger'}
+                                </button>
+                                {expectedOtp && (
+                                    <span className="text-[11px] font-bold text-slate-400">
+                                        PIN: <span className="font-mono text-slate-800 font-extrabold">{expectedOtp}</span>
+                                    </span>
+                                )}
+                            </div>
+                            {resendFeedback && (
+                                <p className={`-mt-2 mb-4 text-center text-[11px] font-bold ${resendFeedback.type === 'error' ? 'text-red-500' : 'text-emerald-600'}`}>
+                                    {resendFeedback.message}
+                                </p>
+                            )}
                             {otpError && (
-                                <p className="-mt-5 mb-5 text-center text-[11px] font-black text-red-500 uppercase tracking-wider">
+                                <p className="-mt-2 mb-4 text-center text-[11px] font-black text-red-500 uppercase tracking-wider">
                                     {otpError}
                                 </p>
                             )}
