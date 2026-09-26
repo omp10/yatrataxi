@@ -5438,10 +5438,10 @@ const toAdminRideRow = (ride) => {
     tripStatus,
     rideStatus: ride.status,
     liveStatus: ride.liveStatus,
-    paymentOption: 'CASH',
+    paymentOption: String(ride.paymentMethod || 'cash').toUpperCase(),
     fare: Number(ride.fare || 0),
-    pickupLabel: formatRidePointLabel(ride.pickupLocation, 'Pickup'),
-    dropLabel: formatRidePointLabel(ride.dropLocation, 'Drop'),
+    pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
+    dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
     pickupLocation: ride.pickupLocation,
     dropLocation: ride.dropLocation,
     lastDriverLocation: ride.lastDriverLocation || null,
@@ -5548,17 +5548,30 @@ const toAdminIntercityTripRow = (ride) => {
 
 
 
-
 export const listOngoingRides = async (query = {}) => {
   const page = Number(query.page || 1);
   const limit = Number(query.limit || 10);
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
 
-  const rides = await Ride.find({
+  const filter = {
     status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
-  })
+  };
+
+  if (tab === 'accepted') {
+    filter.status = RIDE_STATUS.ACCEPTED;
+  } else if (tab === 'ongoing') {
+    filter.status = RIDE_STATUS.ONGOING;
+  } else if (tab === 'upcoming') {
+    filter.status = RIDE_STATUS.SEARCHING;
+  }
+
+  const fetchLimit = Math.max(page * limit * 10, 200);
+
+  const rides = await Ride.find(filter)
     .sort({ createdAt: -1 })
+    .limit(fetchLimit)
+    .select('status liveStatus serviceType createdAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation lastDriverLocation userId driverId vehicleIconType')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
@@ -5595,10 +5608,26 @@ export const listRideRequests = async (query = {}) => {
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
 
-  const rides = await Ride.find({
+  const filter = {
     serviceType: { $nin: ['parcel', 'intercity'] },
-  })
+  };
+
+  if (tab === 'completed') {
+    filter.status = RIDE_STATUS.COMPLETED;
+  } else if (tab === 'cancelled') {
+    filter.status = RIDE_STATUS.CANCELLED;
+  } else if (tab === 'upcoming') {
+    filter.status = { $in: [RIDE_STATUS.SEARCHING, 'pending', 'scheduled'] };
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
+    filter.status = { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] };
+  }
+
+  const fetchLimit = Math.max(page * limit * 10, 200);
+
+  const rides = await Ride.find(filter)
     .sort({ createdAt: -1 })
+    .limit(fetchLimit)
+    .select('status liveStatus serviceType createdAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation lastDriverLocation userId driverId vehicleIconType')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
@@ -5637,8 +5666,21 @@ export const listDeliveries = async (query = {}) => {
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
 
-  const rides = await Ride.find({ serviceType: 'parcel' })
+  const filter = { serviceType: 'parcel' };
+  if (tab === 'completed') {
+    filter.status = RIDE_STATUS.COMPLETED;
+  } else if (tab === 'cancelled') {
+    filter.status = RIDE_STATUS.CANCELLED;
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
+    filter.status = { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] };
+  }
+
+  const fetchLimit = Math.max(page * limit * 10, 200);
+
+  const rides = await Ride.find(filter)
     .sort({ createdAt: -1 })
+    .limit(fetchLimit)
+    .select('status liveStatus serviceType createdAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation deliveryId userId driverId vehicleIconType')
     .populate('deliveryId')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
@@ -5646,15 +5688,6 @@ export const listDeliveries = async (query = {}) => {
 
   let rows = rides.map(toAdminDeliveryRow);
 
-  if (tab === 'completed') {
-    rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
-  } else if (tab === 'cancelled') {
-    rows = rows.filter((row) => row.tripStatus === 'CANCELLED');
-  } else if (tab === 'upcoming') {
-    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
-  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
-    rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
-  }
   if (tab === 'completed') {
     rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
   } else if (tab === 'cancelled') {
@@ -5690,8 +5723,21 @@ export const listIntercityTrips = async (query = {}) => {
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
 
-  const rides = await Ride.find({ serviceType: 'intercity' })
+  const filter = { serviceType: 'intercity' };
+  if (tab === 'completed') {
+    filter.status = RIDE_STATUS.COMPLETED;
+  } else if (tab === 'cancelled') {
+    filter.status = RIDE_STATUS.CANCELLED;
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
+    filter.status = { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] };
+  }
+
+  const fetchLimit = Math.max(page * limit * 10, 200);
+
+  const rides = await Ride.find(filter)
     .sort({ createdAt: -1 })
+    .limit(fetchLimit)
+    .select('status liveStatus serviceType createdAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation intercity userId driverId vehicleIconType')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
@@ -9841,6 +9887,7 @@ export const buildDriverDutyReport = async (query = {}) => {
       { name: 'taxi', display_name: 'Taxi' },
       { name: 'delivery', display_name: 'Delivery' },
       { name: 'pooling', display_name: 'Pooling' },
+      { name: 'bus', display_name: 'Bus' },
       { name: 'both', display_name: 'Both' }
     ];
     

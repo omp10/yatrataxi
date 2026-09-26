@@ -35,6 +35,7 @@ export const getServiceModuleButtonText = (module = {}) => {
   const identity = `${normalizeValue(module.transport_type)} ${normalizeValue(module.service_type)} ${normalizeValue(module.name)}`;
   if (identity.includes('delivery') || identity.includes('parcel')) return 'Send Now';
   if (identity.includes('rental')) return 'Rent Now';
+  if (identity.includes('bus')) return 'Book Bus';
   return 'Book Now';
 };
 

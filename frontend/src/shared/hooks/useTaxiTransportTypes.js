@@ -17,11 +17,11 @@ export const useTaxiTransportTypes = () => {
       } catch (err) {
         console.error('Failed to fetch transport types:', err);
         setError(err);
-        // Fallback to defaults to prevent UI breakage
         setTransportTypes([
           { name: 'taxi', display_name: 'Taxi' },
           { name: 'delivery', display_name: 'Delivery' },
           { name: 'pooling', display_name: 'Pooling' },
+          { name: 'bus', display_name: 'Bus' },
           { name: 'both', display_name: 'Both' }
         ]);
       } finally {

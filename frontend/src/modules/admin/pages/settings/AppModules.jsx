@@ -303,6 +303,7 @@ const AppModules = ({ mode: propMode }) => {
                           <option value="rental">Rental</option>
                           <option value="bid">Bid</option>
                           <option value="pooling">Pooling</option>
+                          <option value="bus">Bus</option>
                         </select>
                       </div>
 
@@ -482,6 +483,7 @@ const AppModules = ({ mode: propMode }) => {
                 <option value="rental">Rental</option>
                 <option value="bid">Bid</option>
                 <option value="pooling">Pooling</option>
+                <option value="bus">Bus</option>
               </select>
             </div>
 
@@ -502,6 +504,7 @@ const AppModules = ({ mode: propMode }) => {
                 <option value="car">Car</option>
                 <option value="bike">Bike</option>
                 <option value="auto">Auto</option>
+                <option value="bus">Bus</option>
                 <option value="truck">Truck</option>
                 <option value="ehcv">EHCV</option>
                 <option value="hatchback">Hatchback</option>

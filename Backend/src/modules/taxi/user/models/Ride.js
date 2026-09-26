@@ -673,5 +673,8 @@ const rideSchema = new mongoose.Schema(
 
 rideSchema.index({ userId: 1, createdAt: -1 });
 rideSchema.index({ driverId: 1, createdAt: -1 });
+rideSchema.index({ createdAt: -1 });
+rideSchema.index({ serviceType: 1, createdAt: -1 });
+rideSchema.index({ status: 1, createdAt: -1 });
 
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);
