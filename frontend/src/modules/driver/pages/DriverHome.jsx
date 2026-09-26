@@ -1031,6 +1031,67 @@ const DriverHome = () => {
             .filter(Boolean);
     }, [documentTemplates, driverDocuments]);
 
+    const onRideRequest = useCallback((data) => {
+        console.info('[driver-home] rideRequest received', data);
+        if (!data?.rideId) {
+            return;
+        }
+        if (currentRequestRef.current?.rideId === data.rideId) {
+            return;
+        }
+        const requestType = normalizeJobType(data);
+        const request = {
+            type: requestType,
+            title: getJobTitle(requestType),
+            fare: `Rs ${data.fare || 0}`,
+            payment: data.paymentMethod || 'Cash',
+            pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
+            drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
+            distance: formatTripDistance(data),
+            requestId: data.rideId,
+            rideId: data.rideId,
+            attempt: data.attempt,
+            maxAttempts: data.maxAttempts,
+            acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
+            requestExpiresAt: data.requestExpiresAt || null,
+            customer: data.user || null,
+            bookingMode: data.bookingMode || 'normal',
+            bidding: data.bidding || { enabled: false },
+            raw: data,
+        };
+        currentRequestRef.current = request;
+        setCurrentRequest(request);
+        setShowRequest(true);
+        setIsOnline(true);
+        persistStoredDriverInfo({ isOnline: true });
+        socketService.connect({ role: 'driver' });
+        playRideRequestAlertSound();
+        setStatusMessage('New booking received.');
+    }, []);
+
+    const onRideRequestRef = useRef(onRideRequest);
+    useEffect(() => {
+        onRideRequestRef.current = onRideRequest;
+    }, [onRideRequest]);
+
+    const checkActiveRideRequest = useCallback(async (targetRideId = null) => {
+        const token = getLocalDriverToken();
+        if (!token) return;
+
+        try {
+            const queryRideId = targetRideId || new URLSearchParams(window.location.search).get('incomingRideId') || null;
+            const response = await api.get('/taxi/driver/active-ride-request', {
+                params: queryRideId ? { rideId: queryRideId } : {},
+            });
+            const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
+            if (rideRequest?.rideId) {
+                onRideRequestRef.current?.(rideRequest);
+            }
+        } catch {
+            // passive check
+        }
+    }, []);
+
     useEffect(() => {
         let active = true;
 
@@ -1537,67 +1598,6 @@ const DriverHome = () => {
             recoveryTimeoutsRef.current.push(timeoutId);
         });
     }, [clearRecoveryBurst, isHydratingDriver, isOnline, isTogglingDuty, recoverRealtimeSession]);
-
-    const onRideRequest = useCallback((data) => {
-        console.info('[driver-home] rideRequest received', data);
-        if (!data?.rideId) {
-            return;
-        }
-        if (currentRequestRef.current?.rideId === data.rideId) {
-            return;
-        }
-        const requestType = normalizeJobType(data);
-        const request = {
-            type: requestType,
-            title: getJobTitle(requestType),
-            fare: `Rs ${data.fare || 0}`,
-            payment: data.paymentMethod || 'Cash',
-            pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
-            drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
-            distance: formatTripDistance(data),
-            requestId: data.rideId,
-            rideId: data.rideId,
-            attempt: data.attempt,
-            maxAttempts: data.maxAttempts,
-            acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
-            requestExpiresAt: data.requestExpiresAt || null,
-            customer: data.user || null,
-            bookingMode: data.bookingMode || 'normal',
-            bidding: data.bidding || { enabled: false },
-            raw: data,
-        };
-        currentRequestRef.current = request;
-        setCurrentRequest(request);
-        setShowRequest(true);
-        setIsOnline(true);
-        persistStoredDriverInfo({ isOnline: true });
-        socketService.connect({ role: 'driver' });
-        playRideRequestAlertSound();
-        setStatusMessage('New booking received.');
-    }, []);
-
-    const onRideRequestRef = useRef(onRideRequest);
-    useEffect(() => {
-        onRideRequestRef.current = onRideRequest;
-    }, [onRideRequest]);
-
-    const checkActiveRideRequest = useCallback(async (targetRideId = null) => {
-        const token = getLocalDriverToken();
-        if (!token) return;
-
-        try {
-            const queryRideId = targetRideId || new URLSearchParams(window.location.search).get('incomingRideId') || null;
-            const response = await api.get('/taxi/driver/active-ride-request', {
-                params: queryRideId ? { rideId: queryRideId } : {},
-            });
-            const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
-            if (rideRequest?.rideId) {
-                onRideRequestRef.current?.(rideRequest);
-            }
-        } catch {
-            // passive check
-        }
-    }, []);
 
     // Global listener for FCM push events, direct service worker messages, URL deep links, and resume
     useEffect(() => {
