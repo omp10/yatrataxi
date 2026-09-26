@@ -404,7 +404,7 @@ const SearchingDriver = () => {
       );
     };
 
-    const moveToTracking = ({ acceptedDriver, rideId, rideSnapshot }) => {
+    const moveToTracking = ({ acceptedDriver, rideId, rideSnapshot, otp: explicitOtp }) => {
       if (disposed) {
         return;
       }
@@ -414,7 +414,7 @@ const SearchingDriver = () => {
       }
 
       const nextDriver = normalizeDriver(acceptedDriver);
-      const nextOtp = String(rideSnapshot?.otp || routeState?.otp || '');
+      const nextOtp = String(explicitOtp || rideSnapshot?.otp || routeState?.otp || '');
       driverRef.current = nextDriver;
       setDriver(nextDriver);
       setStage(STAGES.ACCEPTED);
@@ -459,8 +459,11 @@ const SearchingDriver = () => {
       }, 2200);
     };
 
-    const onRideAccepted = ({ driver: acceptedDriver, rideId }) => {
-      moveToTracking({ acceptedDriver, rideId });
+    const onRideAccepted = (payload) => {
+      const acceptedDriver = payload?.driver;
+      const rideId = payload?.rideId;
+      const rideOtp = payload?.otp;
+      moveToTracking({ acceptedDriver, rideId, rideSnapshot: payload, otp: rideOtp });
     };
 
     const onRideBidUpdated = ({ rideId, bid, userMaxBidFare, bidStepAmount, bookingMode }) => {
@@ -517,7 +520,12 @@ const SearchingDriver = () => {
       }
 
       if (payload.status === 'accepted' || payload.liveStatus === 'accepted') {
-        moveToTracking({ acceptedDriver: payload.driver, rideId: payload.rideId, rideSnapshot: payload });
+        moveToTracking({
+          acceptedDriver: payload.driver,
+          rideId: payload.rideId,
+          rideSnapshot: payload,
+          otp: payload.otp,
+        });
       }
     };
 
@@ -547,7 +555,17 @@ const SearchingDriver = () => {
           acceptedDriver: activeRide?.driver || driverRef.current,
           rideId: payload.rideId,
           rideSnapshot: activeRide || payload,
+          otp: activeRide?.otp || payload?.otp,
         });
+      }
+    };
+
+    const onRideOtpUpdated = (payload) => {
+      if (!payload || String(payload.rideId || '') !== String(activeRideIdRef.current || '')) {
+        return;
+      }
+      if (payload.otp) {
+        setRideOtp(String(payload.otp));
       }
     };
 
@@ -566,6 +584,7 @@ const SearchingDriver = () => {
     socketService.on('rideBiddingUpdated', onRideBiddingUpdated);
     socketService.on('ride:state', onRideState);
     socketService.on('ride:status:updated', onRideStatusUpdated);
+    socketService.on('ride:otp:updated', onRideOtpUpdated);
     socketService.on('rideCancelled', onRideCancelled);
     socketService.on('errorMessage', onError);
 
@@ -585,6 +604,7 @@ const SearchingDriver = () => {
       socketService.off('rideBiddingUpdated', onRideBiddingUpdated);
       socketService.off('ride:state', onRideState);
       socketService.off('ride:status:updated', onRideStatusUpdated);
+      socketService.off('ride:otp:updated', onRideOtpUpdated);
       socketService.off('rideCancelled', onRideCancelled);
       socketService.off('errorMessage', onError);
     };

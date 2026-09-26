@@ -20,6 +20,8 @@ import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '
 import { applyPromoToRideInTransaction } from './promoService.js';
 import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
+import { sendOtpSms } from './smsService.js';
+import { notifyRideOtpResent } from './dispatchService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -2149,4 +2151,52 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
   await Promise.all([ride.save(), driver.save()]);
 
   return populateRideRealtime(ride._id);
+};
+
+export const resendRideOtp = async ({ rideId, requestedByRole, requestedById }) => {
+  const ride = await Ride.findById(rideId);
+  if (!ride) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
+  if (requestedByRole === 'driver' && ride.driverId && String(ride.driverId) !== String(requestedById)) {
+    throw new ApiError(403, 'Only the assigned driver can request OTP resend');
+  }
+
+  if (requestedByRole === 'user' && String(ride.userId) !== String(requestedById)) {
+    throw new ApiError(403, 'Only the ride passenger can request OTP resend');
+  }
+
+  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
+  if (['started', 'ongoing', 'completed', 'cancelled', 'delivered'].includes(liveStatus)) {
+    throw new ApiError(400, 'Cannot resend OTP for a ride that has already started or ended');
+  }
+
+  let otp = ride.otp;
+  if (!otp || String(otp).trim().length !== 4) {
+    otp = generateRideOtp();
+    ride.otp = otp;
+    await ride.save();
+  }
+
+  const user = await User.findById(ride.userId).select('phone name');
+  if (user?.phone) {
+    try {
+      await sendOtpSms({
+        phone: user.phone,
+        otp,
+        purpose: 'ride start OTP',
+      });
+    } catch (smsError) {
+      console.error('[resendRideOtp] SMS send error:', smsError?.message || smsError);
+    }
+  }
+
+  notifyRideOtpResent(ride, otp);
+
+  return {
+    rideId: String(ride._id),
+    otp,
+    phone: user?.phone ? String(user.phone).slice(-4) : '',
+  };
 };

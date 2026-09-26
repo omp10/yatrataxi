@@ -369,7 +369,7 @@ const RideTracking = () => {
   );
   const hasLiveDriverLocation = Boolean(rideRealtime?.driverLocation?.coordinates?.length);
   const tripStatus = String(rideRealtime?.status || state.liveStatus || state.status || 'accepted').toLowerCase();
-  const otp = ['started', 'ongoing', 'arrived', 'completed'].includes(tripStatus)
+  const otp = ['started', 'ongoing', 'completed', 'cancelled', 'delivered'].includes(tripStatus)
     ? ''
     : String(rideRealtime?.otp || state.otp || state.ride_otp || '');
   const serviceType = String(state.serviceType || state.type || 'ride').toLowerCase();
@@ -885,15 +885,31 @@ const RideTracking = () => {
       }));
     };
 
+    const onOtpUpdated = (payload) => {
+      if (!payload || String(payload.rideId || '') !== String(rideId)) return;
+      if (payload.otp) {
+        setRideRealtime((prev) => ({
+          ...(prev || {}),
+          otp: String(payload.otp),
+        }));
+        saveCurrentRide({
+          ...latestStateRef.current,
+          otp: String(payload.otp),
+        });
+      }
+    };
+
     socketService.on('ride:state', onRideState);
     socketService.on('ride:driver-location:updated', onLocationUpdated);
     socketService.on('ride:status:updated', onStatusUpdated);
+    socketService.on('ride:otp:updated', onOtpUpdated);
     socketService.emit('ride:join', { rideId });
 
     return () => {
       socketService.off('ride:state', onRideState);
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
+      socketService.off('ride:otp:updated', onOtpUpdated);
     };
   }, [rideId]);
 
@@ -1382,6 +1398,17 @@ const RideTracking = () => {
                   </p>
                 </div>
               </div>
+              {otp && (
+                <div className="mt-3.5 flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow-sm border border-amber-200/80">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">Start Ride PIN</p>
+                    <p className="text-[12px] font-bold text-slate-600">Share this code with your captain</p>
+                  </div>
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-1.5 text-center shadow-inner">
+                    <span className="font-mono text-[22px] font-black tracking-widest text-slate-900">{otp}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

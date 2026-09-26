@@ -567,9 +567,16 @@ const Home = () => {
                 <ShieldCheck size={12} strokeWidth={3} />
                 Confirmed
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Live Status</span>
+              <div className="flex items-center gap-2">
+                {currentRide?.otp && !['started', 'ongoing', 'completed', 'cancelled'].includes(rideStage) && (
+                  <span className="rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[11px] font-black text-amber-900 tracking-wider">
+                    OTP: {currentRide.otp}
+                  </span>
+                )}
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Live Status</span>
+                </div>
               </div>
             </div>
 
@@ -754,17 +761,24 @@ const Home = () => {
               <img src={currentRideIcon} alt={vehicleLabel} className="h-8 w-8 object-contain" draggable={false} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-orange-600">
-                  {isScheduledAcceptedRide
-                    ? 'Scheduled ride ready'
-                    : serviceType === 'parcel'
-                      ? 'Parcel in progress'
-                      : serviceType === 'rental'
-                        ? (rideStage === 'end_requested' ? 'Rental end review' : 'Rental in progress')
-                        : 'Current Ride'}
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-orange-600">
+                    {isScheduledAcceptedRide
+                      ? 'Scheduled ride ready'
+                      : serviceType === 'parcel'
+                        ? 'Parcel in progress'
+                        : serviceType === 'rental'
+                          ? (rideStage === 'end_requested' ? 'Rental end review' : 'Rental in progress')
+                          : 'Current Ride'}
+                  </p>
+                </div>
+                {currentRide?.otp && !['started', 'ongoing', 'completed', 'cancelled'].includes(rideStage) && (
+                  <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-black text-amber-900 tracking-wider">
+                    OTP: {currentRide.otp}
+                  </span>
+                )}
               </div>
               <p className="mt-0.5 truncate text-[14px] font-black leading-tight text-slate-900">
                 {rideStageContextLabel}

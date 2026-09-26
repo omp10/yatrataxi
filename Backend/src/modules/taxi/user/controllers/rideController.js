@@ -21,6 +21,7 @@ import {
   increaseRideBidCeiling,
   listRideBidsForUser,
   listRideHistoryForIdentity,
+  resendRideOtp,
   serializeRideRealtime,
   submitRideFeedback,
   updateRideLifecycle,
@@ -410,6 +411,20 @@ export const updateRideStatus = async (req, res) => {
   res.json({
     success: true,
     data: serializeRideRealtime(ride),
+  });
+};
+
+export const resendRideOtpController = async (req, res) => {
+  const result = await resendRideOtp({
+    rideId: req.params.rideId,
+    requestedByRole: req.auth.role,
+    requestedById: req.auth.sub,
+  });
+
+  res.json({
+    success: true,
+    message: 'OTP resent to passenger successfully',
+    data: result,
   });
 };
 
