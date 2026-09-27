@@ -20,14 +20,19 @@ export const getServiceModulePath = (module = {}) => {
   const identity = `${transportType} ${serviceType} ${name}`;
 
   if (identity.includes('delivery') || identity.includes('parcel')) return '/taxi/user/parcel/type';
-  if (identity.includes('rental')) return '/taxi/user/rental';
-  if (identity.includes('outstation') || identity.includes('intercity')) return '/taxi/user/intercity';
-  if (identity.includes('pooling')) return '/taxi/user/pooling';
+  if (serviceType === 'rental' || identity.includes('rental')) return '/taxi/user/rental';
+  if (serviceType === 'outstation' || identity.includes('outstation') || identity.includes('intercity')) return '/taxi/user/intercity';
+  if (serviceType === 'pooling' || identity.includes('pooling')) return '/taxi/user/pooling';
   if (identity.includes('sharing') || identity.includes('shared')) return '/taxi/user/cab-sharing';
-  if (identity.includes('bus')) return '/taxi/user/bus';
+  if (serviceType === 'bus' || identity.includes('bus')) return '/taxi/user/bus';
   if (identity.includes('tour')) return '/taxi/user/tours';
-  if (name.includes('cab') || name.includes('taxi')) return '/taxi/user/cab';
 
+  // Only open the multi-service packages hub if explicitly defined as a hub or special package
+  if (name.includes('cab hub') || name.includes('special cab') || name.includes('taxi packages') || name.includes('auto & cab')) {
+    return '/taxi/user/cab';
+  }
+
+  // Normal rides (e.g., "Book cab", "Taxi", "Auto", "Bike Taxi") open direct location selection
   return '/taxi/user/ride/select-location';
 };
 
