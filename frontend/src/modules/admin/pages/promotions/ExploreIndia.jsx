@@ -40,6 +40,9 @@ const createInitialFormData = () => ({
   description: '',
   category: 'spiritual',
   baseFare: 999,
+  sedanFare: 999,
+  suvFare: 1399,
+  tempoFare: 2199,
   distance: '55 km',
   emoji: '🛕',
   order: 0,
@@ -123,6 +126,7 @@ const ExploreIndia = () => {
   // Open modal for Edit
   const handleOpenEditModal = (dest) => {
     setEditingDestination(dest);
+    const bFare = dest.baseFare ?? 999;
     setFormData({
       title: dest.title || '',
       label: dest.label || '',
@@ -133,7 +137,10 @@ const ExploreIndia = () => {
       useUrl: Boolean(dest.image && !dest.image.startsWith('data:')),
       description: dest.description || '',
       category: dest.category || 'spiritual',
-      baseFare: dest.baseFare ?? 999,
+      baseFare: bFare,
+      sedanFare: dest.vehicleFares?.sedan ?? dest.sedanFare ?? bFare,
+      suvFare: dest.vehicleFares?.suv ?? dest.suvFare ?? Math.round(bFare * 1.4),
+      tempoFare: dest.vehicleFares?.tempo ?? dest.tempoFare ?? Math.round(bFare * 2.2),
       distance: dest.distance || dest.dist || '55 km',
       emoji: dest.emoji || '🛕',
       order: dest.order ?? 0,
@@ -219,7 +226,15 @@ const ExploreIndia = () => {
         image: effectiveImage,
         description: formData.description.trim(),
         category: formData.category || 'spiritual',
-        baseFare: Number(formData.baseFare) || 999,
+        baseFare: Number(formData.sedanFare || formData.baseFare) || 999,
+        vehicleFares: {
+          sedan: Number(formData.sedanFare || formData.baseFare) || 999,
+          suv: Number(formData.suvFare) || Math.round((Number(formData.baseFare) || 999) * 1.4),
+          tempo: Number(formData.tempoFare) || Math.round((Number(formData.baseFare) || 999) * 2.2),
+        },
+        sedanFare: Number(formData.sedanFare || formData.baseFare) || 999,
+        suvFare: Number(formData.suvFare) || Math.round((Number(formData.baseFare) || 999) * 1.4),
+        tempoFare: Number(formData.tempoFare) || Math.round((Number(formData.baseFare) || 999) * 2.2),
         distance: formData.distance.trim(),
         emoji: formData.emoji.trim() || '🛕',
         order: Number(formData.order) || 0,
@@ -966,11 +981,87 @@ const ExploreIndia = () => {
                       min={0}
                       required
                       value={formData.baseFare}
-                      onChange={(e) => setFormData({ ...formData, baseFare: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const num = Number(val) || 0;
+                        setFormData((prev) => ({
+                          ...prev,
+                          baseFare: val,
+                          sedanFare: val,
+                          suvFare: num > 0 ? Math.round(num * 1.4) : '',
+                          tempoFare: num > 0 ? Math.round(num * 2.2) : '',
+                        }));
+                      }}
                       placeholder="e.g. 999"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                     />
-                    <p className="text-[10px] text-slate-400">Used for base vehicle pricing in User & Agent desks</p>
+                    <p className="text-[10px] text-slate-400">Used as default base for vehicle calculations</p>
+                  </div>
+                </div>
+
+                {/* Individual Vehicle Fares */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Vehicle Fares (₹)</h4>
+                      <p className="text-[11px] text-slate-500">Edit exact price for each vehicle category</p>
+                    </div>
+                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Option B: Direct Pricing
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">🚗 Sedan</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">4 Seats</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Dzire / Etios</p>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={formData.sedanFare}
+                        onChange={(e) => setFormData({ ...formData, sedanFare: e.target.value, baseFare: e.target.value })}
+                        placeholder="e.g. 600"
+                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">🚙 SUV</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">6 Seats</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Ertiga / Innova</p>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={formData.suvFare}
+                        onChange={(e) => setFormData({ ...formData, suvFare: e.target.value })}
+                        placeholder="e.g. 840"
+                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">🚐 Tempo</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">12 Seats</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Mini Coach</p>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={formData.tempoFare}
+                        onChange={(e) => setFormData({ ...formData, tempoFare: e.target.value })}
+                        placeholder="e.g. 1320"
+                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
                   </div>
                 </div>
 

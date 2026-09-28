@@ -4,10 +4,9 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Users, ChevronRight, Calendar, Clock, MapPin } from 'lucide-react';
 
 const VEHICLES = [
-  { id: 'mini',  name: 'Mini Cab', icon: '🚕', baseFare: 800,  desc: 'Swift, Alto',       maxSeats: 4 },
-  { id: 'sedan', name: 'Sedan',    icon: '🚗', baseFare: 1100, desc: 'Dzire, Amaze',      maxSeats: 4 },
-  { id: 'suv',   name: 'SUV',      icon: '🚙', baseFare: 1600, desc: 'Ertiga, Innova',    maxSeats: 6 },
-  { id: 'tempo', name: 'Traveller',icon: '🚐', baseFare: 3200, desc: 'Force Traveller',   maxSeats: 12 },
+  { id: 'sedan', name: 'Sedan', icon: '🚗', desc: 'Dzire, Etios', maxSeats: 4 },
+  { id: 'suv', name: 'SUV', icon: '🚙', desc: 'Ertiga, Innova', maxSeats: 6 },
+  { id: 'tempo', name: 'Mini Coach / Tempo', icon: '🚐', desc: 'Tempo / Traveller', maxSeats: 12 },
 ];
 
 const SpiritualTripVehicle = () => {
@@ -25,11 +24,18 @@ const SpiritualTripVehicle = () => {
     return null;
   }
 
-  const selectedVehicle = VEHICLES.find(v => v.id === vehicle);
+  const selectedVehicle = VEHICLES.find(v => v.id === vehicle) || VEHICLES[0];
   
-  // Calculate approximate fare based on base vehicle fare and trip multiplier
-  const multiplier = trip.dist.includes('km') ? parseInt(trip.dist) / 50 : 1;
-  const estimatedFare = Math.round(selectedVehicle.baseFare * multiplier);
+  const getVehicleFare = (vehId) => {
+    if (trip?.vehicleFares?.[vehId]) return Number(trip.vehicleFares[vehId]);
+    const bFare = Number(trip?.baseFare) || 999;
+    if (vehId === 'sedan') return bFare;
+    if (vehId === 'suv') return Math.round(bFare * 1.4);
+    if (vehId === 'tempo') return Math.round(bFare * 2.2);
+    return bFare;
+  };
+
+  const estimatedFare = getVehicleFare(vehicle);
 
   const handleContinue = () => {
     if (!date || !time) return alert("Please select date and time");
@@ -117,7 +123,7 @@ const SpiritualTripVehicle = () => {
                   <p className="text-[11px] font-bold text-slate-500">{v.desc} · <span className="text-slate-400 font-medium">Upto</span> {v.maxSeats} seats</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[16px] font-black text-purple-700">₹{Math.round(v.baseFare * multiplier).toLocaleString()}</p>
+                  <p className="text-[16px] font-black text-purple-700">₹{getVehicleFare(v.id).toLocaleString()}</p>
                 </div>
               </motion.button>
             ))}

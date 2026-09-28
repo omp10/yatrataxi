@@ -117,6 +117,17 @@ export const createDefaultAppSettings = () => ({
       active: true,
       mobile_menu_icon: '/bus_service_icon.png',
     },
+    {
+      _id: objectId(),
+      name: 'Spiritual Trips',
+      transport_type: 'taxi',
+      service_type: 'spiritual',
+      order_by: 9,
+      short_description: 'Pilgrimage and holy tours',
+      description: 'Curated spiritual pilgrimage tours to sacred temples and holy sites.',
+      active: true,
+      mobile_menu_icon: '/temple.png',
+    },
   ],
   onboarding_screens: [
     {

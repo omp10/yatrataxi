@@ -3,15 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ChevronRight, MapPin, Loader2, Sparkles } from 'lucide-react';
 
-const FALLBACK_DESTINATIONS = [
-  { id: 'ujjain',      name: 'Ujjain Mahakaleshwar', subtitle: 'Mahakaleshwar Jyotirlinga', dist: '55 km',  fare: '₹800–₹1,200',  emoji: '🛕', accent: 'bg-[linear-gradient(135deg,#FDF4FF_0%,#F3E8FF_100%)]' },
-  { id: 'omkareshwar', name: 'Omkareshwar',  subtitle: 'Jyotirlinga on Narmada',   dist: '77 km',  fare: '₹1,000–₹1,500', emoji: '🙏', accent: 'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]' },
-  { id: 'maheshwar',   name: 'Maheshwar & Mandu', subtitle: 'Ahilya Fort & Ghats',      dist: '91 km',  fare: '₹1,200–₹1,800', emoji: '⛵', accent: 'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]' },
-  { id: 'orchha',      name: 'Orchha Ram Raja', subtitle: 'Sacred Temple Palace',     dist: '320 km', fare: '₹3,500–₹5,000', emoji: '🏯', accent: 'bg-[linear-gradient(135deg,#F0FDF4_0%,#BBF7D0_100%)]' },
-  { id: 'datia',       name: 'Pitambara Peeth', subtitle: 'Datia Shakti Shrine',      dist: '210 km', fare: '₹2,500–₹3,500', emoji: '🌸', accent: 'bg-[linear-gradient(135deg,#FDF4FF_0%,#FBCFE8_100%)]' },
-  { id: 'amarkantak',  name: 'Amarkantak',   subtitle: 'Source of Narmada River',  dist: '380 km', fare: '₹4,000–₹5,500', emoji: '🏔️', accent: 'bg-[linear-gradient(135deg,#F0FDF4_0%,#D1FAE5_100%)]' },
-];
-
 const ACCENT_GRADIENTS = [
   'bg-[linear-gradient(135deg,#FDF4FF_0%,#F3E8FF_100%)]',
   'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]',
@@ -23,7 +14,7 @@ const ACCENT_GRADIENTS = [
 
 const SpiritualTrip = () => {
   const navigate = useNavigate();
-  const [destinations, setDestinations] = useState(FALLBACK_DESTINATIONS);
+  const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,19 +27,31 @@ const SpiritualTrip = () => {
           const data = await res.json();
           const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || []);
           if (isMounted && items.length > 0) {
-            const mapped = items.map((dest, idx) => ({
-              id: dest._id || dest.id || `dest-${idx}`,
-              name: dest.title || dest.name,
-              subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
-              dist: dest.distance || dest.dist || '55 km',
-              fare: dest.baseFare ? `₹${dest.baseFare}–₹${Math.round(dest.baseFare * 1.4)}` : (dest.fare || '₹999–₹1,500'),
-              baseFare: dest.baseFare || 999,
-              emoji: dest.emoji || '🛕',
-              image: dest.image || '',
-              dropLocation: dest.dropLocation || dest.drop,
-              accent: ACCENT_GRADIENTS[idx % ACCENT_GRADIENTS.length],
-            }));
+            const mapped = items.map((dest, idx) => {
+              const bFare = Number(dest.baseFare) || Number(dest.vehicleFares?.sedan) || 999;
+              const suvFare = Number(dest.vehicleFares?.suv) || Math.round(bFare * 1.4);
+              const tempoFare = Number(dest.vehicleFares?.tempo) || Math.round(bFare * 2.2);
+              return {
+                id: dest._id || dest.id || `dest-${idx}`,
+                name: dest.title || dest.name,
+                subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
+                dist: dest.distance || dest.dist || '55 km',
+                fare: `₹${bFare}–₹${suvFare}`,
+                baseFare: bFare,
+                vehicleFares: {
+                  sedan: Number(dest.vehicleFares?.sedan) || bFare,
+                  suv: suvFare,
+                  tempo: tempoFare,
+                },
+                emoji: dest.emoji || '🛕',
+                image: dest.image || '',
+                dropLocation: dest.dropLocation || dest.drop,
+                accent: ACCENT_GRADIENTS[idx % ACCENT_GRADIENTS.length],
+              };
+            });
             setDestinations(mapped);
+          } else if (isMounted) {
+            setDestinations([]);
           }
         }
       } catch (err) {
@@ -109,57 +112,67 @@ const SpiritualTrip = () => {
           {loading && <Loader2 size={16} className="animate-spin text-purple-600" />}
         </div>
 
-        {/* Destination grid */}
-        <div className="grid grid-cols-2 gap-3">
-          {destinations.map((dest, i) => (
-            <motion.button
-              key={dest.id}
-              type="button"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => handleSelect(dest)}
-              className={`rounded-[20px] border border-white/80 shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-3.5 text-left flex flex-col justify-between overflow-hidden relative group ${dest.accent}`}
-            >
-              {dest.image ? (
-                <div className="h-20 -mx-3.5 -mt-3.5 mb-2.5 overflow-hidden relative bg-slate-200">
-                  <img
-                    src={dest.image}
-                    alt={dest.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                  <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-xs bg-white/90 shadow-sm backdrop-blur-xs">
-                    {dest.emoji}
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center text-slate-400 gap-2">
+            <Loader2 size={26} className="animate-spin text-purple-600" />
+            <p className="text-xs font-semibold">Loading holy destinations...</p>
+          </div>
+        ) : destinations.length === 0 ? (
+          <div className="py-16 text-center text-slate-400">
+            <p className="text-sm font-semibold">No spiritual destinations available currently.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {destinations.map((dest, i) => (
+              <motion.button
+                key={dest.id}
+                type="button"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleSelect(dest)}
+                className={`rounded-[20px] border border-white/80 shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-3.5 text-left flex flex-col justify-between overflow-hidden relative group ${dest.accent}`}
+              >
+                {dest.image ? (
+                  <div className="h-20 -mx-3.5 -mt-3.5 mb-2.5 overflow-hidden relative bg-slate-200">
+                    <img
+                      src={dest.image}
+                      alt={dest.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-xs bg-white/90 shadow-sm backdrop-blur-xs">
+                      {dest.emoji}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <span className="text-3xl mb-1">{dest.emoji}</span>
-              )}
+                ) : (
+                  <span className="text-3xl mb-1">{dest.emoji}</span>
+                )}
 
-              <div>
-                <p className="text-[14px] font-black text-slate-900 leading-tight line-clamp-1">{dest.name}</p>
-                <p className="text-[10px] font-bold text-slate-500 mt-0.5 leading-tight line-clamp-1">{dest.subtitle}</p>
-              </div>
-
-              <div className="flex items-center justify-between mt-3 pt-1 border-t border-black/5">
                 <div>
-                  <div className="flex items-center gap-1">
-                    <MapPin size={9} className="text-slate-400" strokeWidth={2.5} />
-                    <span className="text-[9px] font-bold text-slate-400">{dest.dist}</span>
+                  <p className="text-[14px] font-black text-slate-900 leading-tight line-clamp-1">{dest.name}</p>
+                  <p className="text-[10px] font-bold text-slate-500 mt-0.5 leading-tight line-clamp-1">{dest.subtitle}</p>
+                </div>
+
+                <div className="flex items-center justify-between mt-3 pt-1 border-t border-black/5">
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <MapPin size={9} className="text-slate-400" strokeWidth={2.5} />
+                      <span className="text-[9px] font-bold text-slate-400">{dest.dist}</span>
+                    </div>
+                    <p className="text-[10px] font-black text-slate-800">{dest.fare}</p>
                   </div>
-                  <p className="text-[10px] font-black text-slate-800">{dest.fare}</p>
+                  <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center shadow-xs">
+                    <ChevronRight size={12} className="text-slate-600" strokeWidth={2.5} />
+                  </div>
                 </div>
-                <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center shadow-xs">
-                  <ChevronRight size={12} className="text-slate-600" strokeWidth={2.5} />
-                </div>
-              </div>
-            </motion.button>
-          ))}
-        </div>
+              </motion.button>
+            ))}
+          </div>
+        )}
 
         {/* Note */}
         <div className="rounded-[16px] border border-white/80 bg-white/90 px-4 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">

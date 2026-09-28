@@ -35,6 +35,14 @@ const serializeDestination = (item) => ({
   category: item.category || 'spiritual',
   baseFare: Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999,
   fare: item.baseFare ? `₹${Number(item.baseFare).toLocaleString('en-IN')}` : '₹999',
+  vehicleFares: {
+    sedan: Number(item.vehicleFares?.sedan) || (Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999),
+    suv: Number(item.vehicleFares?.suv) || Math.round((Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999) * 1.4),
+    tempo: Number(item.vehicleFares?.tempo) || Math.round((Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999) * 2.2),
+  },
+  sedanFare: Number(item.vehicleFares?.sedan) || (Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999),
+  suvFare: Number(item.vehicleFares?.suv) || Math.round((Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999) * 1.4),
+  tempoFare: Number(item.vehicleFares?.tempo) || Math.round((Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999) * 2.2),
   distance: item.distance || '55 km',
   dist: item.distance || '55 km',
   emoji: item.emoji || '🛕',
@@ -230,6 +238,17 @@ const normalizeDestinationPayload = async (payload, existing = null) => {
     }
   }
 
+  const effectiveBaseFare = Number.isFinite(baseFare) && baseFare >= 0 ? baseFare : 999;
+  const sedanInput = payload.vehicleFares?.sedan ?? payload.sedanFare ?? existing?.vehicleFares?.sedan;
+  const suvInput = payload.vehicleFares?.suv ?? payload.suvFare ?? existing?.vehicleFares?.suv;
+  const tempoInput = payload.vehicleFares?.tempo ?? payload.tempoFare ?? existing?.vehicleFares?.tempo;
+
+  const vehicleFares = {
+    sedan: Number.isFinite(Number(sedanInput)) && Number(sedanInput) >= 0 ? Number(sedanInput) : effectiveBaseFare,
+    suv: Number.isFinite(Number(suvInput)) && Number(suvInput) >= 0 ? Number(suvInput) : Math.round(effectiveBaseFare * 1.4),
+    tempo: Number.isFinite(Number(tempoInput)) && Number(tempoInput) >= 0 ? Number(tempoInput) : Math.round(effectiveBaseFare * 2.2),
+  };
+
   return {
     title,
     label,
@@ -239,7 +258,8 @@ const normalizeDestinationPayload = async (payload, existing = null) => {
     imagePublicId,
     description,
     category: category || 'spiritual',
-    baseFare: Number.isFinite(baseFare) && baseFare >= 0 ? baseFare : 999,
+    baseFare: vehicleFares.sedan || effectiveBaseFare,
+    vehicleFares,
     distance,
     emoji: emoji || '🛕',
     order: Number.isFinite(order) ? order : 0,

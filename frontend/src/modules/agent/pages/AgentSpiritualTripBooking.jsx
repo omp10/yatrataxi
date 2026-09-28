@@ -6,26 +6,17 @@ import toast from 'react-hot-toast';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
 
-const FALLBACK_DESTINATIONS = [
-  { id: 'ujjain', name: 'Ujjain Mahakaleshwar', subtitle: 'Jyotirlinga Darshan & Bhasma Aarti', dist: '55 km', baseFare: 999, emoji: '🛕' },
-  { id: 'omkareshwar', name: 'Omkareshwar Jyotirlinga', subtitle: 'Holy Island on River Narmada', dist: '77 km', baseFare: 1299, emoji: '🙏' },
-  { id: 'maheshwar', name: 'Maheshwar & Mandu', subtitle: 'Ahilya Fort, Ghats & Historic Mandu', dist: '95 km', baseFare: 1499, emoji: '⛵' },
-  { id: 'orchha', name: 'Orchha Ram Raja Temple', subtitle: 'Sacred Temple Palace Complex', dist: '320 km', baseFare: 3999, emoji: '🏯' },
-  { id: 'datia', name: 'Pitambara Peeth Datia', subtitle: 'Siddha Peeth Shakti Shrine', dist: '210 km', baseFare: 2899, emoji: '🌸' },
-  { id: 'amarkantak', name: 'Amarkantak Sacred Source', subtitle: 'Origin of River Narmada & Son', dist: '380 km', baseFare: 4499, emoji: '🏔️' },
-];
-
 const VEHICLE_TIERS = [
-  { id: 'sedan', name: 'Sedan (Dzire / Etios)', seats: '4 Seats', multiplier: 1 },
-  { id: 'suv', name: 'SUV (Ertiga / Innova)', seats: '6 Seats', multiplier: 1.4 },
-  { id: 'tempo', name: 'Mini Coach / Tempo', seats: '12 Seats', multiplier: 2.2 },
+  { id: 'sedan', name: 'Sedan (Dzire / Etios)', seats: '4 Seats' },
+  { id: 'suv', name: 'SUV (Ertiga / Innova)', seats: '6 Seats' },
+  { id: 'tempo', name: 'Mini Coach / Tempo', seats: '12 Seats' },
 ];
 
 export const AgentSpiritualTripBooking = () => {
   const navigate = useNavigate();
-  const [destinations, setDestinations] = useState(FALLBACK_DESTINATIONS);
+  const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDest, setSelectedDest] = useState(FALLBACK_DESTINATIONS[0]);
+  const [selectedDest, setSelectedDest] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(VEHICLE_TIERS[0]);
   const [pickupAddress, setPickupAddress] = useState('');
   const [travelDate, setTravelDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -44,18 +35,29 @@ export const AgentSpiritualTripBooking = () => {
           const data = await res.json();
           const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || []);
           if (isMounted && items.length > 0) {
-            const mapped = items.map((dest, idx) => ({
-              id: dest._id || dest.id || `dest-${idx}`,
-              name: dest.title || dest.name,
-              subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
-              dist: dest.distance || dest.dist || '55 km',
-              baseFare: Number(dest.baseFare) || 999,
-              emoji: dest.emoji || '🛕',
-              image: dest.image || '',
-              dropLocation: dest.dropLocation || dest.drop,
-            }));
+            const mapped = items.map((dest, idx) => {
+              const bFare = Number(dest.baseFare) || Number(dest.vehicleFares?.sedan) || 999;
+              return {
+                id: dest._id || dest.id || `dest-${idx}`,
+                name: dest.title || dest.name,
+                subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
+                dist: dest.distance || dest.dist || '55 km',
+                baseFare: bFare,
+                vehicleFares: {
+                  sedan: Number(dest.vehicleFares?.sedan) || bFare,
+                  suv: Number(dest.vehicleFares?.suv) || Math.round(bFare * 1.4),
+                  tempo: Number(dest.vehicleFares?.tempo) || Math.round(bFare * 2.2),
+                },
+                emoji: dest.emoji || '🛕',
+                image: dest.image || '',
+                dropLocation: dest.dropLocation || dest.drop,
+              };
+            });
             setDestinations(mapped);
             setSelectedDest(mapped[0]);
+          } else if (isMounted) {
+            setDestinations([]);
+            setSelectedDest(null);
           }
         }
       } catch (err) {
@@ -68,7 +70,18 @@ export const AgentSpiritualTripBooking = () => {
     return () => { isMounted = false; };
   }, []);
 
-  const totalFare = Math.round((selectedDest?.baseFare || 999) * selectedVehicle.multiplier);
+  const getVehicleFare = (dest, vehicleId) => {
+    if (!dest) return 0;
+    const directFare = Number(dest.vehicleFares?.[vehicleId]);
+    if (directFare && directFare > 0) return directFare;
+    const base = Number(dest.baseFare) || 0;
+    if (vehicleId === 'sedan') return base;
+    if (vehicleId === 'suv') return Math.round(base * 1.4);
+    if (vehicleId === 'tempo') return Math.round(base * 2.2);
+    return base;
+  };
+
+  const totalFare = selectedDest ? getVehicleFare(selectedDest, selectedVehicle.id) : 0;
   const estimatedCommission = Math.round(totalFare * 0.05 * 100) / 100; // 5% commission
 
   const handleBooking = async () => {
@@ -158,43 +171,54 @@ export const AgentSpiritualTripBooking = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">1. Select Holy Destination</p>
             {loading && <Loader2 size={14} className="animate-spin text-purple-600" />}
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            {destinations.map((dest) => {
-              const isSelected = selectedDest?.id === dest.id;
-              return (
-                <div
-                  key={dest.id}
-                  onClick={() => setSelectedDest(dest)}
-                  className={`cursor-pointer rounded-[20px] border p-3 transition-all flex flex-col justify-between overflow-hidden relative ${
-                    isSelected
-                      ? 'border-purple-600 bg-purple-50/60 shadow-sm ring-1 ring-purple-600'
-                      : 'border-slate-100 bg-white hover:border-slate-300'
-                  }`}
-                >
-                  {dest.image ? (
-                    <div className="h-16 -mx-3 -mt-3 mb-2 overflow-hidden relative bg-slate-100 rounded-t-[19px]">
-                      <img
-                        src={dest.image}
-                        alt={dest.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                      <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-xs bg-white/90 shadow-sm">
-                        {dest.emoji}
+          {loading ? (
+            <div className="py-8 flex flex-col items-center justify-center text-slate-400 gap-2">
+              <Loader2 size={24} className="animate-spin text-purple-600" />
+              <p className="text-xs font-semibold">Loading spiritual destinations...</p>
+            </div>
+          ) : destinations.length === 0 ? (
+            <div className="py-8 text-center text-slate-400">
+              <p className="text-xs font-medium">No destinations configured yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {destinations.map((dest) => {
+                const isSelected = selectedDest?.id === dest.id;
+                return (
+                  <div
+                    key={dest.id}
+                    onClick={() => setSelectedDest(dest)}
+                    className={`cursor-pointer rounded-[20px] border p-3 transition-all flex flex-col justify-between overflow-hidden relative ${
+                      isSelected
+                        ? 'border-purple-600 bg-purple-50/60 shadow-sm ring-1 ring-purple-600'
+                        : 'border-slate-100 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    {dest.image ? (
+                      <div className="h-16 -mx-3 -mt-3 mb-2 overflow-hidden relative bg-slate-100 rounded-t-[19px]">
+                        <img
+                          src={dest.image}
+                          alt={dest.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                        <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-xs bg-white/90 shadow-sm">
+                          {dest.emoji}
+                        </div>
                       </div>
+                    ) : (
+                      <span className="text-2xl">{dest.emoji}</span>
+                    )}
+                    <div>
+                      <h4 className="mt-1 text-xs font-black text-slate-900 leading-snug line-clamp-1">{dest.name}</h4>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{dest.dist}</p>
                     </div>
-                  ) : (
-                    <span className="text-2xl">{dest.emoji}</span>
-                  )}
-                  <div>
-                    <h4 className="mt-1 text-xs font-black text-slate-900 leading-snug line-clamp-1">{dest.name}</h4>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{dest.dist}</p>
+                    <p className="mt-2 text-xs font-black text-purple-700">From ₹{dest.baseFare}</p>
                   </div>
-                  <p className="mt-2 text-xs font-black text-purple-700">From ₹{dest.baseFare}</p>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Vehicle Class Selection */}
@@ -202,7 +226,7 @@ export const AgentSpiritualTripBooking = () => {
           <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">2. Vehicle Option</p>
           {VEHICLE_TIERS.map((v) => {
             const isSelected = selectedVehicle.id === v.id;
-            const fareOption = Math.round(selectedDest.baseFare * v.multiplier);
+            const fareOption = getVehicleFare(selectedDest, v.id);
             return (
               <div
                 key={v.id}

@@ -134,6 +134,16 @@ export const createDefaultAdminState = () => {
         active: true,
         mobile_menu_icon: 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg',
       },
+      {
+        name: 'Spiritual Trips',
+        transport_type: 'taxi',
+        service_type: 'spiritual',
+        order_by: 3,
+        short_description: 'Pilgrimage and holy temple tours',
+        description: 'Curated one-click spiritual tour packages to famous pilgrimage destinations.',
+        active: true,
+        mobile_menu_icon: 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/building-monument.svg',
+      },
     ],
     notificationChannels: [
       {
