@@ -943,11 +943,23 @@ function App() {
                 element={<SpiritualTrip />}
               />
               <Route
+                path="/taxi/user/spiritual"
+                element={<SpiritualTrip />}
+              />
+              <Route
                 path="/taxi/user/cab/spiritual-vehicle"
                 element={<SpiritualTripVehicle />}
               />
               <Route
+                path="/taxi/user/spiritual-vehicle"
+                element={<SpiritualTripVehicle />}
+              />
+              <Route
                 path="/taxi/user/cab/spiritual-confirm"
+                element={<SpiritualTripConfirm />}
+              />
+              <Route
+                path="/taxi/user/spiritual-confirm"
                 element={<SpiritualTripConfirm />}
               />
               <Route path="/taxi/user/bus" element={<BusHome />} />

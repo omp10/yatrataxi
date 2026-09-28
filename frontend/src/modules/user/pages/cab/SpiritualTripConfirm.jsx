@@ -12,8 +12,9 @@ const SpiritualTripConfirm = () => {
 
   useEffect(() => {
     setMounted(true);
+    const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
     if (!state.trip) {
-      navigate('/cab/spiritual');
+      navigate(`${routePrefix}/cab/spiritual`);
       return;
     }
 

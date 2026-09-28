@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ChevronRight, MapPin, Loader2, Sparkles } from 'lucide-react';
 
@@ -12,9 +12,65 @@ const ACCENT_GRADIENTS = [
   'bg-[linear-gradient(135deg,#F0FDF4_0%,#D1FAE5_100%)]',
 ];
 
+const DEFAULT_SPIRITUAL_DESTINATIONS = [
+  {
+    id: 'ujjain-mahakal',
+    name: 'Ujjain Mahakaleshwar',
+    subtitle: 'Mahakaleshwar Jyotirlinga Darshan & Sacred Bhasma Aarti',
+    dist: '55 km',
+    fare: '₹999–₹1,399',
+    baseFare: 999,
+    vehicleFares: { sedan: 999, suv: 1399, tempo: 2199 },
+    emoji: '🛕',
+    image: 'https://images.unsplash.com/photo-1609766857041-ed402ea8069a?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Mahakaleshwar Jyotirlinga, Jaisinghpura, Ujjain, Madhya Pradesh',
+    accent: ACCENT_GRADIENTS[0],
+  },
+  {
+    id: 'omkareshwar-jyotirlinga',
+    name: 'Omkareshwar Jyotirlinga',
+    subtitle: 'Sacred island Jyotirlinga shrine shaped like Om symbol',
+    dist: '78 km',
+    fare: '₹1,499–₹2,099',
+    baseFare: 1499,
+    vehicleFares: { sedan: 1499, suv: 2099, tempo: 3299 },
+    emoji: '🕉️',
+    image: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Omkareshwar Mandir, Mandhata Island, Narmada River, Madhya Pradesh',
+    accent: ACCENT_GRADIENTS[1],
+  },
+  {
+    id: 'maheshwar-temples',
+    name: 'Maheshwar Ahilya Fort & Temples',
+    subtitle: 'Holkar royal ghats, sacred Narmada temples & craft heritage',
+    dist: '91 km',
+    fare: '₹1,799–₹2,519',
+    baseFare: 1799,
+    vehicleFares: { sedan: 1799, suv: 2519, tempo: 3959 },
+    emoji: '🪔',
+    image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Ahilya Fort Ghats, Maheshwar, Khargone, Madhya Pradesh',
+    accent: ACCENT_GRADIENTS[2],
+  },
+  {
+    id: 'shirdi-sai-darshan',
+    name: 'Shirdi Sai Baba Darshan',
+    subtitle: 'Divine Samadhi Mandir darshan & pilgrimage package',
+    dist: '410 km',
+    fare: '₹5,999–₹8,399',
+    baseFare: 5999,
+    vehicleFares: { sedan: 5999, suv: 8399, tempo: 13199 },
+    emoji: '🙏',
+    image: 'https://images.unsplash.com/photo-1590073844006-33379778ae09?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Shree Saibaba Sansthan Temple, Shirdi, Maharashtra',
+    accent: ACCENT_GRADIENTS[3],
+  },
+];
+
 const SpiritualTrip = () => {
   const navigate = useNavigate();
-  const [destinations, setDestinations] = useState([]);
+  const location = useLocation();
+  const [destinations, setDestinations] = useState(DEFAULT_SPIRITUAL_DESTINATIONS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,11 +107,14 @@ const SpiritualTrip = () => {
             });
             setDestinations(mapped);
           } else if (isMounted) {
-            setDestinations([]);
+            setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
           }
+        } else if (isMounted) {
+          setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
         }
       } catch (err) {
         console.error('Failed to load spiritual destinations dynamically:', err);
+        if (isMounted) setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -66,7 +125,8 @@ const SpiritualTrip = () => {
   }, []);
 
   const handleSelect = (dest) => {
-    navigate('/cab/spiritual-vehicle', {
+    const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
+    navigate(`${routePrefix}/cab/spiritual-vehicle`, {
       state: { isSpiritualTrip: true, trip: dest },
     });
   };

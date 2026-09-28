@@ -67,8 +67,10 @@ const SpiritualTripVehicle = () => {
     return () => { isMounted = false; };
   }, []);
 
+  const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
+
   if (!trip) {
-    navigate('/cab/spiritual');
+    navigate(`${routePrefix}/cab/spiritual`);
     return null;
   }
 
@@ -89,7 +91,7 @@ const SpiritualTripVehicle = () => {
   const handleContinue = () => {
     if (!date || !time) return alert("Please select date and time");
     
-    navigate('/cab/spiritual-confirm', {
+    navigate(`${routePrefix}/cab/spiritual-confirm`, {
       state: { 
         isSpiritualTrip: true, 
         trip: { ...trip, fare: `₹${estimatedFare.toLocaleString()}` },

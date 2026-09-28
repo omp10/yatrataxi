@@ -14,10 +14,12 @@ export const getActiveServiceModules = (modules = []) => (
 );
 
 export const getServiceModulePath = (module = {}) => {
+  if (module?.path) return module.path;
   const transportType = normalizeValue(module.transport_type);
   const serviceType = normalizeValue(module.service_type);
+  const iconType = normalizeValue(module.icon_type);
   const name = normalizeValue(module.name);
-  const identity = `${transportType} ${serviceType} ${name}`;
+  const identity = `${transportType} ${serviceType} ${iconType} ${name}`;
 
   if (identity.includes('delivery') || identity.includes('parcel')) return '/taxi/user/parcel/type';
   if (serviceType === 'rental' || identity.includes('rental')) return '/taxi/user/rental';
@@ -25,6 +27,17 @@ export const getServiceModulePath = (module = {}) => {
   if (serviceType === 'pooling' || identity.includes('pooling')) return '/taxi/user/pooling';
   if (identity.includes('sharing') || identity.includes('shared')) return '/taxi/user/cab-sharing';
   if (serviceType === 'bus' || identity.includes('bus')) return '/taxi/user/bus';
+  if (
+    serviceType === 'spiritual' ||
+    iconType === 'spiritual' ||
+    identity.includes('spiritual') ||
+    identity.includes('spritual') ||
+    identity.includes('pilgrimage') ||
+    identity.includes('darshan') ||
+    identity.includes('temple')
+  ) {
+    return '/taxi/user/cab/spiritual';
+  }
   if (identity.includes('tour')) return '/taxi/user/tours';
 
   // Only open the multi-service packages hub if explicitly defined as a hub or special package
@@ -37,10 +50,19 @@ export const getServiceModulePath = (module = {}) => {
 };
 
 export const getServiceModuleButtonText = (module = {}) => {
-  const identity = `${normalizeValue(module.transport_type)} ${normalizeValue(module.service_type)} ${normalizeValue(module.name)}`;
+  const identity = `${normalizeValue(module.transport_type)} ${normalizeValue(module.service_type)} ${normalizeValue(module.icon_type)} ${normalizeValue(module.name)}`;
   if (identity.includes('delivery') || identity.includes('parcel')) return 'Send Now';
   if (identity.includes('rental')) return 'Rent Now';
   if (identity.includes('bus')) return 'Book Bus';
+  if (
+    identity.includes('spiritual') ||
+    identity.includes('spritual') ||
+    identity.includes('pilgrimage') ||
+    identity.includes('darshan') ||
+    identity.includes('temple')
+  ) {
+    return 'Book Pilgrimage';
+  }
   return 'Book Now';
 };
 
