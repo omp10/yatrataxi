@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Users, ChevronRight, Calendar, Clock, MapPin } from 'lucide-react';
+import { ArrowLeft, Users, ChevronRight, Calendar, Clock, MapPin, Loader2 } from 'lucide-react';
+import api from '@/shared/api/axiosInstance';
 
-const VEHICLES = [
+const DEFAULT_VEHICLES = [
   { id: 'sedan', name: 'Sedan', icon: '🚗', desc: 'Dzire, Etios', maxSeats: 4 },
   { id: 'suv', name: 'SUV', icon: '🚙', desc: 'Ertiga, Innova', maxSeats: 6 },
   { id: 'tempo', name: 'Mini Coach / Tempo', icon: '🚐', desc: 'Tempo / Traveller', maxSeats: 12 },
@@ -16,26 +17,74 @@ const SpiritualTripVehicle = () => {
 
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [vehicles, setVehicles] = useState(DEFAULT_VEHICLES);
   const [vehicle, setVehicle] = useState('sedan');
   const [seats, setSeats] = useState(2);
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchVehicles = async () => {
+      try {
+        setLoadingVehicles(true);
+        const res = await api.get('/users/vehicle-types');
+        const raw = res?.data?.results || res?.data?.data?.results || res?.data?.data || [];
+        if (isMounted && Array.isArray(raw) && raw.length > 0) {
+          const mapped = raw
+            .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
+            .map((v) => {
+              const cap = Number(v.capacity) || 4;
+              let icon = '🚗';
+              if (v.icon_types === 'auto') icon = '🛺';
+              else if (v.icon_types === 'bike') icon = '🏍️';
+              else if (v.icon_types === 'suv' || (cap >= 6 && cap <= 8)) icon = '🚙';
+              else if (cap > 8) icon = '🚐';
+
+              return {
+                id: String(v._id || v.id),
+                vehicleTypeId: String(v._id || v.id),
+                name: v.name,
+                icon,
+                iconType: v.icon_types || 'car',
+                desc: v.short_description || v.description || `${v.name} · ${cap} Seats`,
+                maxSeats: cap,
+              };
+            });
+
+          if (mapped.length > 0) {
+            setVehicles(mapped);
+            setVehicle(mapped[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load spiritual trip vehicles:', err);
+      } finally {
+        if (isMounted) setLoadingVehicles(false);
+      }
+    };
+
+    fetchVehicles();
+    return () => { isMounted = false; };
+  }, []);
 
   if (!trip) {
     navigate('/cab/spiritual');
     return null;
   }
 
-  const selectedVehicle = VEHICLES.find(v => v.id === vehicle) || VEHICLES[0];
+  const selectedVehicle = vehicles.find(v => v.id === vehicle) || vehicles[0];
   
-  const getVehicleFare = (vehId) => {
+  const getVehicleFare = (veh) => {
+    const vehId = typeof veh === 'object' ? veh?.id : veh;
     if (trip?.vehicleFares?.[vehId]) return Number(trip.vehicleFares[vehId]);
     const bFare = Number(trip?.baseFare) || 999;
-    if (vehId === 'sedan') return bFare;
-    if (vehId === 'suv') return Math.round(bFare * 1.4);
-    if (vehId === 'tempo') return Math.round(bFare * 2.2);
-    return bFare;
+    const maxSeats = typeof veh === 'object' ? veh?.maxSeats : (veh === 'suv' ? 6 : veh === 'tempo' ? 12 : 4);
+    if (maxSeats <= 4) return bFare;
+    if (maxSeats <= 7) return Math.round(bFare * 1.4);
+    return Math.round(bFare * 2.2);
   };
 
-  const estimatedFare = getVehicleFare(vehicle);
+  const estimatedFare = getVehicleFare(selectedVehicle);
 
   const handleContinue = () => {
     if (!date || !time) return alert("Please select date and time");
@@ -45,6 +94,7 @@ const SpiritualTripVehicle = () => {
         isSpiritualTrip: true, 
         trip: { ...trip, fare: `₹${estimatedFare.toLocaleString()}` },
         vehicle: selectedVehicle,
+        vehicleTypeId: selectedVehicle.id,
         seats,
         date,
         time
@@ -108,26 +158,33 @@ const SpiritualTripVehicle = () => {
         {/* Vehicle selection */}
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400 mb-2 ml-1 mt-2">Select Vehicle</p>
-          <div className="space-y-2.5">
-            {VEHICLES.map(v => (
-              <motion.button key={v.id} whileTap={{ scale: 0.98 }} onClick={() => { setVehicle(v.id); if(seats > v.maxSeats) setSeats(v.maxSeats); }}
-                className={`w-full flex items-center gap-4 p-4 rounded-[18px] border-2 transition-all text-left overflow-hidden relative ${
-                  vehicle === v.id ? 'border-purple-300 bg-purple-50/50 shadow-sm' : 'border-slate-100 bg-white/90 hover:border-purple-100'
-                }`}>
-                {vehicle === v.id && <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/5 rounded-bl-full pointer-events-none" />}
-                <span className="text-3xl">{v.icon}</span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-black text-slate-900">{v.name}</span>
+          {loadingVehicles ? (
+            <div className="flex items-center justify-center py-8 text-slate-400 gap-2 bg-white/60 rounded-[18px] border border-slate-100">
+              <Loader2 size={18} className="animate-spin text-purple-600" />
+              <span className="text-[12px] font-bold">Loading available vehicles...</span>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {vehicles.map(v => (
+                <motion.button key={v.id} whileTap={{ scale: 0.98 }} onClick={() => { setVehicle(v.id); if(seats > v.maxSeats) setSeats(v.maxSeats); }}
+                  className={`w-full flex items-center gap-4 p-4 rounded-[18px] border-2 transition-all text-left overflow-hidden relative ${
+                    vehicle === v.id ? 'border-purple-300 bg-purple-50/50 shadow-sm' : 'border-slate-100 bg-white/90 hover:border-purple-100'
+                  }`}>
+                  {vehicle === v.id && <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/5 rounded-bl-full pointer-events-none" />}
+                  <span className="text-3xl">{v.icon}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[15px] font-black text-slate-900">{v.name}</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-500">{v.desc} · <span className="text-slate-400 font-medium">Upto</span> {v.maxSeats} seats</p>
                   </div>
-                  <p className="text-[11px] font-bold text-slate-500">{v.desc} · <span className="text-slate-400 font-medium">Upto</span> {v.maxSeats} seats</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[16px] font-black text-purple-700">₹{getVehicleFare(v.id).toLocaleString()}</p>
-                </div>
-              </motion.button>
-            ))}
-          </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[16px] font-black text-purple-700">₹{getVehicleFare(v).toLocaleString()}</p>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Passenger/Seats Selection */}

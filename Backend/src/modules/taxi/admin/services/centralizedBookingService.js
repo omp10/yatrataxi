@@ -35,6 +35,7 @@ const parseDateRange = (startDate, endDate) => {
 const mapRideToUnified = (ride) => {
   const isAgent = Boolean(ride.agentMeta?.bookedByAgentId);
   const isSpiritual =
+    ride.serviceType === 'spiritual' ||
     String(ride.dropAddress || '').toLowerCase().includes('temple') ||
     String(ride.dropAddress || '').toLowerCase().includes('darshan') ||
     String(ride.dropAddress || '').toLowerCase().includes('jyotirlinga') ||

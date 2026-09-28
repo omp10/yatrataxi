@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, MapPin, Calendar, Clock, Plane, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, ChevronRight, MapPin, Calendar, Clock, Plane, ArrowLeft, Home } from 'lucide-react';
+import api from '@/shared/api/axiosInstance';
 
 const AirportCabConfirm = () => {
   const navigate = useNavigate();
@@ -14,8 +15,29 @@ const AirportCabConfirm = () => {
     // Safety check if accessed directly
     if (!state.pickup) {
       navigate('/cab');
+      return;
     }
-  }, [navigate, state.pickup]);
+
+    // Persist booking to backend so it shows in Admin Panel & Driver dispatch
+    if (state.pickup && state.vehicle) {
+      api.post('/rides', {
+        pickup: [75.8577, 22.7196],
+        drop: [75.8042, 22.7228],
+        pickupAddress: state.pickup,
+        dropAddress: `Indore Airport - Terminal ${state.terminal || 'T1'}`,
+        fare: Number(state.fare || state.vehicle?.fare || 0),
+        vehicleTypeId: state.vehicle?.id || state.vehicleTypeId || '',
+        vehicleTypeIds: [state.vehicle?.id || state.vehicleTypeId].filter(Boolean),
+        vehicleIconType: state.vehicle?.iconType || 'car',
+        paymentMethod: 'Cash',
+        serviceType: 'airport',
+        transport_type: 'taxi',
+        scheduledAt: state.date && state.time ? `${state.date}T${state.time}:00` : undefined,
+      }).catch((err) => {
+        console.warn('Airport ride booking creation notice:', err?.message);
+      });
+    }
+  }, [navigate, state]);
 
   if (!state.pickup) return null;
 

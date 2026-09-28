@@ -815,7 +815,7 @@ export const createAgentRideBooking = async (req, res) => {
     vehicleIconType: req.body?.vehicleIconType,
     vehicleIconUrl: req.body?.vehicleIconUrl,
     paymentMethod: req.body?.paymentMethod || 'cash',
-    serviceType: isIntercity ? 'intercity' : 'ride',
+    serviceType: isIntercity ? 'intercity' : (serviceType === 'spiritual' ? 'spiritual' : 'ride'),
     parcel: req.body?.parcel,
     intercity: req.body?.intercity || (isIntercity ? {
       fromCity: req.body?.fromCity || '',

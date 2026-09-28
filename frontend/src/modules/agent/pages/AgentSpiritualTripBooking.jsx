@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '@/shared/api/axiosInstance';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
 
-const VEHICLE_TIERS = [
-  { id: 'sedan', name: 'Sedan (Dzire / Etios)', seats: '4 Seats' },
-  { id: 'suv', name: 'SUV (Ertiga / Innova)', seats: '6 Seats' },
-  { id: 'tempo', name: 'Mini Coach / Tempo', seats: '12 Seats' },
+const DEFAULT_VEHICLES = [
+  { id: 'sedan', name: 'Sedan (Dzire / Etios)', seats: '4 Seats', capacity: 4 },
+  { id: 'suv', name: 'SUV (Ertiga / Innova)', seats: '6 Seats', capacity: 6 },
+  { id: 'tempo', name: 'Mini Coach / Tempo', seats: '12 Seats', capacity: 12 },
 ];
 
 export const AgentSpiritualTripBooking = () => {
@@ -17,7 +18,8 @@ export const AgentSpiritualTripBooking = () => {
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDest, setSelectedDest] = useState(null);
-  const [selectedVehicle, setSelectedVehicle] = useState(VEHICLE_TIERS[0]);
+  const [vehicles, setVehicles] = useState(DEFAULT_VEHICLES);
+  const [selectedVehicle, setSelectedVehicle] = useState(DEFAULT_VEHICLES[0]);
   const [pickupAddress, setPickupAddress] = useState('');
   const [travelDate, setTravelDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [travelTime, setTravelTime] = useState('06:00');
@@ -27,12 +29,16 @@ export const AgentSpiritualTripBooking = () => {
 
   useEffect(() => {
     let isMounted = true;
-    const fetchDestinations = async () => {
+    const fetchDestinationsAndVehicles = async () => {
       try {
         const origin = globalThis.__LEGACY_BACKEND_ORIGIN__ || '';
-        const res = await fetch(`${origin}/api/v1/explore-destinations?category=spiritual`);
-        if (res.ok) {
-          const data = await res.json();
+        const [destRes, vTypesRes] = await Promise.allSettled([
+          fetch(`${origin}/api/v1/explore-destinations?category=spiritual`),
+          api.get('/users/vehicle-types'),
+        ]);
+
+        if (destRes.status === 'fulfilled' && destRes.value.ok) {
+          const data = await destRes.value.json();
           const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || []);
           if (isMounted && items.length > 0) {
             const mapped = items.map((dest, idx) => {
@@ -60,28 +66,49 @@ export const AgentSpiritualTripBooking = () => {
             setSelectedDest(null);
           }
         }
+
+        if (vTypesRes.status === 'fulfilled') {
+          const rawVehicles = vTypesRes.value?.data?.results || vTypesRes.value?.data?.data?.results || vTypesRes.value?.data?.data || [];
+          if (Array.isArray(rawVehicles) && rawVehicles.length > 0) {
+            const mappedVehicles = rawVehicles
+              .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
+              .map((v) => ({
+                id: String(v._id || v.id),
+                name: `${v.name} (${v.capacity || 4} Seats)`,
+                rawName: v.name,
+                seats: `${v.capacity || 4} Seats`,
+                capacity: Number(v.capacity) || 4,
+              }));
+
+            if (isMounted && mappedVehicles.length > 0) {
+              setVehicles(mappedVehicles);
+              setSelectedVehicle(mappedVehicles[0]);
+            }
+          }
+        }
       } catch (err) {
-        console.error('Failed to load spiritual destinations for agent:', err);
+        console.error('Failed to load spiritual destinations or vehicles for agent:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-    fetchDestinations();
+    fetchDestinationsAndVehicles();
     return () => { isMounted = false; };
   }, []);
 
-  const getVehicleFare = (dest, vehicleId) => {
+  const getVehicleFare = (dest, vehicle) => {
     if (!dest) return 0;
-    const directFare = Number(dest.vehicleFares?.[vehicleId]);
+    const vId = typeof vehicle === 'object' ? vehicle?.id : vehicle;
+    const directFare = Number(dest.vehicleFares?.[vId]);
     if (directFare && directFare > 0) return directFare;
     const base = Number(dest.baseFare) || 0;
-    if (vehicleId === 'sedan') return base;
-    if (vehicleId === 'suv') return Math.round(base * 1.4);
-    if (vehicleId === 'tempo') return Math.round(base * 2.2);
-    return base;
+    const cap = typeof vehicle === 'object' ? (vehicle?.capacity || 4) : (vehicle === 'suv' ? 6 : vehicle === 'tempo' ? 12 : 4);
+    if (cap <= 4) return base;
+    if (cap <= 7) return Math.round(base * 1.4);
+    return Math.round(base * 2.2);
   };
 
-  const totalFare = selectedDest ? getVehicleFare(selectedDest, selectedVehicle.id) : 0;
+  const totalFare = selectedDest ? getVehicleFare(selectedDest, selectedVehicle) : 0;
   const estimatedCommission = Math.round(totalFare * 0.05 * 100) / 100; // 5% commission
 
   const handleBooking = async () => {
@@ -103,7 +130,9 @@ export const AgentSpiritualTripBooking = () => {
         pickup: [75.8577, 22.7196],
         drop: [75.7873, 23.1765],
         fare: totalFare,
-        serviceType: 'ride',
+        vehicleTypeId: selectedVehicle?.id,
+        vehicleType: selectedVehicle?.rawName || selectedVehicle?.name,
+        serviceType: 'spiritual',
         transport_type: 'taxi',
         paymentMethod: 'cash',
         scheduledAt: `${travelDate}T${travelTime}:00`,
@@ -224,9 +253,9 @@ export const AgentSpiritualTripBooking = () => {
         {/* Vehicle Class Selection */}
         <div className="rounded-[24px] border border-white/70 bg-white/90 p-4 shadow-[0_12px_28px_rgba(20,58,90,0.06)] space-y-2.5">
           <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">2. Vehicle Option</p>
-          {VEHICLE_TIERS.map((v) => {
-            const isSelected = selectedVehicle.id === v.id;
-            const fareOption = getVehicleFare(selectedDest, v.id);
+          {vehicles.map((v) => {
+            const isSelected = selectedVehicle?.id === v.id;
+            const fareOption = getVehicleFare(selectedDest, v);
             return (
               <div
                 key={v.id}

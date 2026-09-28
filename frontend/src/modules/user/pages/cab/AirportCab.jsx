@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, Calendar, Clock, ChevronRight, AlertCircle, Plane } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, ChevronRight, AlertCircle, Plane, Loader2 } from 'lucide-react';
+import api from '@/shared/api/axiosInstance';
 
-const VEHICLES = [
+const DEFAULT_VEHICLES = [
   { id: 'mini',  name: 'Mini Cab', icon: '🚕', fare: 499,  desc: 'Swift, Alto, WagonR',    seats: 4 },
   { id: 'sedan', name: 'Sedan',    icon: '🚗', fare: 699,  desc: 'Dzire, Amaze, Aspire',   seats: 4 },
   { id: 'suv',   name: 'SUV',      icon: '🚙', fare: 999,  desc: 'Ertiga, Innova, Crysta', seats: 6 },
@@ -17,10 +18,95 @@ const AirportCab = () => {
   const [terminal, setTerminal] = useState('');
   const [date,     setDate]     = useState('');
   const [time,     setTime]     = useState('');
+  const [vehicles, setVehicles] = useState(DEFAULT_VEHICLES);
   const [vehicle,  setVehicle]  = useState('mini');
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
   const [errors,   setErrors]   = useState({});
 
-  const selectedVehicle = VEHICLES.find(v => v.id === vehicle);
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAirportVehicles = async () => {
+      try {
+        setLoadingVehicles(true);
+        const [vTypesRes, setPricesRes] = await Promise.allSettled([
+          api.get('/users/vehicle-types'),
+          api.get('/users/set-prices'),
+        ]);
+
+        const rawVehicles = vTypesRes.status === 'fulfilled'
+          ? (vTypesRes.value?.data?.results || vTypesRes.value?.data?.data?.results || vTypesRes.value?.data?.data || [])
+          : [];
+        const rawSetPrices = setPricesRes.status === 'fulfilled'
+          ? (setPricesRes.value?.data?.results || setPricesRes.value?.data?.data?.results || setPricesRes.value?.data?.data || [])
+          : [];
+
+        // Build price map per vehicle ID from SetPrices rules
+        const airportPriceMap = {};
+        const generalPriceMap = {};
+
+        rawSetPrices.forEach((rule) => {
+          const vId = String(rule.vehicle_type?._id || rule.vehicle_type?.id || rule.vehicle_type || rule.type_id || '');
+          if (!vId) return;
+
+          const baseP = Number(rule.base_price) || 0;
+          const surgeP = Number(rule.airport_surge) || 0;
+          const feeP = Number(rule.support_airport_fee) || 0;
+          const totalAirportFare = baseP + surgeP + feeP;
+
+          if (rule.enable_airport_ride) {
+            airportPriceMap[vId] = totalAirportFare > 0 ? totalAirportFare : (baseP || 499);
+          }
+          if (baseP > 0) {
+            generalPriceMap[vId] = baseP;
+          }
+        });
+
+        const mapped = rawVehicles
+          .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
+          .map((v) => {
+            const vId = String(v._id || v.id);
+            const isAirportEnabled = Boolean(airportPriceMap[vId]);
+            const calculatedFare = airportPriceMap[vId] || generalPriceMap[vId] || (v.capacity > 4 ? 999 : 499);
+
+            let icon = '🚗';
+            if (v.icon_types === 'auto') icon = '🛺';
+            else if (v.icon_types === 'bike') icon = '🏍️';
+            else if (v.icon_types === 'suv' || (v.capacity && v.capacity >= 6)) icon = '🚙';
+
+            return {
+              id: vId,
+              vehicleTypeId: vId,
+              name: v.name,
+              icon,
+              iconType: v.icon_types || 'car',
+              desc: v.short_description || v.description || `${v.name} · ${v.capacity || 4} seats`,
+              seats: v.capacity || 4,
+              fare: calculatedFare,
+              isAirportEnabled,
+            };
+          });
+
+        const airportOnly = mapped.filter((v) => v.isAirportEnabled);
+        const finalVehicles = airportOnly.length > 0 ? airportOnly : (mapped.length > 0 ? mapped : DEFAULT_VEHICLES);
+
+        if (isMounted) {
+          setVehicles(finalVehicles);
+          if (finalVehicles.length > 0) {
+            setVehicle(finalVehicles[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load airport vehicles:', err);
+      } finally {
+        if (isMounted) setLoadingVehicles(false);
+      }
+    };
+
+    fetchAirportVehicles();
+    return () => { isMounted = false; };
+  }, []);
+
+  const selectedVehicle = vehicles.find(v => v.id === vehicle) || vehicles[0];
 
   const validate = () => {
     const e = {};
@@ -34,8 +120,18 @@ const AirportCab = () => {
 
   const handleBook = () => {
     if (!validate()) return;
+    if (!selectedVehicle) return;
     navigate('/cab/airport-confirm', {
-      state: { isAirport: true, pickup, terminal, date, time, vehicle: selectedVehicle, fare: selectedVehicle.fare },
+      state: { 
+        isAirport: true, 
+        pickup, 
+        terminal, 
+        date, 
+        time, 
+        vehicle: selectedVehicle, 
+        fare: selectedVehicle.fare,
+        vehicleTypeId: selectedVehicle.id,
+      },
     });
   };
 
@@ -119,27 +215,38 @@ const AirportCab = () => {
         {/* Vehicle selection */}
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400 mb-2">Choose Vehicle</p>
-          <div className="space-y-2">
-            {VEHICLES.map(v => (
-              <motion.button key={v.id} whileTap={{ scale: 0.98 }} onClick={() => setVehicle(v.id)}
-                className={`w-full flex items-center gap-4 p-4 rounded-[18px] border-2 transition-all text-left ${
-                  vehicle === v.id ? 'border-blue-300 bg-blue-50/50 shadow-sm' : 'border-slate-100 bg-white/90'
-                }`}>
-                <span className="text-2xl">{v.icon}</span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-black text-slate-900">{v.name}</span>
-                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">Fixed Fare</span>
+          {loadingVehicles ? (
+            <div className="flex items-center justify-center py-8 text-slate-400 gap-2 bg-white/60 rounded-[18px] border border-slate-100">
+              <Loader2 size={18} className="animate-spin text-blue-600" />
+              <span className="text-[12px] font-bold">Loading airport cabs...</span>
+            </div>
+          ) : vehicles.length === 0 ? (
+            <div className="text-center py-8 bg-white/60 rounded-[18px] border border-slate-100 text-slate-500">
+              <p className="text-[13px] font-bold">No vehicles currently configured for airport rides.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {vehicles.map(v => (
+                <motion.button key={v.id} whileTap={{ scale: 0.98 }} onClick={() => setVehicle(v.id)}
+                  className={`w-full flex items-center gap-4 p-4 rounded-[18px] border-2 transition-all text-left ${
+                    vehicle === v.id ? 'border-blue-300 bg-blue-50/50 shadow-sm' : 'border-slate-100 bg-white/90'
+                  }`}>
+                  <span className="text-2xl">{v.icon}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-black text-slate-900">{v.name}</span>
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">Fixed Fare</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-400">{v.desc} · {v.seats} seats</p>
                   </div>
-                  <p className="text-[11px] font-bold text-slate-400">{v.desc} · {v.seats} seats</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-[17px] font-black text-slate-900">₹{v.fare}</p>
-                  <p className="text-[9px] font-bold text-slate-400">one way</p>
-                </div>
-              </motion.button>
-            ))}
-          </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[17px] font-black text-slate-900">₹{v.fare}</p>
+                    <p className="text-[9px] font-bold text-slate-400">one way</p>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

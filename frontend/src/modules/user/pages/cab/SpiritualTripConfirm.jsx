@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, ChevronRight, MapPin, Calendar, User, ArrowLeft, Star, Home } from 'lucide-react';
+import api from '@/shared/api/axiosInstance';
 
 const SpiritualTripConfirm = () => {
   const navigate = useNavigate();
@@ -13,8 +14,30 @@ const SpiritualTripConfirm = () => {
     setMounted(true);
     if (!state.trip) {
       navigate('/cab/spiritual');
+      return;
     }
-  }, [navigate, state.trip]);
+
+    // Persist spiritual tour booking to backend
+    if (state.trip && state.vehicle) {
+      const parsedFare = Number(String(state.trip?.fare || '').replace(/[^0-9]/g, '')) || 999;
+      api.post('/rides', {
+        pickup: [75.8577, 22.7196],
+        drop: [75.7873, 23.1765],
+        pickupAddress: state.pickupAddress || 'Indore City',
+        dropAddress: state.trip.dropLocation || `${state.trip.name} (${state.trip.subtitle || 'Spiritual Tour'})`,
+        fare: parsedFare,
+        vehicleTypeId: state.vehicle?.id || state.vehicleTypeId || '',
+        vehicleTypeIds: [state.vehicle?.id || state.vehicleTypeId].filter(Boolean),
+        vehicleIconType: state.vehicle?.iconType || 'car',
+        paymentMethod: 'Cash',
+        serviceType: 'spiritual',
+        transport_type: 'taxi',
+        scheduledAt: state.date && state.time ? `${state.date}T${state.time}:00` : undefined,
+      }).catch((err) => {
+        console.warn('Spiritual trip booking creation notice:', err?.message);
+      });
+    }
+  }, [navigate, state]);
 
   if (!state.trip) return null;
   const { trip, vehicle, seats, date, time } = state;

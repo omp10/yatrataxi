@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plane, MapPin, Calendar, Clock, CheckCircle2, Sparkles, Car } from 'lucide-react';
+import { ArrowLeft, Plane, MapPin, Calendar, Clock, CheckCircle2, Sparkles, Car, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '@/shared/api/axiosInstance';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
 
@@ -10,12 +11,6 @@ const AIRPORTS = [
   { id: 'IDR', name: 'Indore - Devi Ahilya Bai Holkar Airport (IDR)', city: 'Indore', coords: [75.8042, 22.7228] },
   { id: 'BHO', name: 'Bhopal - Raja Bhoj International Airport (BHO)', city: 'Bhopal', coords: [77.3377, 23.2875] },
   { id: 'GWL', name: 'Gwalior - Rajmata Vijaya Raje Scindia Airport (GWL)', city: 'Gwalior', coords: [78.2274, 26.2936] },
-];
-
-const VEHICLES = [
-  { id: 'mini', name: 'Mini Cab', icon: '🚕', desc: 'Swift, Alto, WagonR · 4 Seats', fare: 499 },
-  { id: 'sedan', name: 'Comfort Sedan', icon: '🚗', desc: 'Dzire, Amaze, Aura · 4 Seats', fare: 699 },
-  { id: 'suv', name: 'Family SUV', icon: '🚙', desc: 'Ertiga, Innova Crysta · 6 Seats', fare: 999 },
 ];
 
 export const AgentAirportCabBooking = () => {
@@ -26,15 +21,105 @@ export const AgentAirportCabBooking = () => {
   const [cityAddress, setCityAddress] = useState('');
   const [travelDate, setTravelDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [travelTime, setTravelTime] = useState('10:00');
-  const [selectedVehicle, setSelectedVehicle] = useState(VEHICLES[1]); // Sedan
+  const [vehicles, setVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [customer, setCustomer] = useState({ name: '', phone: '', email: '' });
   const [submitting, setSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  const fare = selectedVehicle.fare;
+  useEffect(() => {
+    let isMounted = true;
+    const fetchVehicles = async () => {
+      try {
+        setLoadingVehicles(true);
+        const [vTypesRes, setPricesRes] = await Promise.allSettled([
+          api.get('/users/vehicle-types'),
+          api.get('/users/set-prices'),
+        ]);
+
+        const rawVehicles = vTypesRes.status === 'fulfilled'
+          ? (vTypesRes.value?.data?.results || vTypesRes.value?.data?.data || [])
+          : [];
+        const rawSetPrices = setPricesRes.status === 'fulfilled'
+          ? (setPricesRes.value?.data?.results || setPricesRes.value?.data?.data || [])
+          : [];
+
+        // Build price map per vehicle ID from SetPrices rules
+        const airportPriceMap = {};
+        const generalPriceMap = {};
+
+        rawSetPrices.forEach((rule) => {
+          const vId = String(rule.vehicle_type?._id || rule.vehicle_type?.id || rule.vehicle_type || rule.type_id || '');
+          if (!vId) return;
+
+          const baseP = Number(rule.base_price) || 0;
+          const surgeP = Number(rule.airport_surge) || 0;
+          const feeP = Number(rule.support_airport_fee) || 0;
+          const totalAirportFare = baseP + surgeP + feeP;
+
+          if (rule.enable_airport_ride) {
+            airportPriceMap[vId] = totalAirportFare > 0 ? totalAirportFare : (baseP || 599);
+          }
+          if (baseP > 0) {
+            generalPriceMap[vId] = baseP;
+          }
+        });
+
+        const mapped = rawVehicles
+          .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
+          .map((v) => {
+            const vId = String(v._id || v.id);
+            const isAirportEnabled = Boolean(airportPriceMap[vId]);
+            const calculatedFare = airportPriceMap[vId] || generalPriceMap[vId] || (v.capacity > 4 ? 999 : 599);
+
+            let icon = '🚗';
+            if (v.icon_types === 'auto') icon = '🛺';
+            else if (v.icon_types === 'bike') icon = '🏍️';
+            else if (v.icon_types === 'suv' || (v.capacity && v.capacity >= 6)) icon = '🚙';
+
+            return {
+              id: vId,
+              name: v.name,
+              seats: `${v.capacity || 4} Seats`,
+              desc: v.short_description || v.description || `${v.name} · ${v.capacity || 4} Seats`,
+              fare: calculatedFare,
+              icon,
+              iconType: v.icon_types || 'car',
+              image: v.image || '',
+              isAirportEnabled,
+            };
+          });
+
+        // If vehicles are explicitly enabled for airport ride in set-prices, show those
+        const airportOnly = mapped.filter((v) => v.isAirportEnabled);
+        const finalVehicles = airportOnly.length > 0 ? airportOnly : mapped;
+
+        if (isMounted) {
+          setVehicles(finalVehicles);
+          if (finalVehicles.length > 0) {
+            setSelectedVehicle(finalVehicles[0]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load airport vehicles:', err);
+      } finally {
+        if (isMounted) setLoadingVehicles(false);
+      }
+    };
+
+    fetchVehicles();
+    return () => { isMounted = false; };
+  }, []);
+
+  const fare = selectedVehicle?.fare || 0;
   const estimatedCommission = Math.round(fare * 0.05 * 100) / 100; // 5% direct commission
 
   const handleBooking = async () => {
+    if (!selectedVehicle) {
+      toast.error('Please select a vehicle');
+      return;
+    }
     if (!customer.phone || customer.phone.length < 10) {
       toast.error('Enter a valid 10-digit customer mobile number');
       return;
@@ -59,6 +144,8 @@ export const AgentAirportCabBooking = () => {
         fare,
         serviceType: 'ride',
         transport_type: 'taxi',
+        vehicleTypeId: selectedVehicle?.id,
+        vehicleIconType: selectedVehicle?.iconType || 'car',
         paymentMethod: 'cash',
         scheduledAt: `${travelDate}T${travelTime}:00`,
         estimatedDistanceMeters: 18000,
@@ -219,33 +306,45 @@ export const AgentAirportCabBooking = () => {
 
         {/* Vehicle Selection */}
         <div className="rounded-[24px] border border-white/70 bg-white/90 p-4 shadow-[0_12px_28px_rgba(20,58,90,0.06)] space-y-2.5">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93] mb-1">3. Select Vehicle Class</p>
-          {VEHICLES.map((v) => {
-            const isSelected = selectedVehicle.id === v.id;
-            return (
-              <div
-                key={v.id}
-                onClick={() => setSelectedVehicle(v)}
-                className={`cursor-pointer rounded-[20px] border p-3 transition-all flex items-center justify-between ${
-                  isSelected
-                    ? 'border-[#143a5a] bg-[#eff7ff] shadow-sm'
-                    : 'border-slate-100 bg-white hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{v.icon}</span>
-                  <div>
-                    <h4 className="text-sm font-black text-slate-900">{v.name}</h4>
-                    <p className="text-xs font-medium text-slate-500">{v.desc}</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">3. Select Vehicle Class</p>
+            {loadingVehicles && <Loader2 size={14} className="animate-spin text-blue-600" />}
+          </div>
+          {loadingVehicles ? (
+            <div className="py-6 flex flex-col items-center justify-center text-slate-400 gap-2">
+              <Loader2 size={20} className="animate-spin text-blue-600" />
+              <p className="text-xs font-semibold">Loading airport vehicles...</p>
+            </div>
+          ) : vehicles.length === 0 ? (
+            <p className="text-xs text-center text-slate-400 py-4 font-semibold">No vehicles configured for airport rides.</p>
+          ) : (
+            vehicles.map((v) => {
+              const isSelected = selectedVehicle?.id === v.id;
+              return (
+                <div
+                  key={v.id}
+                  onClick={() => setSelectedVehicle(v)}
+                  className={`cursor-pointer rounded-[20px] border p-3 transition-all flex items-center justify-between ${
+                    isSelected
+                      ? 'border-[#143a5a] bg-[#eff7ff] shadow-sm'
+                      : 'border-slate-100 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{v.icon}</span>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">{v.name}</h4>
+                      <p className="text-xs font-medium text-slate-500">{v.desc}</p>
+                    </div>
+                  </div>
+                  <div className="text-right pl-3">
+                    <p className="text-base font-black text-slate-900">₹{v.fare}</p>
+                    <span className="text-[10px] font-bold text-emerald-600">Fixed Fare</span>
                   </div>
                 </div>
-                <div className="text-right pl-3">
-                  <p className="text-base font-black text-slate-900">₹{v.fare}</p>
-                  <span className="text-[10px] font-bold text-emerald-600">Fixed Fare</span>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         {/* Fare & Commission Card */}
