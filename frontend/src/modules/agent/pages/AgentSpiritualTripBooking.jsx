@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import api from '@/shared/api/axiosInstance';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
+import { isEligibleSpiritualVehicle } from '@/modules/user/utils/serviceModulePresentation';
 
 const DEFAULT_VEHICLES = [
   { id: 'sedan', name: 'Sedan (Dzire / Etios)', seats: '4 Seats', capacity: 4 },
@@ -50,6 +51,7 @@ export const AgentSpiritualTripBooking = () => {
                 dist: dest.distance || dest.dist || '55 km',
                 baseFare: bFare,
                 vehicleFares: {
+                  ...(dest.vehicleFares || {}),
                   sedan: Number(dest.vehicleFares?.sedan) || bFare,
                   suv: Number(dest.vehicleFares?.suv) || Math.round(bFare * 1.4),
                   tempo: Number(dest.vehicleFares?.tempo) || Math.round(bFare * 2.2),
@@ -71,7 +73,10 @@ export const AgentSpiritualTripBooking = () => {
           const rawVehicles = vTypesRes.value?.data?.results || vTypesRes.value?.data?.data?.results || vTypesRes.value?.data?.data || [];
           if (Array.isArray(rawVehicles) && rawVehicles.length > 0) {
             const mappedVehicles = rawVehicles
-              .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
+              .filter((v) => {
+                if (v.active === false || Number(v.status ?? 1) === 0) return false;
+                return isEligibleSpiritualVehicle(v);
+              })
               .map((v) => ({
                 id: String(v._id || v.id),
                 name: `${v.name} (${v.capacity || 4} Seats)`,
@@ -98,14 +103,20 @@ export const AgentSpiritualTripBooking = () => {
 
   const getVehicleFare = (dest, vehicle) => {
     if (!dest) return 0;
-    const vId = typeof vehicle === 'object' ? vehicle?.id : vehicle;
+    const vId = typeof vehicle === 'object' ? (vehicle?.id || vehicle?.vehicleTypeId) : vehicle;
     const directFare = Number(dest.vehicleFares?.[vId]);
     if (directFare && directFare > 0) return directFare;
-    const base = Number(dest.baseFare) || 0;
+
+    const vehName = String(vehicle?.name || vehicle || '').toLowerCase();
+    if (vehName.includes('sedan') && Number(dest.vehicleFares?.sedan) > 0) return Number(dest.vehicleFares.sedan);
+    if ((vehName.includes('suv') || vehName.includes('ertiga') || vehName.includes('innova')) && Number(dest.vehicleFares?.suv) > 0) return Number(dest.vehicleFares.suv);
+    if ((vehName.includes('tempo') || vehName.includes('traveller')) && Number(dest.vehicleFares?.tempo) > 0) return Number(dest.vehicleFares.tempo);
+
+    const base = Number(dest.baseFare) || Number(dest.vehicleFares?.sedan) || 0;
     const cap = typeof vehicle === 'object' ? (vehicle?.capacity || 4) : (vehicle === 'suv' ? 6 : vehicle === 'tempo' ? 12 : 4);
     if (cap <= 4) return base;
-    if (cap <= 7) return Math.round(base * 1.4);
-    return Math.round(base * 2.2);
+    if (cap <= 7) return Number(dest.vehicleFares?.suv) || Math.round(base * 1.4);
+    return Number(dest.vehicleFares?.tempo) || Math.round(base * 2.2);
   };
 
   const totalFare = selectedDest ? getVehicleFare(selectedDest, selectedVehicle) : 0;

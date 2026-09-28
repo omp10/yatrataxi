@@ -70,3 +70,49 @@ export const getServiceModuleDescription = (module = {}) => (
   String(module.short_description || module.description || '').trim()
   || `Book ${String(module.name || 'this service').trim()} quickly.`
 );
+
+export const isEligibleSpiritualVehicle = (v) => {
+  if (!v) return false;
+  const icon = String(v.icon_types || v.iconType || v.icon_types_for || v.icon || '').toLowerCase();
+  const name = String(v.name || '').toLowerCase();
+  const transport = String(v.transport_type || v.transportType || '').toLowerCase();
+  const dispatch = String(v.dispatch_type || v.dispatchType || '').toLowerCase();
+  const deliveryCat = String(v.delivery_category || '').toLowerCase();
+  const desc = String(v.description || v.short_description || v.desc || '').toLowerCase();
+
+  // 1. Exclude two-wheelers and three-wheelers (Auto rickshaws, e-rickshaws, bikes)
+  if (
+    icon === 'auto' ||
+    icon === 'bike' ||
+    name.includes('auto') ||
+    name.includes('rickshaw') ||
+    name.includes('bike') ||
+    name.includes('scooter') ||
+    desc.includes('rickshaw')
+  ) {
+    return false;
+  }
+
+  // 2. Exclude delivery / cargo / goods vehicles
+  if (
+    transport === 'delivery' ||
+    dispatch === 'delivery' ||
+    deliveryCat ||
+    name.includes('delivery') ||
+    name.includes('cargo') ||
+    name.includes('truck') ||
+    desc.includes('delivery') ||
+    desc.includes('cargo')
+  ) {
+    return false;
+  }
+
+  // 3. Passenger vehicles must have at least 4 seats
+  const cap = Number(v.capacity || v.maxSeats || 0);
+  if (cap > 0 && cap < 4) {
+    return false;
+  }
+
+  return true;
+};
+

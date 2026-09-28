@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { isEligibleSpiritualVehicle } from '@/modules/user/utils/serviceModulePresentation';
 
 const Motion = motion;
 
@@ -43,6 +44,8 @@ const createInitialFormData = () => ({
   sedanFare: 999,
   suvFare: 1399,
   tempoFare: 2199,
+  vehicleFares: {},
+  disabledVehicles: {},
   distance: '55 km',
   emoji: '🛕',
   order: 0,
@@ -69,9 +72,52 @@ const ExploreIndia = () => {
   const [formData, setFormData] = useState(createInitialFormData);
   const [imagePreview, setImagePreview] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [vehicleTypes, setVehicleTypes] = useState([]);
 
   const token = localStorage.getItem('adminToken') || '';
   const baseUrl = (globalThis.__LEGACY_BACKEND_ORIGIN__ || '') + '/api/v1/admin';
+
+  const fetchVehicles = useCallback(async () => {
+    try {
+      const origin = globalThis.__LEGACY_BACKEND_ORIGIN__ || '';
+      const res = await fetch(`${origin}/api/v1/users/vehicle-types`);
+      if (res.ok) {
+        const data = await res.json();
+        const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || data?.results || []);
+        const eligible = items
+          .filter(isEligibleSpiritualVehicle)
+          .map((v) => {
+            const cap = Number(v.capacity) || 4;
+            let icon = '🚗';
+            if (v.icon_types === 'suv' || (cap >= 6 && cap <= 8)) icon = '🚙';
+            else if (cap > 8) icon = '🚐';
+            return {
+              id: String(v._id || v.id),
+              name: v.name,
+              icon,
+              desc: v.short_description || v.description || (cap <= 4 ? 'Dzire / Etios' : cap <= 7 ? 'Ertiga / Innova' : 'Mini Coach'),
+              capacity: cap,
+            };
+          });
+        setVehicleTypes(eligible);
+      }
+    } catch (err) {
+      console.warn('Failed to load dynamic vehicles for explore destinations:', err?.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchVehicles();
+  }, [fetchVehicles]);
+
+  const displayVehicles = useMemo(() => {
+    if (vehicleTypes.length > 0) return vehicleTypes;
+    return [
+      { id: 'sedan', name: 'Sedan', icon: '🚗', desc: 'Dzire / Etios', capacity: 4 },
+      { id: 'suv', name: 'SUV', icon: '🚙', desc: 'Ertiga / Innova', capacity: 6 },
+      { id: 'tempo', name: 'Tempo', icon: '🚐', desc: 'Mini Coach', capacity: 12 },
+    ];
+  }, [vehicleTypes]);
 
   const fetchDestinations = useCallback(async () => {
     setLoading(true);
@@ -127,6 +173,14 @@ const ExploreIndia = () => {
   const handleOpenEditModal = (dest) => {
     setEditingDestination(dest);
     const bFare = dest.baseFare ?? 999;
+    const destFares = dest.vehicleFares || {};
+    const disabledMap = {};
+    if (dest.vehicleFares) {
+      Object.entries(dest.vehicleFares).forEach(([k, v]) => {
+        if (v === 0 || v === '0') disabledMap[k] = true;
+      });
+    }
+
     setFormData({
       title: dest.title || '',
       label: dest.label || '',
@@ -138,9 +192,11 @@ const ExploreIndia = () => {
       description: dest.description || '',
       category: dest.category || 'spiritual',
       baseFare: bFare,
-      sedanFare: dest.vehicleFares?.sedan ?? dest.sedanFare ?? bFare,
-      suvFare: dest.vehicleFares?.suv ?? dest.suvFare ?? Math.round(bFare * 1.4),
-      tempoFare: dest.vehicleFares?.tempo ?? dest.tempoFare ?? Math.round(bFare * 2.2),
+      sedanFare: destFares.sedan ?? dest.sedanFare ?? bFare,
+      suvFare: destFares.suv ?? dest.suvFare ?? Math.round(bFare * 1.4),
+      tempoFare: destFares.tempo ?? dest.tempoFare ?? Math.round(bFare * 2.2),
+      vehicleFares: { ...destFares },
+      disabledVehicles: disabledMap,
       distance: dest.distance || dest.dist || '55 km',
       emoji: dest.emoji || '🛕',
       order: dest.order ?? 0,
@@ -218,6 +274,25 @@ const ExploreIndia = () => {
 
     setSaving(true);
     try {
+      const base = Number(formData.baseFare) || 999;
+      const combinedFares = { ...(formData.vehicleFares || {}) };
+
+      // Standard fallback categories
+      combinedFares.sedan = Number(formData.sedanFare || base) || base;
+      combinedFares.suv = Number(formData.suvFare) || Math.round(base * 1.4);
+      combinedFares.tempo = Number(formData.tempoFare) || Math.round(base * 2.2);
+
+      // Apply any vehicle-specific active / disabled settings
+      displayVehicles.forEach((v) => {
+        if (formData.disabledVehicles?.[v.id]) {
+          combinedFares[v.id] = 0;
+        } else if (combinedFares[v.id] === undefined || combinedFares[v.id] === '') {
+          combinedFares[v.id] = v.capacity <= 4 ? combinedFares.sedan : v.capacity <= 7 ? combinedFares.suv : combinedFares.tempo;
+        } else {
+          combinedFares[v.id] = Number(combinedFares[v.id]);
+        }
+      });
+
       const payload = {
         title: formData.title.trim(),
         label: formData.label.trim(),
@@ -226,15 +301,11 @@ const ExploreIndia = () => {
         image: effectiveImage,
         description: formData.description.trim(),
         category: formData.category || 'spiritual',
-        baseFare: Number(formData.sedanFare || formData.baseFare) || 999,
-        vehicleFares: {
-          sedan: Number(formData.sedanFare || formData.baseFare) || 999,
-          suv: Number(formData.suvFare) || Math.round((Number(formData.baseFare) || 999) * 1.4),
-          tempo: Number(formData.tempoFare) || Math.round((Number(formData.baseFare) || 999) * 2.2),
-        },
-        sedanFare: Number(formData.sedanFare || formData.baseFare) || 999,
-        suvFare: Number(formData.suvFare) || Math.round((Number(formData.baseFare) || 999) * 1.4),
-        tempoFare: Number(formData.tempoFare) || Math.round((Number(formData.baseFare) || 999) * 2.2),
+        baseFare: base,
+        vehicleFares: combinedFares,
+        sedanFare: combinedFares.sedan,
+        suvFare: combinedFares.suv,
+        tempoFare: combinedFares.tempo,
         distance: formData.distance.trim(),
         emoji: formData.emoji.trim() || '🛕',
         order: Number(formData.order) || 0,
@@ -1001,67 +1072,99 @@ const ExploreIndia = () => {
 
                 {/* Individual Vehicle Fares */}
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Vehicle Fares (₹)</h4>
-                      <p className="text-[11px] text-slate-500">Edit exact price for each vehicle category</p>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                        Vehicle Fares (₹)
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Set price for eligible passenger cabs (Auto, Bike & Delivery automatically excluded)
+                      </p>
                     </div>
                     <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Option B: Direct Pricing
+                      Dynamic Fleet Pricing
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">🚗 Sedan</span>
-                        <span className="text-[10px] text-slate-400 font-semibold">4 Seats</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">Dzire / Etios</p>
-                      <input
-                        type="number"
-                        min={0}
-                        required
-                        value={formData.sedanFare}
-                        onChange={(e) => setFormData({ ...formData, sedanFare: e.target.value, baseFare: e.target.value })}
-                        placeholder="e.g. 600"
-                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {displayVehicles.map((veh) => {
+                      const vId = veh.id;
+                      const isDisabled = Boolean(formData.disabledVehicles?.[vId]);
+                      const defaultVal =
+                        veh.capacity <= 4
+                          ? formData.baseFare
+                          : veh.capacity <= 7
+                          ? Math.round((Number(formData.baseFare) || 999) * 1.4)
+                          : Math.round((Number(formData.baseFare) || 999) * 2.2);
+                      const currentVal = formData.vehicleFares?.[vId] ?? defaultVal;
 
-                    <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">🚙 SUV</span>
-                        <span className="text-[10px] text-slate-400 font-semibold">6 Seats</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">Ertiga / Innova</p>
-                      <input
-                        type="number"
-                        min={0}
-                        required
-                        value={formData.suvFare}
-                        onChange={(e) => setFormData({ ...formData, suvFare: e.target.value })}
-                        placeholder="e.g. 840"
-                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">🚐 Tempo</span>
-                        <span className="text-[10px] text-slate-400 font-semibold">12 Seats</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">Mini Coach</p>
-                      <input
-                        type="number"
-                        min={0}
-                        required
-                        value={formData.tempoFare}
-                        onChange={(e) => setFormData({ ...formData, tempoFare: e.target.value })}
-                        placeholder="e.g. 1320"
-                        className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                      />
-                    </div>
+                      return (
+                        <div
+                          key={vId}
+                          className={`space-y-2 p-3 rounded-xl border shadow-sm transition-all ${
+                            isDisabled
+                              ? 'bg-slate-100/70 border-slate-200 opacity-60'
+                              : 'bg-white border-slate-200 hover:border-emerald-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <span>{veh.icon}</span>
+                              <span className="truncate max-w-[120px]">{veh.name}</span>
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-semibold bg-slate-100 px-2 py-0.5 rounded-md">
+                              {veh.capacity ? `${veh.capacity} Seats` : '4 Seats'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span className="truncate max-w-[130px]">{veh.desc}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  disabledVehicles: {
+                                    ...(prev.disabledVehicles || {}),
+                                    [vId]: !isDisabled,
+                                  },
+                                }));
+                              }}
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-full border transition-all ${
+                                isDisabled
+                                  ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              }`}
+                            >
+                              {isDisabled ? 'Off (Hidden)' : 'Active'}
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            disabled={isDisabled}
+                            value={isDisabled ? '' : currentVal}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormData((prev) => {
+                                const nextFares = { ...(prev.vehicleFares || {}), [vId]: val };
+                                const vehNameLower = String(veh.name || '').toLowerCase();
+                                const updates = { vehicleFares: nextFares };
+                                if (vehNameLower.includes('sedan') || veh.capacity <= 4) updates.sedanFare = val;
+                                if (vehNameLower.includes('suv') || (veh.capacity >= 6 && veh.capacity <= 8)) updates.suvFare = val;
+                                if (vehNameLower.includes('tempo') || veh.capacity > 8) updates.tempoFare = val;
+                                return { ...prev, ...updates };
+                              });
+                            }}
+                            placeholder={isDisabled ? 'Disabled for tour' : 'Enter fare (₹)'}
+                            className={`w-full px-3 py-2 border rounded-lg text-sm font-black focus:outline-none focus:ring-2 ${
+                              isDisabled
+                                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-slate-50 border-slate-200 text-slate-900 focus:ring-emerald-500/20 focus:border-emerald-500'
+                            }`}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

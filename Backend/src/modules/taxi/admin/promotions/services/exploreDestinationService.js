@@ -36,6 +36,7 @@ const serializeDestination = (item) => ({
   baseFare: Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999,
   fare: item.baseFare ? `₹${Number(item.baseFare).toLocaleString('en-IN')}` : '₹999',
   vehicleFares: {
+    ...(typeof item.vehicleFares === 'object' && item.vehicleFares !== null ? item.vehicleFares : {}),
     sedan: Number(item.vehicleFares?.sedan) || (Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999),
     suv: Number(item.vehicleFares?.suv) || Math.round((Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999) * 1.4),
     tempo: Number(item.vehicleFares?.tempo) || Math.round((Number.isFinite(Number(item.baseFare)) ? Number(item.baseFare) : 999) * 2.2),
@@ -243,7 +244,12 @@ const normalizeDestinationPayload = async (payload, existing = null) => {
   const suvInput = payload.vehicleFares?.suv ?? payload.suvFare ?? existing?.vehicleFares?.suv;
   const tempoInput = payload.vehicleFares?.tempo ?? payload.tempoFare ?? existing?.vehicleFares?.tempo;
 
+  const rawPayloadFares = typeof payload.vehicleFares === 'object' && payload.vehicleFares !== null ? payload.vehicleFares : {};
+  const rawExistingFares = typeof existing?.vehicleFares === 'object' && existing?.vehicleFares !== null ? existing.vehicleFares : {};
+
   const vehicleFares = {
+    ...rawExistingFares,
+    ...rawPayloadFares,
     sedan: Number.isFinite(Number(sedanInput)) && Number(sedanInput) >= 0 ? Number(sedanInput) : effectiveBaseFare,
     suv: Number.isFinite(Number(suvInput)) && Number(suvInput) >= 0 ? Number(suvInput) : Math.round(effectiveBaseFare * 1.4),
     tempo: Number.isFinite(Number(tempoInput)) && Number(tempoInput) >= 0 ? Number(tempoInput) : Math.round(effectiveBaseFare * 2.2),

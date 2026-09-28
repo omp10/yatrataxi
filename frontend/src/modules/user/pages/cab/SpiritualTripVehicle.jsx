@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Users, ChevronRight, Calendar, Clock, MapPin, Loader2 } from 'lucide-react';
 import api from '@/shared/api/axiosInstance';
+import { isEligibleSpiritualVehicle } from '../../utils/serviceModulePresentation';
 
 const DEFAULT_VEHICLES = [
   { id: 'sedan', name: 'Sedan', icon: '🚗', desc: 'Dzire, Etios', maxSeats: 4 },
@@ -31,7 +32,14 @@ const SpiritualTripVehicle = () => {
         const raw = res?.data?.results || res?.data?.data?.results || res?.data?.data || [];
         if (isMounted && Array.isArray(raw) && raw.length > 0) {
           const mapped = raw
-            .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
+            .filter((v) => {
+              if (v.active === false || Number(v.status ?? 1) === 0) return false;
+              if (!isEligibleSpiritualVehicle(v)) return false;
+              // If admin explicitly set price to 0, hide this vehicle
+              const explicitFare = trip?.vehicleFares?.[String(v._id || v.id)];
+              if (explicitFare === 0 || explicitFare === '0') return false;
+              return true;
+            })
             .map((v) => {
               const cap = Number(v.capacity) || 4;
               let icon = '🚗';
@@ -77,13 +85,20 @@ const SpiritualTripVehicle = () => {
   const selectedVehicle = vehicles.find(v => v.id === vehicle) || vehicles[0];
   
   const getVehicleFare = (veh) => {
-    const vehId = typeof veh === 'object' ? veh?.id : veh;
-    if (trip?.vehicleFares?.[vehId]) return Number(trip.vehicleFares[vehId]);
-    const bFare = Number(trip?.baseFare) || 999;
+    const vehId = typeof veh === 'object' ? (veh?.id || veh?.vehicleTypeId) : veh;
+    const directFare = Number(trip?.vehicleFares?.[vehId]);
+    if (directFare && directFare > 0) return directFare;
+
+    const vehName = String(veh?.name || veh || '').toLowerCase();
+    if (vehName.includes('sedan') && Number(trip?.vehicleFares?.sedan) > 0) return Number(trip.vehicleFares.sedan);
+    if ((vehName.includes('suv') || vehName.includes('ertiga') || vehName.includes('innova')) && Number(trip?.vehicleFares?.suv) > 0) return Number(trip.vehicleFares.suv);
+    if ((vehName.includes('tempo') || vehName.includes('traveller')) && Number(trip?.vehicleFares?.tempo) > 0) return Number(trip.vehicleFares.tempo);
+
+    const bFare = Number(trip?.baseFare) || Number(trip?.vehicleFares?.sedan) || 999;
     const maxSeats = typeof veh === 'object' ? veh?.maxSeats : (veh === 'suv' ? 6 : veh === 'tempo' ? 12 : 4);
     if (maxSeats <= 4) return bFare;
-    if (maxSeats <= 7) return Math.round(bFare * 1.4);
-    return Math.round(bFare * 2.2);
+    if (maxSeats <= 7) return Number(trip?.vehicleFares?.suv) || Math.round(bFare * 1.4);
+    return Number(trip?.vehicleFares?.tempo) || Math.round(bFare * 2.2);
   };
 
   const estimatedFare = getVehicleFare(selectedVehicle);

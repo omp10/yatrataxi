@@ -50,9 +50,8 @@ const exploreDestinationSchema = new mongoose.Schema(
       default: 999,
     },
     vehicleFares: {
-      sedan: { type: Number, default: 0 },
-      suv: { type: Number, default: 0 },
-      tempo: { type: Number, default: 0 },
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ sedan: 0, suv: 0, tempo: 0 }),
     },
     distance: {
       type: String,
