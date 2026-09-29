@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { User, Mail, Phone, ChevronRight, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -33,6 +33,7 @@ const StepPersonal = () => {
         email: session.email || '',
         gender: session.gender || '',
     });
+    const emailInputRef = useRef(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -98,7 +99,7 @@ const StepPersonal = () => {
 
     return (
         <div
-            className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-8 select-none"
+            className="min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-52 pt-8 select-none"
             style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
         >
             <main className="mx-auto max-w-sm space-y-6">
@@ -144,6 +145,13 @@ const StepPersonal = () => {
                                     <input
                                         value={formData.fullName}
                                         onChange={(e) => setFormData(p => ({ ...p, fullName: e.target.value.replace(/[^A-Za-z .'-]/g, '') }))}
+                                        onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                emailInputRef.current?.focus();
+                                            }
+                                        }}
                                         placeholder="Enter your name"
                                         className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0 placeholder:text-slate-200"
                                     />
@@ -171,9 +179,11 @@ const StepPersonal = () => {
                                 <div className="min-w-0 flex-1 space-y-0.5">
                                     <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 opacity-70">Email Address</label>
                                     <input
+                                        ref={emailInputRef}
                                         type="email"
                                         value={formData.email}
                                         onChange={(e) => setFormData(p => ({ ...p, email: e.target.value.trim().toLowerCase() }))}
+                                        onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                                         placeholder="name@gmail.com"
                                         className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0 placeholder:text-slate-200"
                                     />

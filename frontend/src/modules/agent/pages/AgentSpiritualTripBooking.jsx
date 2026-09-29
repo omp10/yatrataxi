@@ -14,11 +14,47 @@ const DEFAULT_VEHICLES = [
   { id: 'tempo', name: 'Mini Coach / Tempo', seats: '12 Seats', capacity: 12 },
 ];
 
+const DEFAULT_SPIRITUAL_DESTINATIONS = [
+  {
+    id: 'ujjain-mahakal',
+    name: 'Ujjain Mahakaleshwar',
+    subtitle: 'Mahakaleshwar Jyotirlinga Darshan & Sacred Bhasma Aarti',
+    dist: '55 km',
+    baseFare: 999,
+    vehicleFares: { sedan: 999, suv: 1399, tempo: 2199 },
+    emoji: '🛕',
+    image: 'https://images.unsplash.com/photo-1609766857041-ed402ea8069a?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Mahakaleshwar Jyotirlinga, Jaisinghpura, Ujjain, Madhya Pradesh',
+  },
+  {
+    id: 'omkareshwar-jyotirlinga',
+    name: 'Omkareshwar Jyotirlinga',
+    subtitle: 'Sacred island Jyotirlinga shrine shaped like Om symbol',
+    dist: '78 km',
+    baseFare: 1499,
+    vehicleFares: { sedan: 1499, suv: 2099, tempo: 3299 },
+    emoji: '🕉️',
+    image: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Omkareshwar Mandir, Mandhata Island, Narmada River, Madhya Pradesh',
+  },
+  {
+    id: 'maheshwar-temples',
+    name: 'Maheshwar Ahilya Fort & Temples',
+    subtitle: 'Holkar royal ghats, sacred Narmada temples & craft heritage',
+    dist: '91 km',
+    baseFare: 1799,
+    vehicleFares: { sedan: 1799, suv: 2519, tempo: 3959 },
+    emoji: '🪔',
+    image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80',
+    dropLocation: 'Ahilya Fort Ghats, Maheshwar, Khargone, Madhya Pradesh',
+  },
+];
+
 export const AgentSpiritualTripBooking = () => {
   const navigate = useNavigate();
-  const [destinations, setDestinations] = useState([]);
+  const [destinations, setDestinations] = useState(DEFAULT_SPIRITUAL_DESTINATIONS);
   const [loading, setLoading] = useState(true);
-  const [selectedDest, setSelectedDest] = useState(null);
+  const [selectedDest, setSelectedDest] = useState(DEFAULT_SPIRITUAL_DESTINATIONS[0]);
   const [vehicles, setVehicles] = useState(DEFAULT_VEHICLES);
   const [selectedVehicle, setSelectedVehicle] = useState(DEFAULT_VEHICLES[0]);
   const [pickupAddress, setPickupAddress] = useState('');
@@ -64,8 +100,8 @@ export const AgentSpiritualTripBooking = () => {
             setDestinations(mapped);
             setSelectedDest(mapped[0]);
           } else if (isMounted) {
-            setDestinations([]);
-            setSelectedDest(null);
+            setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
+            setSelectedDest(DEFAULT_SPIRITUAL_DESTINATIONS[0]);
           }
         }
 
@@ -137,7 +173,7 @@ export const AgentSpiritualTripBooking = () => {
       const payload = {
         customer,
         pickupAddress,
-        dropAddress: selectedDest?.dropLocation || `${selectedDest.name} (${selectedDest.subtitle})`,
+        dropAddress: selectedDest?.dropLocation || `${selectedDest?.name || 'Spiritual Destination'} (${selectedDest?.subtitle || 'Pilgrimage'})`,
         pickup: [75.8577, 22.7196],
         drop: [75.7873, 23.1765],
         fare: totalFare,
@@ -157,9 +193,9 @@ export const AgentSpiritualTripBooking = () => {
       toast.success('Spiritual tour booked successfully! Commission credited.');
       setConfirmedBooking({
         bookingId: data._id || `TOUR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-        destination: selectedDest.name,
+        destination: selectedDest?.name || 'Spiritual Tour',
         pickup: pickupAddress,
-        vehicle: selectedVehicle.name,
+        vehicle: selectedVehicle?.name || 'Selected Vehicle',
         fare: totalFare,
         commission: estimatedCommission,
         travelDate: `${travelDate} at ${travelTime}`,
@@ -168,9 +204,9 @@ export const AgentSpiritualTripBooking = () => {
       toast.success('Spiritual tour booked! Commission recorded.');
       setConfirmedBooking({
         bookingId: `TOUR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-        destination: selectedDest.name,
+        destination: selectedDest?.name || 'Spiritual Tour',
         pickup: pickupAddress,
-        vehicle: selectedVehicle.name,
+        vehicle: selectedVehicle?.name || 'Selected Vehicle',
         fare: totalFare,
         commission: estimatedCommission,
         travelDate: `${travelDate} at ${travelTime}`,
@@ -336,7 +372,7 @@ export const AgentSpiritualTripBooking = () => {
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">Tour Package Fare</p>
               <h3 className="mt-1 text-2xl font-black">₹{totalFare}</h3>
-              <p className="text-xs font-semibold text-white/75">{selectedDest.name} Tour</p>
+              <p className="text-xs font-semibold text-white/75">{selectedDest?.name || 'Spiritual'} Tour</p>
             </div>
             <div className="text-right">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-black text-emerald-300 ring-1 ring-emerald-400/40">

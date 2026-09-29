@@ -413,8 +413,8 @@ const MainLayout = ({ children }) => {
   }
 
   return (
-    <div className="Yatra Desk-app min-h-screen bg-gray-50/50">
-      <main className="max-w-lg mx-auto shadow-2xl bg-white min-h-screen relative overflow-x-hidden">
+    <div className="yatradesk-app min-h-screen bg-gray-50/50">
+      <main className="w-full max-w-lg mx-auto shadow-2xl bg-white min-h-screen relative">
         {children}
       </main>
     </div>
@@ -831,6 +831,7 @@ function App() {
               <Route path="/taxi/user/refund" element={<LegalPage />} />
               <Route path="/taxi/user/verify-otp" element={<VerifyOTP />} />
               <Route path="/taxi/user/signup" element={<Signup />} />
+              <Route path="/taxi/user/support" element={<Support />} />
               <Route path="/taxi/user" element={<UserHomeRoute taxiPrefixed />} />
               <Route path="/taxi/agent/login" element={<AgentLogin />} />
               <Route path="/taxi/agent/verify-otp" element={<AgentOtpVerification />} />

@@ -54,7 +54,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F5] flex flex-col font-['Outfit'] select-none overflow-hidden relative">
+    <div className="min-h-screen w-full bg-[#FAF9F5] flex flex-col font-['Outfit'] select-none overflow-hidden relative">
       <div className="absolute top-0 left-0 right-0 h-[65%] z-0">
         <motion.img 
           initial={{ opacity: 0, scale: 1.1 }}
@@ -152,7 +152,7 @@ const Login = () => {
                   <div className={`flex items-center gap-4 p-5 rounded-2xl transition-all border-2 ${error ? 'border-rose-100 bg-rose-50/30' : 'border-slate-100 bg-slate-50 focus-within:border-amber-500 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-amber-100/30'}`}>
                     <div className="flex items-center gap-3 pr-4 border-r border-slate-200">
                       <img src="https://flagcdn.com/w40/in.png" alt="India" className="w-5 h-3.5 object-cover rounded-sm" />
-                      <span className="text-slate-400 text-sm font-black">+91</span>
+                      <span className="text-slate-900 text-xl font-bold leading-none">+91</span>
                     </div>
                     <input 
                       ref={phoneInputRef}

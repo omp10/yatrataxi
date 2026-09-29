@@ -298,7 +298,7 @@ const PhoneRegistration = () => {
                         <div className="space-y-4">
                             <div className={`flex items-center gap-4 p-5 rounded-2xl transition-all border-2 ${error ? 'border-rose-100 bg-rose-50/30' : 'border-slate-50 bg-slate-50 focus-within:border-amber-400 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-amber-100/50'}`}>
                                 <div className="flex items-center gap-2 pr-4 border-r border-slate-200">
-                                    <span className="text-slate-400 text-sm font-black">+91</span>
+                                    <span className="text-slate-900 text-xl font-bold leading-none">+91</span>
                                 </div>
                                 <input 
                                     type="tel" 

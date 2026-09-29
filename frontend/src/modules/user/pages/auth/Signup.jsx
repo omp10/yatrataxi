@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import AuthLayout from '../../components/AuthLayout';
@@ -14,6 +14,11 @@ const fieldInputClassName =
 
 const PENDING_SIGNUP_PHONE_KEY = 'pendingUserSignupPhone';
 const PENDING_SIGNUP_REFERRAL_CODE_KEY = 'pendingUserSignupReferralCode';
+const PENDING_SIGNUP_PROFILE_IMAGE_KEY = 'pendingUserSignupProfileImage';
+const PENDING_SIGNUP_NAME_KEY = 'pendingUserSignupName';
+const PENDING_SIGNUP_EMAIL_KEY = 'pendingUserSignupEmail';
+const PENDING_SIGNUP_GENDER_KEY = 'pendingUserSignupGender';
+
 const syncPushTokens = () => {
   window.__flushNativeFcmToken?.().catch?.(() => {});
   window.__registerBrowserFcmToken?.({ interactive: true }).catch?.(() => {});
@@ -22,26 +27,47 @@ const syncPushTokens = () => {
 const Signup = () => {
   const location = useLocation();
   const { settings } = useSettings();
+  const navigate = useNavigate();
+
+  const nameInputRef = useRef(null);
+  const emailInputRef = useRef(null);
+  const referralInputRef = useRef(null);
+
   const referralCodeFromQuery = new URLSearchParams(location.search).get('ref') || '';
   const preservedPhone = typeof window !== 'undefined' ? sessionStorage.getItem(PENDING_SIGNUP_PHONE_KEY) || '' : '';
   const preservedReferralCode = typeof window !== 'undefined'
     ? sessionStorage.getItem(PENDING_SIGNUP_REFERRAL_CODE_KEY) || ''
     : '';
+  const preservedProfileImage = typeof window !== 'undefined'
+    ? sessionStorage.getItem(PENDING_SIGNUP_PROFILE_IMAGE_KEY) || ''
+    : '';
+  const preservedName = typeof window !== 'undefined'
+    ? sessionStorage.getItem(PENDING_SIGNUP_NAME_KEY) || ''
+    : '';
+  const preservedEmail = typeof window !== 'undefined'
+    ? sessionStorage.getItem(PENDING_SIGNUP_EMAIL_KEY) || ''
+    : '';
+  const preservedGender = typeof window !== 'undefined'
+    ? sessionStorage.getItem(PENDING_SIGNUP_GENDER_KEY) || 'prefer-not-to-say'
+    : 'prefer-not-to-say';
+
   const initialPhone = String(location.state?.phone || preservedPhone || '').replace(/\D/g, '').slice(-10);
+  
   const [formData, setFormData] = useState({
     phone: initialPhone,
-    name: '',
-    email: '',
-    gender: 'prefer-not-to-say',
-    profileImage: '',
+    name: preservedName,
+    email: preservedEmail,
+    gender: preservedGender,
+    profileImage: preservedProfileImage,
     referralCode: String(location.state?.referralCode || referralCodeFromQuery || preservedReferralCode || '').trim().toUpperCase(),
   });
+
   const [loading, setLoading] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [error, setError] = useState('');
   const [otpSending, setOtpSending] = useState(false);
-  const navigate = useNavigate();
+
   const appName = settings.general?.app_name || 'App';
   const isValidPhone = /^\d{10}$/.test(formData.phone);
   const hasVerifiedSignupContext = Boolean(location.state?.otpVerified) || Boolean(preservedPhone);
@@ -55,13 +81,24 @@ const Signup = () => {
 
   useEffect(() => {
     const normalizedReferralCode = String(formData.referralCode || '').trim().toUpperCase();
-
     if (normalizedReferralCode) {
       sessionStorage.setItem(PENDING_SIGNUP_REFERRAL_CODE_KEY, normalizedReferralCode);
     } else {
       sessionStorage.removeItem(PENDING_SIGNUP_REFERRAL_CODE_KEY);
     }
   }, [formData.referralCode]);
+
+  useEffect(() => {
+    if (formData.profileImage) {
+      sessionStorage.setItem(PENDING_SIGNUP_PROFILE_IMAGE_KEY, formData.profileImage);
+    }
+  }, [formData.profileImage]);
+
+  useEffect(() => {
+    if (formData.name) sessionStorage.setItem(PENDING_SIGNUP_NAME_KEY, formData.name);
+    if (formData.email) sessionStorage.setItem(PENDING_SIGNUP_EMAIL_KEY, formData.email);
+    if (formData.gender) sessionStorage.setItem(PENDING_SIGNUP_GENDER_KEY, formData.gender);
+  }, [formData.name, formData.email, formData.gender]);
 
   useEffect(() => {
     if (location.state?.otpVerified) {
@@ -101,9 +138,9 @@ const Signup = () => {
       }
 
       setFormData((prev) => ({ ...prev, profileImage: secureUrl }));
+      sessionStorage.setItem(PENDING_SIGNUP_PROFILE_IMAGE_KEY, secureUrl);
     } catch (err) {
       setPhotoError(err?.message || 'Photo upload failed');
-      setFormData((prev) => ({ ...prev, profileImage: '' }));
     } finally {
       setPhotoUploading(false);
       e.target.value = '';
@@ -134,6 +171,15 @@ const Signup = () => {
     }
   };
 
+  const clearPendingStorage = () => {
+    sessionStorage.removeItem(PENDING_SIGNUP_PHONE_KEY);
+    sessionStorage.removeItem(PENDING_SIGNUP_REFERRAL_CODE_KEY);
+    sessionStorage.removeItem(PENDING_SIGNUP_PROFILE_IMAGE_KEY);
+    sessionStorage.removeItem(PENDING_SIGNUP_NAME_KEY);
+    sessionStorage.removeItem(PENDING_SIGNUP_EMAIL_KEY);
+    sessionStorage.removeItem(PENDING_SIGNUP_GENDER_KEY);
+  };
+
   const handleSignup = async (e, overrides = {}) => {
     e.preventDefault();
     if (!formData.name || !isValidPhone) return;
@@ -157,14 +203,13 @@ const Signup = () => {
       localStorage.setItem('role', 'user');
       localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
       syncPushTokens();
-      sessionStorage.removeItem(PENDING_SIGNUP_PHONE_KEY);
-      sessionStorage.removeItem(PENDING_SIGNUP_REFERRAL_CODE_KEY);
+      clearPendingStorage();
       navigate('/taxi/user', { replace: true });
     } catch (err) {
       const message = err?.message || 'Signup failed. Please try again.';
 
       if (message === 'OTP session not found' || message === 'Verify OTP before signup' || message === 'OTP session expired') {
-        sessionStorage.removeItem(PENDING_SIGNUP_PHONE_KEY);
+        clearPendingStorage();
         setStep('phone');
         setError('Your verification session expired. Please request a fresh OTP to continue.');
         return;
@@ -179,8 +224,6 @@ const Signup = () => {
   const handleGenderChange = (gender) => {
     setFormData({ ...formData, gender });
   };
-
-
 
   return (
     <AuthLayout
@@ -219,7 +262,7 @@ const Signup = () => {
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={!isValidPhone || otpSending}
-            className={`w-full py-4 rounded-xl text-lg font-bold transition-all flex items-center justify-center gap-3 ${
+            className={`w-full py-4 rounded-xl text-lg font-bold transition-all flex items-center justify-center gap-3 cursor-pointer ${
               isValidPhone && !otpSending
                 ? 'bg-black text-white shadow-xl shadow-black/10'
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
@@ -259,28 +302,36 @@ const Signup = () => {
           </div>
         </form>
       ) : (
-      <form onSubmit={handleSignup} className="space-y-6 sm:space-y-8">
-        {/* Avatar Placeholder */}
+      <form onSubmit={handleSignup} className="space-y-6 sm:space-y-8 pb-32">
+        {/* Avatar Placeholder - Fully Clickable */}
         <div className="flex flex-col items-center">
-            <div className="relative group active:scale-95 transition-all">
-                <div className="w-24 h-24 rounded-full bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm">
+            <label className="relative group active:scale-95 transition-all cursor-pointer block">
+                <div className="w-24 h-24 rounded-full bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-sm group-hover:border-slate-900 transition-colors">
                     {avatarPreviewUrl ? (
                       <img src={avatarPreviewUrl} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
-                      <User size={40} className="text-slate-400" />
+                      <User size={40} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
                     )}
                 </div>
-                <div className="absolute bottom-1 right-1 w-8 h-8 bg-black rounded-full border-2 border-white flex items-center justify-center text-white shadow-md">
+                <div className="absolute bottom-1 right-1 w-8 h-8 bg-black rounded-full border-2 border-white flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform">
                     <Camera size={14} />
                 </div>
-            </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={photoUploading}
+                  className="sr-only"
+                  aria-label="Upload profile photo"
+                  onChange={handlePhotoChange}
+                />
+            </label>
             <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Profile Photo (Optional)</p>
-            <p className="mt-2 text-xs font-medium text-slate-500">You can add one now or skip it and update later.</p>
-            <div className="mt-4 grid w-full max-w-[280px] grid-cols-2 gap-2">
+            <p className="mt-1 text-xs font-medium text-slate-500">Tap avatar or choose option below</p>
+            <div className="mt-3 grid w-full max-w-[280px] grid-cols-2 gap-2">
               <label className={`relative flex h-11 items-center justify-center gap-2 rounded-2xl border text-[11px] font-bold uppercase tracking-wider transition-all ${
                 photoUploading
                   ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                  : 'cursor-pointer border-slate-200 bg-white text-slate-700 active:scale-[0.99]'
+                  : 'cursor-pointer border-slate-200 bg-white text-slate-700 active:scale-[0.99] hover:border-slate-400'
               }`}>
                 <ImagePlus size={14} />
                 Gallery
@@ -296,7 +347,7 @@ const Signup = () => {
               <label className={`relative flex h-11 items-center justify-center gap-2 rounded-2xl border text-[11px] font-bold uppercase tracking-wider transition-all ${
                 photoUploading
                   ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                  : 'cursor-pointer border-slate-900 bg-slate-950 text-white active:scale-[0.99]'
+                  : 'cursor-pointer border-slate-900 bg-slate-950 text-white active:scale-[0.99] hover:bg-slate-800'
               }`}>
                 <Camera size={14} />
                 Camera
@@ -311,7 +362,7 @@ const Signup = () => {
                 />
               </label>
             </div>
-            {photoUploading && <p className="text-[11px] font-bold text-slate-500 mt-2">Uploading...</p>}
+            {photoUploading && <p className="text-[11px] font-bold text-slate-500 mt-2">Uploading photo...</p>}
             {photoError && <p className="text-[11px] font-bold text-red-500 mt-2">{photoError}</p>}
         </div>
 
@@ -340,12 +391,21 @@ const Signup = () => {
             <div className={fieldShellClassName}>
               <User size={18} className="text-slate-500" />
               <input 
+                ref={nameInputRef}
                 type="text" 
                 placeholder="Enter your name"
                 className={fieldInputClassName}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    emailInputRef.current?.focus();
+                  }
+                }}
                 required
+                autoFocus
               />
             </div>
           </div>
@@ -355,11 +415,19 @@ const Signup = () => {
             <div className={fieldShellClassName}>
               <Mail size={18} className="text-slate-500" />
               <input 
+                ref={emailInputRef}
                 type="email" 
                 placeholder="Enter email address"
                 className={fieldInputClassName}
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    referralInputRef.current?.focus();
+                  }
+                }}
               />
             </div>
           </div>
@@ -369,10 +437,12 @@ const Signup = () => {
             <div className={fieldShellClassName}>
               <User size={18} className="text-slate-500" />
               <input
+                ref={referralInputRef}
                 type="text"
                 placeholder="Enter referral code"
                 className={fieldInputClassName}
                 value={formData.referralCode}
+                onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                 onChange={(e) => setFormData((current) => ({
                   ...current,
                   referralCode: e.target.value.trim().toUpperCase(),
@@ -390,7 +460,7 @@ const Signup = () => {
                         key={g}
                         type="button"
                         onClick={() => handleGenderChange(g.toLowerCase())}
-                        className={`w-full py-3 rounded-xl text-[13px] font-bold border-2 transition-all ${
+                        className={`w-full py-3 rounded-xl text-[13px] font-bold border-2 transition-all cursor-pointer ${
                             formData.gender === g.toLowerCase() 
                             ? 'border-black bg-black text-white shadow-sm' 
                             : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
@@ -407,12 +477,12 @@ const Signup = () => {
           )}
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 pt-2">
           <motion.button 
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={!formData.name || !isValidPhone || loading || photoUploading}
-            className={`w-full py-4 rounded-xl text-lg font-bold shadow-xl transition-all flex items-center justify-center gap-3 mt-4 ${
+            className={`w-full py-4 rounded-xl text-lg font-bold shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer ${
               formData.name && isValidPhone && !loading && !photoUploading
               ? 'bg-black text-white shadow-black/10' 
               : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
@@ -427,8 +497,8 @@ const Signup = () => {
 
           <button
             type="button"
-            onClick={() => navigate('/taxi/user/support')}
-            className="w-full py-3 text-sm font-bold text-slate-500 transition-colors hover:text-slate-900 flex items-center justify-center gap-2"
+            onClick={() => navigate('/support')}
+            className="w-full py-3 text-sm font-bold text-slate-500 transition-colors hover:text-slate-900 flex items-center justify-center gap-2 cursor-pointer"
           >
             <LifeBuoy size={16} />
             Need Help?

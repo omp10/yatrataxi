@@ -35,8 +35,23 @@ const HeaderGreeting = () => {
     };
   }, []);
 
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 15);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <div className="px-5 pt-6">
+    <header className={`sticky top-0 z-40 px-5 pt-3 pb-3 transition-all duration-300 ${
+      scrolled 
+        ? 'bg-[#F8FAFC]/95 backdrop-blur-md shadow-[0_10px_25px_rgba(15,23,42,0.06)] border-b border-slate-200/60' 
+        : 'bg-[#F8FAFC] border-b border-transparent'
+    }`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <motion.div
@@ -147,7 +162,7 @@ const HeaderGreeting = () => {
           <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600">Go</span>
         </motion.button>
       </motion.div>
-    </div>
+    </header>
   );
 };
 
