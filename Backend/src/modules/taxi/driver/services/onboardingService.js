@@ -292,7 +292,7 @@ const getGenericVehicleTypeFromCatalog = (vehicle = {}) => {
 };
 
 const getServiceLocationName = (serviceLocation = {}) =>
-  String(serviceLocation.service_location_name || serviceLocation.name || '').trim();
+  String(serviceLocation?.service_location_name || serviceLocation?.name || '').trim();
 
 const getServiceLocationCoordinates = (serviceLocation = {}) => {
   if (Array.isArray(serviceLocation?.location?.coordinates) && serviceLocation.location.coordinates.length === 2) {
@@ -593,7 +593,7 @@ export const verifyDriverOtp = async ({ registrationId, phone, otp }) => {
   };
 };
 
-export const saveDriverPersonalDetails = async ({ registrationId, phone, fullName, email, gender, password }) => {
+export const saveDriverPersonalDetails = async ({ registrationId, phone, fullName, name, email, gender, password }) => {
   const session = await getSession(registrationId, phone);
   const isOwner = String(session.role || '').toLowerCase() === 'owner';
 
@@ -601,11 +601,12 @@ export const saveDriverPersonalDetails = async ({ registrationId, phone, fullNam
     throw new ApiError(400, 'Verify OTP before continuing');
   }
 
-  if (!fullName || !email || !gender) {
+  const resolvedName = String(fullName || name || '').trim();
+  if (!resolvedName || !email || !gender) {
     throw new ApiError(400, 'fullName, email and gender are required');
   }
 
-  const normalizedName = String(fullName).trim();
+  const normalizedName = resolvedName;
   const normalizedEmail = String(email).trim().toLowerCase();
 
   if (!DRIVER_NAME_REGEX.test(normalizedName)) {
@@ -672,9 +673,12 @@ export const saveDriverVehicle = async ({
   serviceLocation,
   vehicleTypeId,
   make,
+  vehicleMake,
   model,
+  vehicleModel,
   year,
   number,
+  vehicleNumber,
   color,
   companyName,
   companyAddress,
@@ -683,6 +687,9 @@ export const saveDriverVehicle = async ({
   taxNumber,
   customFields = {},
 }) => {
+  const resolvedMake = make || vehicleMake;
+  const resolvedModel = model || vehicleModel;
+  const resolvedNumber = number || vehicleNumber;
   const session = await getSession(registrationId, phone);
 
   if (!session.personal?.fullName) {
@@ -744,10 +751,10 @@ export const saveDriverVehicle = async ({
 
     requireField('serviceCategories', normalizedServiceCategories, 'Service category');
     requireField('vehicleTypeId', vehicleTypeId, 'Vehicle type');
-    requireField('make', make, 'Brand / Make');
-    requireField('model', model, 'Model');
+    requireField('make', resolvedMake, 'Brand / Make');
+    requireField('model', resolvedModel, 'Model');
     requireField('year', normalizedYear, 'Year');
-    requireField('number', normalizedNumber, 'Plate number');
+    requireField('number', resolvedNumber, 'Plate number');
     requireField('color', color, 'Exterior color');
 
     if (normalizedYear && (!/^\d{4}$/.test(normalizedYear) || vehicleYear < 1980 || vehicleYear > currentYear)) {

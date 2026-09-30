@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, CreditCard, Plus, Banknote, Smartphone, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import api from '../../../../shared/api/axiosInstance';
 
 const PAYMENT_OPTIONS = [
   { id: 'upi', label: 'UPI', icon: Smartphone, color: 'purple' },
@@ -10,36 +12,68 @@ const PAYMENT_OPTIONS = [
 
 const PaymentSettings = () => {
   const navigate = useNavigate();
-  const [showModal, setShowModal] = React.useState(false);
-  const [selected, setSelected] = React.useState(null);
-  const [upiId, setUpiId] = React.useState('');
-  const [cardNumber, setCardNumber] = React.useState('');
-  const [cardName, setCardName] = React.useState('');
-  const [cardExpiry, setCardExpiry] = React.useState('');
-  const [added, setAdded] = React.useState([]);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isSuccess, setIsSuccess] = React.useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [upiId, setUpiId] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [added, setAdded] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    fetchPaymentMethods();
+  }, []);
+
+  const fetchPaymentMethods = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/users/saved-payment-methods');
+      const list = res.data?.data?.results || res.data?.results || [];
+      setAdded(list);
+    } catch (err) {
+      console.warn('Failed to load saved payment methods:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const canSubmit = selected === 'upi' ? upiId.trim() : cardNumber && cardName && cardExpiry;
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!canSubmit) return;
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    const label = selected === 'upi' ? upiId.trim() : `•••• ${cardNumber.slice(-4)}`;
+    try {
+      setIsSubmitting(true);
+      const res = await api.post('/users/saved-payment-methods', {
+        type: selected,
+        label,
+      });
+      const saved = res.data?.data || { id: Date.now().toString(), type: selected, label };
+      setAdded(prev => [...prev, saved]);
       setIsSuccess(true);
-      const label = selected === 'upi' ? upiId : `•••• ${cardNumber.slice(-4)}`;
+      toast.success('Payment method added');
       setTimeout(() => {
-        setAdded(prev => [...prev, { id: Date.now(), type: selected, label }]);
         setIsSuccess(false);
-        setShowModal(false);
-        setSelected(null);
-        setUpiId('');
-        setCardNumber('');
-        setCardName('');
-        setCardExpiry('');
-      }, 1800);
-    }, 1500);
+        handleClose();
+      }, 1000);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to add payment method');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/users/saved-payment-methods/${id}`);
+      setAdded(prev => prev.filter(a => a.id !== id));
+      toast.success('Payment method removed');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to remove payment method');
+    }
   };
 
   const handleClose = () => {
@@ -68,6 +102,12 @@ const PaymentSettings = () => {
           <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white p-1"><Plus className="rotate-45" /></div>
         </div>
 
+        {loading && (
+          <div className="py-8 flex justify-center items-center text-gray-400 text-sm font-semibold">
+            Loading payment methods...
+          </div>
+        )}
+
         {added.map(item => (
           <div key={item.id} className="bg-white p-6 rounded-[32px] border border-gray-50 shadow-sm flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -76,7 +116,7 @@ const PaymentSettings = () => {
               </div>
               <div><p className="font-black">{item.label}</p><p className="text-xs text-gray-400">{item.type === 'upi' ? 'UPI' : 'Card'}</p></div>
             </div>
-            <button onClick={() => setAdded(prev => prev.filter(a => a.id !== item.id))} className="w-7 h-7 bg-red-50 text-red-400 rounded-full flex items-center justify-center active:scale-90">
+            <button onClick={() => handleDelete(item.id)} className="w-7 h-7 bg-red-50 text-red-400 rounded-full flex items-center justify-center active:scale-90">
               <X size={14} strokeWidth={3} />
             </button>
           </div>

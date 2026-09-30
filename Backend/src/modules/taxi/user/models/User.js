@@ -171,6 +171,21 @@ const userSchema = new mongoose.Schema(
       type: [userAddressSchema],
       default: [],
     },
+    emergencyContacts: [
+      {
+        name: { type: String, trim: true },
+        phone: { type: String, trim: true },
+        relationship: { type: String, default: 'Family', trim: true },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    savedPaymentMethods: [
+      {
+        type: { type: String, enum: ['upi', 'card'], required: true },
+        label: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     active: {
       type: Boolean,
       default: true,

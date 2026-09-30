@@ -5,6 +5,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../../../../shared/api/axiosInstance';
 
 const DispatcherAddons = () => {
   const [purchaseCode, setPurchaseCode] = useState('');
@@ -18,11 +19,11 @@ const DispatcherAddons = () => {
 
     try {
       setSubmitting(true);
-      // Simulate verification
-      await new Promise(r => setTimeout(r, 1500));
-      toast.error('Invalid purchase code. Please check and try again.');
+      const res = await api.post('/admin/dispatcher/verify', { purchaseCode: purchaseCode.trim() });
+      toast.success(res.data?.message || 'Dispatcher Addon verified and activated successfully');
+      setPurchaseCode('');
     } catch (err) {
-      toast.error('Verification failed');
+      toast.error(err?.response?.data?.message || 'Invalid purchase code. Please check and try again.');
     } finally {
       setSubmitting(false);
     }

@@ -4611,3 +4611,158 @@ export const listMyBusBookings = async (req, res) => {
     },
   });
 };
+
+export const getUserEmergencyContacts = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const contacts = Array.isArray(user.emergencyContacts) ? user.emergencyContacts : [];
+  res.json({
+    success: true,
+    data: {
+      results: contacts.map((c) => ({
+        id: String(c._id),
+        name: c.name,
+        phone: c.phone,
+        relationship: c.relationship,
+      })),
+    },
+  });
+};
+
+export const addUserEmergencyContact = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const { name, phone, relationship } = req.body || {};
+  if (!name || !phone) {
+    throw new ApiError(400, 'name and phone are required');
+  }
+
+  const contacts = Array.isArray(user.emergencyContacts) ? user.emergencyContacts : [];
+  if (contacts.length >= 5) {
+    throw new ApiError(400, 'Maximum 5 emergency contacts allowed');
+  }
+
+  const sanitizedPhone = String(phone).replace(/\D/g, '').slice(-10);
+  const newContact = {
+    name: String(name).trim(),
+    phone: sanitizedPhone,
+    relationship: String(relationship || 'Emergency Contact').trim(),
+  };
+
+  user.emergencyContacts.push(newContact);
+  await user.save();
+
+  const added = user.emergencyContacts[user.emergencyContacts.length - 1];
+  res.status(201).json({
+    success: true,
+    data: {
+      id: String(added._id),
+      name: added.name,
+      phone: added.phone,
+      relationship: added.relationship,
+    },
+  });
+};
+
+export const deleteUserEmergencyContact = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const contactId = req.params.contactId;
+  user.emergencyContacts = (user.emergencyContacts || []).filter(
+    (c) => String(c._id) !== String(contactId)
+  );
+  await user.save();
+
+  res.json({
+    success: true,
+    message: 'Emergency contact deleted successfully',
+  });
+};
+
+export const getUserSavedPaymentMethods = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const methods = Array.isArray(user.savedPaymentMethods) ? user.savedPaymentMethods : [];
+  res.json({
+    success: true,
+    data: {
+      results: methods.map((m) => ({
+        id: String(m._id),
+        type: m.type,
+        label: m.label,
+        createdAt: m.createdAt,
+      })),
+    },
+  });
+};
+
+export const addUserSavedPaymentMethod = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const { type, label } = req.body || {};
+  if (!type || !label) {
+    throw new ApiError(400, 'type and label are required');
+  }
+
+  if (!['upi', 'card'].includes(type)) {
+    throw new ApiError(400, 'Invalid payment method type');
+  }
+
+  const methods = Array.isArray(user.savedPaymentMethods) ? user.savedPaymentMethods : [];
+  if (methods.length >= 10) {
+    throw new ApiError(400, 'Maximum 10 saved payment methods allowed');
+  }
+
+  const newMethod = {
+    type,
+    label: String(label).trim(),
+  };
+
+  user.savedPaymentMethods.push(newMethod);
+  await user.save();
+
+  const added = user.savedPaymentMethods[user.savedPaymentMethods.length - 1];
+  res.status(201).json({
+    success: true,
+    data: {
+      id: String(added._id),
+      type: added.type,
+      label: added.label,
+      createdAt: added.createdAt,
+    },
+  });
+};
+
+export const deleteUserSavedPaymentMethod = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const methodId = req.params.methodId;
+  user.savedPaymentMethods = (user.savedPaymentMethods || []).filter(
+    (m) => String(m._id) !== String(methodId)
+  );
+  await user.save();
+
+  res.json({
+    success: true,
+    message: 'Saved payment method deleted successfully',
+  });
+};
+

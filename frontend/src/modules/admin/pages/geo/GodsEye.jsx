@@ -22,6 +22,8 @@ import CarIcon from '@/assets/icons/car.png';
 import BikeIcon from '@/assets/icons/bike.png';
 import AutoIcon from '@/assets/icons/auto.png';
 
+import api from '@/shared/api/axiosInstance';
+
 const INDIA_CENTER = { lat: 22.7196, lng: 75.8577 };
 const MAP_CONTAINER_STYLE = { width: '100%', height: '400px' };
 
@@ -49,6 +51,8 @@ const getMapIconForVehicle = (iconType = '') => {
 const GodsEye = () => {
   const navigate = useNavigate();
   const [zones, setZones] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [demands, setDemands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [driverMode, setDriverMode] = useState('all');
   const [vehicleType, setVehicleType] = useState('all');
@@ -61,12 +65,27 @@ const GodsEye = () => {
   const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors appearance-none cursor-pointer";
   const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-widest";
 
-  const fetchZones = async () => {
+  const fetchGodsEyeData = async () => {
     setLoading(true);
     try {
-      const response = await adminService.getZones();
-      const results = response?.data?.results || response?.data || [];
-      setZones(results);
+      const [zonesRes, driversRes, ridesRes] = await Promise.allSettled([
+        adminService.getZones(),
+        adminService.getDrivers(1, 100),
+        api.get('/admin/ongoing-rides')
+      ]);
+
+      if (zonesRes.status === 'fulfilled') {
+        const results = zonesRes.value?.data?.results || zonesRes.value?.data || [];
+        setZones(Array.isArray(results) ? results : []);
+      }
+      if (driversRes.status === 'fulfilled') {
+        const dList = driversRes.value?.data?.results || driversRes.value?.data?.data || driversRes.value?.data || [];
+        setDrivers(Array.isArray(dList) ? dList : []);
+      }
+      if (ridesRes.status === 'fulfilled') {
+        const rList = ridesRes.value?.data?.results || ridesRes.value?.data?.data || ridesRes.value?.data || [];
+        setDemands(Array.isArray(rList) ? rList : []);
+      }
     } catch (error) {
       console.error('Failed to fetch Gods Eye data', error);
     } finally {
@@ -75,30 +94,74 @@ const GodsEye = () => {
   };
 
   useEffect(() => {
-    fetchZones();
+    fetchGodsEyeData();
     if (refreshMethod === 'automatic') {
-      const interval = setInterval(fetchZones, 30000);
+      const interval = setInterval(fetchGodsEyeData, 30000);
       return () => clearInterval(interval);
     }
   }, [refreshMethod]);
 
   const markers = useMemo(() => {
-    if (!zones.length) return [];
-    return zones.flatMap((zone, idx) => {
-      const coord = zone.coordinates?.[0]?.[0] || [75.8577, 22.7196];
-      const lat = Number(coord[1]);
-      const lng = Number(coord[0]);
-      const driverVehicleType = idx % 3 === 0 ? 'car' : idx % 3 === 1 ? 'bike' : 'auto';
-      const activeVehicleType = idx % 2 === 0 ? 'car' : 'bike';
-      
-      // Mock drivers and demand for visualization
-      return [
-        { id: `${zone._id}-d1`, type: 'driver', vehicleType: driverVehicleType, pos: { lat: lat + 0.01, lng: lng - 0.01 }, title: `Driver ${idx + 1}`, status: 'Online' },
-        { id: `${zone._id}-d2`, type: 'driver', vehicleType: activeVehicleType, pos: { lat: lat - 0.01, lng: lng + 0.01 }, title: `Driver ${idx + 10}`, status: 'On Ride' },
-        { id: `${zone._id}-r1`, type: 'demand', pos: { lat: lat + 0.005, lng: lng + 0.005 }, title: `Request ${idx + 1}`, status: 'Pending' }
-      ];
+    const list = [];
+    const defaultLat = INDIA_CENTER.lat;
+    const defaultLng = INDIA_CENTER.lng;
+
+    // Real drivers
+    drivers.forEach((driver, idx) => {
+      const vType = String(driver.vehicleType || driver.vehicle_type || 'car').toLowerCase();
+      const isCar = vType.includes('car') || vType.includes('sedan') || vType.includes('suv') || vType.includes('comfort');
+      const isBike = vType.includes('bike') || vType.includes('moto');
+      const normalizedVType = isBike ? 'bike' : isCar ? 'car' : 'auto';
+
+      if (vehicleType !== 'all') {
+        if (vehicleType === 'car' && !isCar) return;
+        if (vehicleType === 'bike' && !isBike) return;
+      }
+
+      const isOnline = Boolean(driver.onlineStatus || driver.isOnline || driver.status === 'active' || driver.approvalStatus === 'approved');
+      const isOnRide = Boolean(driver.currentRideId || driver.isOnRide || driver.status === 'on_ride');
+
+      if (driverMode === 'online' && !isOnline) return;
+      if (driverMode === 'on-ride' && !isOnRide) return;
+
+      const rawCoords = driver.currentLocation?.coordinates || driver.location?.coordinates;
+      let lat = Number(rawCoords?.[1]);
+      let lng = Number(rawCoords?.[0]);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+        // Place relative to default or zone
+        lat = defaultLat + ((idx % 5) - 2) * 0.008;
+        lng = defaultLng + ((idx % 7) - 3) * 0.008;
+      }
+
+      list.push({
+        id: driver._id || `driver-${idx}`,
+        type: 'driver',
+        vehicleType: normalizedVType,
+        pos: { lat, lng },
+        title: driver.name || driver.fullName || `Driver #${idx + 1}`,
+        status: isOnRide ? 'On Ride' : isOnline ? 'Online' : 'Offline'
+      });
     });
-  }, [zones]);
+
+    // Real active requests
+    demands.forEach((req, idx) => {
+      const pickupCoords = req.pickupLocation?.coordinates || req.pickup?.coordinates;
+      const lat = Number(pickupCoords?.[1]);
+      const lng = Number(pickupCoords?.[0]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        list.push({
+          id: req._id || `demand-${idx}`,
+          type: 'demand',
+          pos: { lat, lng },
+          title: `Trip Request #${String(req.rideNumber || req._id).slice(-4)}`,
+          status: req.status || 'Pending'
+        });
+      }
+    });
+
+    return list;
+  }, [drivers, demands, driverMode, vehicleType]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans animate-in fade-in duration-500">
@@ -177,7 +240,7 @@ const GodsEye = () => {
               </div>
 
               <div className="flex items-center gap-3 mt-8 pt-8 border-t border-gray-50">
-                 <button onClick={fetchZones} className="px-8 py-3 bg-[#00BFA5] text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-[#00BFA5]/20 hover:scale-[1.02] transition-all">
+                 <button onClick={fetchGodsEyeData} className="px-8 py-3 bg-[#00BFA5] text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-[#00BFA5]/20 hover:scale-[1.02] transition-all">
                     Apply Grid
                  </button>
                  <button onClick={() => { setDriverMode('all'); setVehicleType('all'); }} className="px-8 py-3 bg-rose-500 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-rose-100 hover:scale-[1.02] transition-all">

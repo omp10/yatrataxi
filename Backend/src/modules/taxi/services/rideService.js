@@ -1601,13 +1601,13 @@ const rideStatusConfig = {
     persistedStatus: RIDE_STATUS.ACCEPTED,
     allowedCurrent: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING],
   },
+  [RIDE_LIVE_STATUS.ARRIVED]: {
+    persistedStatus: RIDE_STATUS.ACCEPTED,
+    allowedCurrent: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING, RIDE_LIVE_STATUS.STARTED, RIDE_LIVE_STATUS.ARRIVED],
+  },
   [RIDE_LIVE_STATUS.STARTED]: {
     persistedStatus: RIDE_STATUS.ONGOING,
-    allowedCurrent: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING, RIDE_LIVE_STATUS.STARTED],
-  },
-  [RIDE_LIVE_STATUS.ARRIVED]: {
-    persistedStatus: RIDE_STATUS.ONGOING,
-    allowedCurrent: [RIDE_LIVE_STATUS.STARTED, RIDE_LIVE_STATUS.ARRIVED],
+    allowedCurrent: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING, RIDE_LIVE_STATUS.ARRIVED, RIDE_LIVE_STATUS.STARTED],
   },
   [RIDE_LIVE_STATUS.COMPLETED]: {
     persistedStatus: RIDE_STATUS.COMPLETED,
@@ -1620,6 +1620,14 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   if (!config) {
     throw new ApiError(400, 'Unsupported ride status');
+  }
+
+  if (nextStatus === RIDE_LIVE_STATUS.ACCEPTED) {
+    const existingAssigned = await Ride.findOne({ _id: rideId, driverId });
+    if (existingAssigned) {
+      return existingAssigned;
+    }
+    return acceptRideAssignment({ rideId, driverId });
   }
 
   const ride = await Ride.findOne({ _id: rideId, driverId });

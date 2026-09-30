@@ -57,10 +57,13 @@ const MailSettings = () => {
   const handleTestMail = async () => {
     try {
       setTesting(true);
-      await new Promise(r => setTimeout(r, 1200));
-      toast.success('Test mail sent to ' + (settings.mail_from_address || 'administrator'));
+      const res = await adminService.testMailSettings({
+        ...settings,
+        to: settings.mail_from_address || 'admin@example.com'
+      });
+      toast.success(res.data?.message || ('Test mail verified for ' + (settings.mail_from_address || 'administrator')));
     } catch (err) {
-      toast.error('Failed to send test mail');
+      toast.error(err?.response?.data?.message || 'Failed to send test mail');
     } finally {
       setTesting(false);
     }

@@ -7084,6 +7084,9 @@ export const createOwnerFleetDriver = async (req, res) => {
   const email = String(req.body?.email || "")
     .trim()
     .toLowerCase();
+  const salaryValue = Number(
+    req.body?.salary ?? req.body?.monthly_salary ?? req.body?.monthlySalary ?? 0,
+  );
 
   if (!name) {
     throw new ApiError(400, "name is required");
@@ -7091,6 +7094,10 @@ export const createOwnerFleetDriver = async (req, res) => {
 
   if (!/^\d{10}$/.test(phone)) {
     throw new ApiError(400, "A valid 10-digit mobile number is required");
+  }
+
+  if (!Number.isFinite(salaryValue) || salaryValue < 0) {
+    throw new ApiError(400, "A valid non-negative salary is required");
   }
 
   const existing = await Driver.findOne({ phone }).lean();

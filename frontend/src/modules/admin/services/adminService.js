@@ -344,6 +344,7 @@ export const adminService = {
   updateMapSettings: (data) => api.patch('/admin/integration-settings/map', data),
   getMailSettings: () => api.get('/admin/integration-settings/mail'),
   updateMailSettings: (data) => api.patch('/admin/integration-settings/mail', data),
+  testMailSettings: (data) => api.post('/admin/integration-settings/mail/test', data),
 
   /**
    * Onboarding Screens Management

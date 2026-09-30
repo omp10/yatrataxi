@@ -16,10 +16,7 @@ export const validatePromo = async (req, res) => {
 };
 
 export const getAvailablePromos = async (req, res) => {
-  const serviceLocationId = req.query.service_location_id;
-  if (!serviceLocationId) {
-    throw new ApiError(400, 'service_location_id is required');
-  }
+  const serviceLocationId = req.query.service_location_id || null;
 
   const result = await listAvailablePromosForUser({
     userId: req.auth?.sub,

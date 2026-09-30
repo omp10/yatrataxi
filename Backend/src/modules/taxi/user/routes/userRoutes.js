@@ -52,6 +52,12 @@ import {
   getAvailableSubscriptionPlans,
   getMySubscriptions,
   buySubscription,
+  getUserEmergencyContacts,
+  addUserEmergencyContact,
+  deleteUserEmergencyContact,
+  getUserSavedPaymentMethods,
+  addUserSavedPaymentMethod,
+  deleteUserSavedPaymentMethod,
 } from '../controllers/userController.js';
 import {
   searchPoolingRoutes,
@@ -103,7 +109,12 @@ userRouter.post('/subscriptions/purchase', authenticateOrResolveUser(['user']), 
 userRouter.post('/me/delete-request', authenticateOrResolveUser(['user']), asyncHandler(requestAccountDeletion));
 userRouter.get('/notifications', authenticateOrResolveUser(['user']), asyncHandler(getUserNotifications));
 userRouter.delete('/notifications/:id', authenticateOrResolveUser(['user']), asyncHandler(deleteUserNotification));
-userRouter.delete('/notifications', authenticateOrResolveUser(['user']), asyncHandler(clearAllUserNotifications));
+userRouter.get('/emergency-contacts', authenticateOrResolveUser(['user']), asyncHandler(getUserEmergencyContacts));
+userRouter.post('/emergency-contacts', authenticateOrResolveUser(['user']), asyncHandler(addUserEmergencyContact));
+userRouter.delete('/emergency-contacts/:contactId', authenticateOrResolveUser(['user']), asyncHandler(deleteUserEmergencyContact));
+userRouter.get('/saved-payment-methods', authenticateOrResolveUser(['user']), asyncHandler(getUserSavedPaymentMethods));
+userRouter.post('/saved-payment-methods', authenticateOrResolveUser(['user']), asyncHandler(addUserSavedPaymentMethod));
+userRouter.delete('/saved-payment-methods/:methodId', authenticateOrResolveUser(['user']), asyncHandler(deleteUserSavedPaymentMethod));
 userRouter.post('/sos', authenticateOrResolveUser(['user']), asyncHandler(triggerUserSosAlert));
 userRouter.get('/wallet', authenticateOrResolveUser(['user']), asyncHandler(getUserWallet));
 userRouter.post('/wallet/topup', authenticateOrResolveUser(['user']), asyncHandler(topupUserWallet));

@@ -44,7 +44,7 @@ const onAsync = (socket, handler) => async (payload = {}) => {
 export const configureTaxiSocketServer = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
-      origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','),
+      origin: (origin, callback) => callback(null, true),
       credentials: true,
     },
   });
@@ -54,12 +54,13 @@ export const configureTaxiSocketServer = (httpServer) => {
   setSupportChatServer(io);
 
   io.on('connection', async (socket) => {
-    const identity = socket.auth;
+    const identity = socket.auth || { role: 'guest', sub: null };
 
-    addSocketSubscriptions(socket, { role: identity.role, entityId: identity.sub });
-
-    socket.join(getSupportParticipantRoom(identity.role, identity.sub));
-    socket.join(getSupportRoleRoom(identity.role));
+    if (identity.sub) {
+      addSocketSubscriptions(socket, { role: identity.role, entityId: identity.sub });
+      socket.join(getSupportParticipantRoom(identity.role, identity.sub));
+      socket.join(getSupportRoleRoom(identity.role));
+    }
 
     if (identity.role === 'driver') {
       await Driver.findByIdAndUpdate(identity.sub, { socketId: socket.id });

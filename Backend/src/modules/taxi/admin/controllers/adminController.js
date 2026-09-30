@@ -2187,6 +2187,9 @@ export const getMailSettings = asyncHandler(async (_req, res) =>
 export const updateMailSettings = asyncHandler(async (req, res) =>
   ok(res, { settings: await adminService.updateMailSettings(req.body) }),
 );
+export const testMailSettings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.testMailSettings(req.body)),
+);
 
 export const getUserOnboarding = asyncHandler(async (_req, res) =>
   res.json({
@@ -2285,4 +2288,27 @@ export const getAppBootstrap = asyncHandler(async (_req, res) => {
       paymentGateway: gatewayResult?.activeGateway || null
     }
   });
+});
+
+export const verifyDispatcherAddon = asyncHandler(async (req, res) => {
+  const { purchaseCode } = req.body || {};
+  if (!purchaseCode || String(purchaseCode).trim().length < 6) {
+    throw new ApiError(400, 'Please provide a valid purchase code');
+  }
+  const cleanCode = String(purchaseCode).trim();
+  const isValidFormat = /^[a-zA-Z0-9-]{6,40}$/.test(cleanCode);
+  if (!isValidFormat) {
+    throw new ApiError(400, 'Invalid purchase code format. Please check and try again.');
+  }
+
+  const settings = await adminService.ensureThirdPartySettings();
+  settings.dispatcherAddon = {
+    purchaseCode: cleanCode,
+    verifiedAt: new Date(),
+    status: 'active',
+  };
+  settings.markModified('dispatcherAddon');
+  await settings.save();
+
+  return ok(res, { success: true, message: 'Dispatcher Addon successfully activated' });
 });

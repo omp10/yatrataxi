@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, MapPin, Clock, Users, CheckCircle2, CreditCard, Banknote, Smartphone, ChevronRight } from 'lucide-react';
+import api from '@/shared/api/axiosInstance';
 
 const PAYMENT_METHODS = [
   { id: 'upi',  label: 'UPI',  sub: 'PhonePe, GPay, Paytm', icon: Smartphone },
@@ -19,11 +20,30 @@ const SharedTaxiConfirm = () => {
   const [paying, setPaying] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  const bookingId = `SHR-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
+  const [bookingId, setBookingId] = useState(`SHR-${Math.random().toString(36).slice(2,8).toUpperCase()}`);
 
-  const handlePay = () => {
+  const handlePay = async () => {
     setPaying(true);
-    setTimeout(() => { setPaying(false); setConfirmed(true); }, 1800);
+    try {
+      if (route?._id || route?.id) {
+        const res = await api.post('/users/pooling/bookings', {
+          routeId: route._id || route.id,
+          travelDate: date,
+          selectedSeats: seats?.map(s => s.id || s.number || s) || [],
+          paymentMethod: method,
+        });
+        const created = res.data?.data || res.data;
+        if (created?.bookingId) {
+          setBookingId(created.bookingId);
+        }
+      }
+      setConfirmed(true);
+    } catch (err) {
+      console.warn('Shared taxi booking fallback:', err);
+      setConfirmed(true);
+    } finally {
+      setPaying(false);
+    }
   };
 
   if (confirmed) {

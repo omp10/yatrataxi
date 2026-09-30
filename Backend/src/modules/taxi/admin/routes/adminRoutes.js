@@ -193,6 +193,7 @@ import {
   updateGeneralSettingsCategory,
   updateLanguageStatus,
   updateMailSettings,
+  testMailSettings,
   updateMapSettings,
   updateOwner,
   updateOwnerBooking,
@@ -221,6 +222,7 @@ import {
   deleteVehicleType,
   getAdminPermissions,
   getAdmins,
+  verifyDispatcherAddon,
   getTransportTypes,
   deleteFleetVehicle,
 } from '../controllers/adminController.js';
@@ -500,6 +502,8 @@ adminRouter.get('/admin/integration-settings/map', getMapSettings);
 adminRouter.patch('/admin/integration-settings/map', updateMapSettings);
 adminRouter.get('/admin/integration-settings/mail', getMailSettings);
 adminRouter.patch('/admin/integration-settings/mail', updateMailSettings);
+adminRouter.post('/admin/integration-settings/mail/test', testMailSettings);
+adminRouter.post('/admin/dispatcher/verify', verifyDispatcherAddon);
 
 adminRouter.patch('/admin/general-settings/:category', updateGeneralSettingsCategory);
 

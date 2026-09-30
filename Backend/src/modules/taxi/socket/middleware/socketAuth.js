@@ -15,14 +15,25 @@ export const getIdentityFromSocket = (socket) => {
 export const attachSocketAuth = (io) => {
   io.use(async (socket, next) => {
     try {
-      socket.auth = getIdentityFromSocket(socket);
+      const token = socket.handshake.auth?.token;
 
-      if (socket.auth.role === 'user') {
-        const user = await User.findById(socket.auth.sub).select('active isActive deletedAt').lean();
+      if (!token) {
+        socket.auth = { role: 'guest', sub: null };
+        return next();
+      }
 
-        if (!user || user.deletedAt || user.isActive === false || user.active === false) {
-          throw new ApiError(401, 'User account is not active');
+      try {
+        socket.auth = verifyAccessToken(token);
+
+        if (socket.auth.role === 'user' && socket.auth.sub) {
+          const user = await User.findById(socket.auth.sub).select('active isActive deletedAt').lean();
+
+          if (!user || user.deletedAt || user.isActive === false || user.active === false) {
+            socket.auth = { role: 'guest', sub: null };
+          }
         }
+      } catch (tokenErr) {
+        socket.auth = { role: 'guest', sub: null };
       }
 
       next();

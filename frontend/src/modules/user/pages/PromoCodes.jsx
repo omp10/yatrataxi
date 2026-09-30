@@ -3,13 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Tag, CheckCircle2, X, ChevronRight, Ticket } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
-
-const MOCK_PROMOS = [
-  { id: '1', code: 'Yatra Desk50',  discount: 50,  type: 'flat',    service: 'All Rides',    expiry: '30 Apr 2026', minFare: 100 },
-  { id: '2', code: 'GOFREE',   discount: 100, type: 'flat',    service: 'Cab Only',     expiry: '15 Apr 2026', minFare: 150 },
-  { id: '3', code: 'SAVE20',   discount: 20,  type: 'percent', service: 'Parcel',       expiry: '30 Apr 2026', minFare: 50  },
-  { id: '4', code: 'NEWUSER',  discount: 75,  type: 'flat',    service: 'First Ride',   expiry: '30 Apr 2026', minFare: 80  },
-];
+import api from '../../../shared/api/axiosInstance';
 
 const SkeletonCard = () => (
   <div className="animate-pulse rounded-[20px] bg-white/70 border border-white/80 p-4 space-y-3">
@@ -32,13 +26,31 @@ const PromoCodes = () => {
   const [errorBanner, setErrorBanner] = useState(null);
   const [applying, setApplying] = useState(null);
 
-  useEffect(() => {
-    const load = async () => {
-      await new Promise(r => setTimeout(r, 700));
-      setPromos(MOCK_PROMOS);
+  const fetchPromos = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/promos/available');
+      const items = res.data?.data || [];
+      const mapped = items.map((item) => ({
+        id: item._id || item.code,
+        code: item.code,
+        discount: item.discount_percentage || item.maximum_discount_amount || 0,
+        type: item.discount_percentage ? 'percent' : 'flat',
+        service: item.transport_type === 'all' ? 'All Rides' : (item.transport_type || 'Taxi'),
+        minFare: item.minimum_trip_amount || 0,
+        expiry: item.to_date ? new Date(item.to_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Ongoing',
+      }));
+      setPromos(mapped);
+    } catch (err) {
+      console.warn('Failed to load promo codes:', err.message);
+      setPromos([]);
+    } finally {
       setLoading(false);
-    };
-    load();
+    }
+  };
+
+  useEffect(() => {
+    fetchPromos();
   }, []);
 
   const showToast = (msg, type = 'success') => {
@@ -47,17 +59,21 @@ const PromoCodes = () => {
   };
 
   const applyCode = async (code) => {
-    if (appliedCode === code) return; // idempotence guard
+    if (appliedCode === code) return;
     setApplying(code);
     try {
-      await new Promise(r => setTimeout(r, 600));
-      // POST /api/v1/request/promocode-redeem
-      if (code === 'INVALID') throw new Error('Promo code is expired or invalid');
-      setAppliedCode(code);
-      showToast(`"${code}" applied successfully!`, 'success');
-      setErrorBanner(null);
+      const res = await api.post('/promos/validate', { code });
+      if (res.data?.success || res.status === 200) {
+        setAppliedCode(code);
+        showToast(`"${code}" applied successfully!`, 'success');
+        setErrorBanner(null);
+      } else {
+        throw new Error(res.data?.message || 'Invalid promo code');
+      }
     } catch (err) {
-      setErrorBanner(err.message || 'Failed to apply promo code');
+      const message = err.response?.data?.message || err.message || 'Failed to apply promo code';
+      setErrorBanner(message);
+      showToast(message, 'error');
     } finally {
       setApplying(null);
     }
