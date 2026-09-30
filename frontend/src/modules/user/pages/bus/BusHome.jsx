@@ -27,10 +27,17 @@ const isEnabledFlag = (value) => {
 
 const getRoutePrefix = (pathname = '') => (pathname.startsWith('/taxi/user') ? '/taxi/user' : '');
 
-const getDateOffset = (offset = 1) => {
+const formatDateKey = (value) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDateOffset = (offset = 0) => {
   const date = new Date();
   date.setDate(date.getDate() + offset);
-  return date.toISOString().split('T')[0];
+  return formatDateKey(date);
 };
 
 const getTodayDate = () => getDateOffset(0);
@@ -53,13 +60,6 @@ const getNextWeekendDate = () => {
 const getMonthStart = (value) => new Date(value.getFullYear(), value.getMonth(), 1);
 
 const addMonths = (value, amount) => new Date(value.getFullYear(), value.getMonth() + amount, 1);
-
-const formatDateKey = (value) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const buildCalendarDays = (monthDate) => {
   const start = getMonthStart(monthDate);
@@ -113,7 +113,7 @@ const BusHome = () => {
   const [routesLoading, setRoutesLoading] = useState(false);
   const [routesError, setRoutesError] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState(() => getMonthStart(new Date(getTomorrowDate())));
+  const [calendarMonth, setCalendarMonth] = useState(() => getMonthStart(new Date()));
 
   useEffect(() => {
     if (!busEnabled) {

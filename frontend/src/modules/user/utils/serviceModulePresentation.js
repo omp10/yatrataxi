@@ -98,11 +98,9 @@ export const isEligibleSpiritualVehicle = (v) => {
     transport === 'delivery' ||
     dispatch === 'delivery' ||
     deliveryCat ||
-    name.includes('delivery') ||
     name.includes('cargo') ||
     name.includes('truck') ||
-    desc.includes('delivery') ||
-    desc.includes('cargo')
+    (transport !== 'taxi' && (name.includes('delivery') || desc.includes('delivery') || desc.includes('cargo')))
   ) {
     return false;
   }
