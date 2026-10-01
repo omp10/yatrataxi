@@ -87,6 +87,7 @@ export const adminService = {
     api.patch(`/admin/referrals/translation/${languageCode}`, data),
   getReferralSettings: (type) => api.get(`/admin/referrals/settings/${type}`),
   updateReferralSettings: (type, data) => api.patch(`/admin/referrals/settings/${type}`, data),
+  getAgentReferralTrees: () => api.get('/admin/referrals/agent-trees'),
   // Wallet Payment APIs
   searchUsers: (query) => api.get(`/admin/users?search=${query}`),
   searchDrivers: (query) => api.get(`/admin/drivers?search=${query}`),

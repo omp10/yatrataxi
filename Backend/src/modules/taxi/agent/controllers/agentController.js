@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
+import QRCode from 'qrcode';
+import { env } from '../../../../config/env.js';
 import { ApiError } from '../../../../utils/ApiError.js';
+import { AdminBusinessSetting } from '../../admin/models/AdminBusinessSetting.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { signAccessToken } from '../../services/tokenService.js';
 import { normalizePoint } from '../../../../utils/geo.js';
@@ -68,9 +71,83 @@ const generateUserReferralCode = (user) => {
   return `USR${phonePart}${idPart}`.replace(/\W/g, '');
 };
 
+const normalizeOriginCandidate = (value = '') => {
+  const trimmed = toCleanString(value).replace(/\/+$/, '');
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return '';
+  }
+};
+
+const isPublicWebOrigin = (value = '') => {
+  const origin = normalizeOriginCandidate(value);
+  if (!origin) return false;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    if (!['http:', 'https:'].includes(protocol)) return false;
+    return !['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname);
+  } catch {
+    return false;
+  }
+};
+
+const getFrontendBaseUrl = (req) => {
+  const configuredOrigins = [
+    env.phonePeRedirectBaseUrl,
+    env.publicFrontendUrl,
+    ...String(env.corsOrigin || '')
+      .split(',')
+      .map((value) => value.trim()),
+  ]
+    .map(normalizeOriginCandidate)
+    .filter(Boolean);
+
+  const requestCandidates = [
+    normalizeOriginCandidate(req?.get?.('origin')),
+    normalizeOriginCandidate(req?.get?.('referer')),
+    (() => {
+      const forwardedProto = String(req?.get?.('x-forwarded-proto') || '').trim();
+      const forwardedHost = String(req?.get?.('x-forwarded-host') || '').trim();
+      if (!forwardedProto || !forwardedHost) return '';
+      return normalizeOriginCandidate(`${forwardedProto}://${forwardedHost}`);
+    })(),
+    (() => {
+      const host = String(req?.get?.('host') || '').trim();
+      const proto =
+        String(req?.protocol || '').trim() ||
+        String(req?.get?.('x-forwarded-proto') || '').trim() ||
+        'http';
+      if (!host) return '';
+      return normalizeOriginCandidate(`${proto}://${host}`);
+    })(),
+  ].filter(Boolean);
+
+  const preferredPublicOrigin =
+    configuredOrigins.find(isPublicWebOrigin) ||
+    requestCandidates.find(isPublicWebOrigin);
+
+  if (preferredPublicOrigin) {
+    return preferredPublicOrigin;
+  }
+
+  return (
+    requestCandidates[0] ||
+    configuredOrigins[0] ||
+    'http://localhost:5173'
+  );
+};
+
 const buildAgentReferralLink = (req, referralCode) => {
-  const origin = toCleanString(req.get('origin')) || 'http://localhost:5173';
-  return `${origin.replace(/\/+$/, '')}/taxi/user/signup?ref=${encodeURIComponent(referralCode)}`;
+  const origin = getFrontendBaseUrl(req);
+  return `${origin}/taxi/user/signup?ref=${encodeURIComponent(referralCode)}`;
+};
+
+const buildAgentAgentReferralLink = (req, referralCode) => {
+  const origin = getFrontendBaseUrl(req);
+  return `${origin}/taxi/agent/login?ref=${encodeURIComponent(referralCode)}`;
 };
 
 const serializeCustomer = (user = {}) => ({
@@ -442,6 +519,12 @@ export const completeAgentOnboarding = async (req, res) => {
     throw new ApiError(409, 'Agent account already exists for this number');
   }
 
+  const incomingReferralCode = normalizeReferralCode(req.body?.referralCode);
+  let referrerAgent = null;
+  if (incomingReferralCode) {
+    referrerAgent = await Agent.findOne({ referralCode: incomingReferralCode });
+  }
+
   const generatedPassword = await hashPassword(crypto.randomBytes(18).toString('hex'));
   const agent = await Agent.create({
     phone,
@@ -451,6 +534,8 @@ export const completeAgentOnboarding = async (req, res) => {
     active: false,
     status: 'inactive',
     kycStatus: 'pending',
+    referredByAgent: referrerAgent?._id || null,
+    referralRewardPaid: false,
     commissionConfig: await getDefaultAgentCommissionConfig(),
     documents,
     notes,
@@ -463,6 +548,13 @@ export const completeAgentOnboarding = async (req, res) => {
 
   agent.referralCode = `AGT${String(agent.phone || '').slice(-4)}${String(agent._id).slice(-6).toUpperCase()}`.replace(/\W/g, '');
   await agent.save();
+
+  if (referrerAgent?._id) {
+    await Agent.updateOne(
+      { _id: referrerAgent._id },
+      { $inc: { 'metrics.referredAgentsCount': 1 } }
+    );
+  }
   await session.deleteOne();
 
   res.status(201).json({
@@ -606,25 +698,83 @@ export const getAgentReferralSummary = async (req, res) => {
     throw new ApiError(404, 'Agent not found');
   }
 
-  const referredUsers = await User.find({ referredByAgent: agent._id })
-    .sort({ createdAt: -1 })
-    .limit(20)
-    .select('name phone email createdAt')
-    .lean();
+  const referralCode = agent.referralCode || '';
+  const customerReferralLink = buildAgentReferralLink(req, referralCode);
+  const agentReferralLink = buildAgentAgentReferralLink(req, referralCode);
+
+  let customerQrDataUrl = '';
+  let agentQrDataUrl = '';
+  try {
+    customerQrDataUrl = await QRCode.toDataURL(customerReferralLink, {
+      width: 320,
+      margin: 2,
+      color: { dark: '#143a5a', light: '#ffffff' },
+    });
+    agentQrDataUrl = await QRCode.toDataURL(agentReferralLink, {
+      width: 320,
+      margin: 2,
+      color: { dark: '#0d6aa8', light: '#ffffff' },
+    });
+  } catch (qrErr) {
+    console.warn('QR generation error in getAgentReferralSummary:', qrErr);
+  }
+
+  const [referredUsers, referredAgents, settingDoc] = await Promise.all([
+    User.find({ referredByAgent: agent._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('name phone email createdAt')
+      .lean(),
+    Agent.find({ referredByAgent: agent._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('name phone email kycStatus status createdAt referralRewardPaid metrics')
+      .lean(),
+    AdminBusinessSetting.findOne({ scope: 'default' }).lean(),
+  ]);
+
+  const agentReferralSettings = settingDoc?.referral?.agent || {};
 
   res.json({
     success: true,
     data: {
-      referralCode: agent.referralCode || '',
-      referralLink: buildAgentReferralLink(req, agent.referralCode || ''),
-      qrValue: buildAgentReferralLink(req, agent.referralCode || ''),
+      referralCode,
+      customerReferralLink,
+      customerQrValue: customerReferralLink,
+      customerQrDataUrl,
+      agentReferralLink,
+      agentQrValue: agentReferralLink,
+      agentQrDataUrl,
+      referralLink: customerReferralLink,
+      qrValue: customerReferralLink,
+      qrDataUrl: customerQrDataUrl,
       metrics: agent.metrics || {},
+      settings: {
+        agent_to_user_enabled: agentReferralSettings.agent_to_user_enabled !== false,
+        agent_to_agent_enabled: agentReferralSettings.agent_to_agent_enabled !== false,
+        agent_referral_bonus: Number(agentReferralSettings.agent_referral_bonus || 0),
+        welcome_bonus: Number(agentReferralSettings.welcome_bonus || 0),
+        override_commission_enabled: Boolean(agentReferralSettings.override_commission_enabled),
+        override_commission_rate: Number(agentReferralSettings.override_commission_rate || 0),
+      },
       referredUsers: referredUsers.map((user) => ({
         id: String(user._id),
         name: user.name || '',
         phone: user.phone || '',
         email: user.email || '',
         createdAt: user.createdAt || null,
+      })),
+      referredAgents: referredAgents.map((subAgent) => ({
+        id: String(subAgent._id),
+        name: subAgent.name || '',
+        phone: subAgent.phone || '',
+        email: subAgent.email || '',
+        kycStatus: subAgent.kycStatus || 'pending',
+        status: subAgent.status || 'inactive',
+        createdAt: subAgent.createdAt || null,
+        referralRewardPaid: Boolean(subAgent.referralRewardPaid),
+        totalCustomers: Number(subAgent.metrics?.totalCustomers || 0),
+        totalBookings: Number(subAgent.metrics?.directRideBookings || 0) + Number(subAgent.metrics?.directBusBookings || 0),
       })),
     },
   });

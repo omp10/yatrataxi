@@ -13,7 +13,10 @@ import {
   Plus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getOwnerFleetDrivers } from "../../services/registrationService";
+import {
+  deleteOwnerFleetDriver,
+  getOwnerFleetDrivers,
+} from "../../services/registrationService";
 import DriverBottomNav from "../../../shared/components/DriverBottomNav";
 
 const ManageDrivers = () => {

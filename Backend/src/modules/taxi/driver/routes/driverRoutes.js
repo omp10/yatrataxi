@@ -15,6 +15,7 @@ import {
   captureServiceCenterBookingFingerprint,
   createOwnerFleetDriver,
   updateOwnerFleetDriver,
+  deleteOwnerFleetDriver,
   updateOwnerFleetVehicle,
   deleteServiceCenterBookingFingerprint,
   deleteCurrentDriverAccount,
@@ -336,6 +337,11 @@ driverRouter.patch(
   "/fleet/drivers/:driverId",
   authenticate(["driver", "owner"]),
   asyncHandler(updateOwnerFleetDriver),
+);
+driverRouter.delete(
+  "/fleet/drivers/:driverId",
+  authenticate(["driver", "owner"]),
+  asyncHandler(deleteOwnerFleetDriver),
 );
 driverRouter.get(
   "/fleet/vehicles",

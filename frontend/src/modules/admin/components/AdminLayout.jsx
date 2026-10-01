@@ -961,6 +961,7 @@ const AdminLayout = () => {
               { label: 'Referral Dashboard', path: '/admin/referrals/dashboard', permission: 'referrals.view' },
               { label: 'User Referral Settings', path: '/admin/referrals/user-settings', permission: 'referrals.view' },
               { label: 'Driver Referral Settings', path: '/admin/referrals/driver-settings', permission: 'referrals.view' },
+              { label: 'Agent Referral Settings', path: '/admin/referrals/agent-settings', permission: 'referrals.view' },
               { label: 'Referral Translation', path: '/admin/referrals/translation', permission: 'referrals.view' },
             ],
           },

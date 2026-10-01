@@ -25,6 +25,14 @@ const Login = () => {
     [location.pathname],
   );
 
+  const referralCodeFromQuery = new URLSearchParams(location.search).get('ref') || '';
+
+  useEffect(() => {
+    if (referralCodeFromQuery) {
+      sessionStorage.setItem('pendingUserSignupReferralCode', referralCodeFromQuery.trim().toUpperCase());
+    }
+  }, [referralCodeFromQuery]);
+
   const isValidPhone = phoneNumber.length === 10 && /^\d+$/.test(phoneNumber);
 
   useEffect(() => {
@@ -43,8 +51,14 @@ const Login = () => {
 
     try {
       await userAuthService.startOtp(phoneNumber);
+      const pendingReferralCode =
+        referralCodeFromQuery ||
+        (typeof window !== 'undefined' ? sessionStorage.getItem('pendingUserSignupReferralCode') || '' : '');
       navigate('/taxi/user/verify-otp', {
-        state: { phone: phoneNumber },
+        state: {
+          phone: phoneNumber,
+          referralCode: pendingReferralCode,
+        },
       });
     } catch (err) {
       setError(err?.message || 'Unable to send OTP. Please try again.');

@@ -154,6 +154,87 @@ export const creditAgentCommission = async ({
       { $inc: metricsUpdate },
       { session },
     );
+
+    if (agent.referredByAgent) {
+      try {
+        const settingDoc = await AdminBusinessSetting.findOne({ scope: 'default' }).session(session).lean();
+        const agentReferral = settingDoc?.referral?.agent || {};
+        const agentToAgentEnabled = agentReferral.agent_to_agent_enabled !== false;
+
+        // 1. First booking reward trigger
+        if (agentToAgentEnabled && !agent.referralRewardPaid && agentReferral.reward_trigger === 'first_booking') {
+          const bonusAmount = Number(agentReferral.agent_referral_bonus || 0);
+          const welcomeAmount = Number(agentReferral.welcome_bonus || 0);
+
+          if (bonusAmount > 0) {
+            await applyAgentWalletAdjustment({
+              agentId: agent.referredByAgent,
+              amount: bonusAmount,
+              kind: 'credit',
+              title: `Referral bonus for recruiting agent ${agent.name || agent.phone}`,
+              source: 'referral_agent',
+              referenceKey: `agent_ref_bonus_${agent._id}_referrer`,
+              metadata: { referredAgentId: String(agent._id) },
+              session,
+            });
+            await Agent.updateOne(
+              { _id: agent.referredByAgent },
+              { $inc: { 'metrics.agentReferralEarnings': bonusAmount } },
+              { session },
+            );
+          }
+
+          if (welcomeAmount > 0) {
+            await applyAgentWalletAdjustment({
+              agentId: agent._id,
+              amount: welcomeAmount,
+              kind: 'credit',
+              title: 'Agent Welcome Bonus',
+              source: 'referral_welcome',
+              referenceKey: `agent_welcome_bonus_${agent._id}`,
+              metadata: { referredBy: String(agent.referredByAgent) },
+              session,
+            });
+          }
+
+          await Agent.updateOne(
+            { _id: agent._id },
+            { $set: { referralRewardPaid: true } },
+            { session },
+          );
+        }
+
+        // 2. Override commission
+        if (agentToAgentEnabled && agentReferral.override_commission_enabled && Number(agentReferral.override_commission_rate || 0) > 0) {
+          const overrideRate = Number(agentReferral.override_commission_rate || 0);
+          const overrideAmount = roundMoney(amount * (overrideRate / 100));
+          if (overrideAmount > 0) {
+            await applyAgentWalletAdjustment({
+              agentId: agent.referredByAgent,
+              amount: overrideAmount,
+              kind: 'credit',
+              title: `Override commission (${overrideRate}%) from sub-agent ${agent.name || agent.phone}`,
+              source: 'agent_override_commission',
+              bookingType: normalizedBookingType,
+              referenceKey: `agent_override_${referenceKey}`,
+              metadata: {
+                fromAgentId: String(agent._id),
+                baseCommissionAmount: amount,
+                overrideRate,
+              },
+              session,
+            });
+            await Agent.updateOne(
+              { _id: agent.referredByAgent },
+              { $inc: { 'metrics.agentReferralEarnings': overrideAmount } },
+              { session },
+            );
+          }
+        }
+      } catch (agentAffiliateErr) {
+        console.warn('Agent affiliate commission processing error:', agentAffiliateErr);
+      }
+    }
   }
 
   return result;

@@ -913,7 +913,7 @@ const serializeBusDriverBooking = (booking = {}) => ({
   createdAt: booking.createdAt || null,
 });
 
-const serializeBusDriverProfile = async (busDriver) => {
+const serializeBusDriverProfile = async (busDriver, options = {}) => {
   const assignedBusServiceId = busDriver.assignedBusServiceId
     ? String(busDriver.assignedBusServiceId)
     : "";
@@ -921,9 +921,36 @@ const serializeBusDriverProfile = async (busDriver) => {
     ? await BusService.findById(assignedBusServiceId).lean()
     : null;
 
+  const rawDate = toCleanString(options.travelDate || options.date);
+  let targetDate = null;
+  if (rawDate) {
+    try {
+      targetDate = normalizeBusTravelDate(rawDate);
+    } catch {
+      targetDate = null;
+    }
+  }
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  // If a specific target date is requested, filter by targetDate.
+  // Otherwise, upcoming bookings should only be future or today's bookings (>= todayKey), never past ones!
+  const bookingsFilter = targetDate
+    ? { travelDate: targetDate }
+    : { travelDate: { $gte: todayKey } };
+
+  const dayBookingsCount = assignedBusServiceId && targetDate
+    ? await BusBooking.countDocuments({
+        busServiceId: assignedBusServiceId,
+        travelDate: targetDate,
+        status: { $in: ["pending", "confirmed"] },
+      })
+    : 0;
+
   const upcomingBookingsCount = assignedBusServiceId
     ? await BusBooking.countDocuments({
         busServiceId: assignedBusServiceId,
+        ...bookingsFilter,
         status: { $in: ["pending", "confirmed"] },
       })
     : 0;
@@ -968,6 +995,7 @@ const serializeBusDriverProfile = async (busDriver) => {
       : null,
     metrics: {
       upcomingBookings: upcomingBookingsCount,
+      dayBookings: targetDate ? dayBookingsCount : upcomingBookingsCount,
       totalSchedules: Array.isArray(busService?.schedules) ? busService.schedules.length : 0,
       totalCapacity: Number(busService?.capacity || 0),
     },
@@ -2737,7 +2765,9 @@ export const getCurrentDriver = async (req, res) => {
 
     res.json({
       success: true,
-      data: await serializeBusDriverProfile(busDriver),
+      data: await serializeBusDriverProfile(busDriver, {
+        travelDate: req.query?.date || req.query?.travelDate,
+      }),
     });
     return;
   }
@@ -6535,7 +6565,9 @@ export const getDriverApprovalStatus = async (req, res) => {
 
     res.json({
       success: true,
-      data: await serializeBusDriverProfile(busDriver),
+      data: await serializeBusDriverProfile(busDriver, {
+        travelDate: req.query?.date || req.query?.travelDate,
+      }),
     });
     return;
   }
@@ -7030,6 +7062,43 @@ export const deleteOwnerFleetVehicle = async (req, res) => {
   res.json({
     success: true,
     message: "Vehicle deleted successfully",
+    data: { deleted: true },
+  });
+};
+
+export const deleteOwnerFleetDriver = async (req, res) => {
+  const owner = await resolveAuthenticatedOwner(req);
+
+  if (!owner?._id) {
+    throw new ApiError(
+      403,
+      "Fleet driver access is only available for owner accounts",
+    );
+  }
+
+  const driverId = String(req.params.driverId || "").trim();
+  if (!driverId || !mongoose.isValidObjectId(driverId)) {
+    throw new ApiError(400, "A valid driver id is required");
+  }
+
+  const driver = await Driver.findOne({
+    _id: driverId,
+    owner_id: owner._id,
+    deletedAt: null,
+  });
+
+  if (!driver) {
+    throw new ApiError(404, "Fleet driver not found");
+  }
+
+  driver.deletedAt = new Date();
+  driver.approve = false;
+  driver.status = "inactive";
+  await driver.save();
+
+  res.json({
+    success: true,
+    message: "Fleet driver deleted successfully",
     data: { deleted: true },
   });
 };

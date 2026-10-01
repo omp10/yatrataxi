@@ -245,6 +245,7 @@ const BusDriverHome = () => {
   const [profile, setProfile] = useState(null);
   const [layout, setLayout] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [dayBookingsCount, setDayBookingsCount] = useState(0);
   const [selectedScheduleId, setSelectedScheduleId] = useState('');
   const [travelDate, setTravelDate] = useState(createToday());
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -313,6 +314,7 @@ const BusDriverHome = () => {
         const data = unwrap(response);
         if (!active) return;
         setProfile(data);
+        setDayBookingsCount(Number(data?.metrics?.dayBookings ?? data?.metrics?.upcomingBookings ?? 0));
 
         const firstSchedule = Array.isArray(data?.busService?.schedules) ? data.busService.schedules[0] : null;
         if (firstSchedule?.id) {
@@ -400,19 +402,24 @@ const BusDriverHome = () => {
       setLoadingDesk(true);
       setDeskError('');
       try {
-        const [layoutResponse, bookingsResponse] = await Promise.all([
+        const [layoutResponse, bookingsResponse, allDayBookingsResponse] = await Promise.all([
           getBusDriverSeatLayout({ scheduleId: selectedScheduleId, date: travelDate }),
           getBusDriverBookings({ scheduleId: selectedScheduleId, date: travelDate }),
+          getBusDriverBookings({ date: travelDate }),
         ]);
 
         if (!active) return;
         setLayout(unwrap(layoutResponse));
-        setBookings(unwrapResults(bookingsResponse));
+        const activeBookings = unwrapResults(bookingsResponse);
+        const dayBookingsList = unwrapResults(allDayBookingsResponse);
+        setBookings(activeBookings);
+        setDayBookingsCount(dayBookingsList.length);
       } catch (error) {
         if (!active) return;
         setDeskError(error?.message || 'Unable to load seat desk');
         setLayout(null);
         setBookings([]);
+        setDayBookingsCount(0);
       } finally {
         if (active) {
           setLoadingDesk(false);
@@ -618,14 +625,17 @@ const BusDriverHome = () => {
 
     setLoadingDesk(true);
     try {
-      const [layoutResponse, bookingsResponse, profileResponse] = await Promise.all([
+      const [layoutResponse, bookingsResponse, allDayBookingsResponse, profileResponse] = await Promise.all([
         getBusDriverSeatLayout({ scheduleId: selectedScheduleId, date: travelDate }),
         getBusDriverBookings({ scheduleId: selectedScheduleId, date: travelDate }),
-        getCurrentDriver(),
+        getBusDriverBookings({ date: travelDate }),
+        getCurrentDriver({ date: travelDate }),
       ]);
 
       setLayout(unwrap(layoutResponse));
       setBookings(unwrapResults(bookingsResponse));
+      const dayBookingsList = unwrapResults(allDayBookingsResponse);
+      setDayBookingsCount(dayBookingsList.length);
       setProfile(unwrap(profileResponse));
       setDeskError('');
     } catch (error) {
@@ -1776,7 +1786,7 @@ const BusDriverHome = () => {
               </div>
               <div className="rounded-2xl bg-white/8 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/50">Bookings</p>
-                <p className="mt-2 text-2xl font-black">{profile?.metrics?.upcomingBookings || 0}</p>
+                <p className="mt-2 text-2xl font-black">{dayBookingsCount}</p>
               </div>
             </div>
 

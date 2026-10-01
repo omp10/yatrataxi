@@ -134,6 +134,7 @@ import {
   getReferralSettings,
   updateReferralSettings,
   getReferralDashboard,
+  getAgentReferralTrees,
   getSetPrices,
   getServiceLocations,
   getServiceStores,
@@ -440,6 +441,7 @@ adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTr
 adminRouter.get('/admin/referrals/settings/:type', getReferralSettings);
 adminRouter.patch('/admin/referrals/settings/:type', updateReferralSettings);
 adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
+adminRouter.get('/admin/referrals/agent-trees', getAgentReferralTrees);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 

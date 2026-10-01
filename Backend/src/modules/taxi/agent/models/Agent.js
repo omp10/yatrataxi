@@ -110,6 +110,17 @@ const agentSchema = new mongoose.Schema(
       sparse: true,
       index: true,
     },
+    referredByAgent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiAgent',
+      default: null,
+      index: true,
+    },
+    referralRewardPaid: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     commissionConfig: {
       directRide: {
         type: commissionRuleSchema,
@@ -150,6 +161,8 @@ const agentSchema = new mongoose.Schema(
       directBusBookings: { type: Number, default: 0, min: 0 },
       referredBusBookings: { type: Number, default: 0, min: 0 },
       totalCustomers: { type: Number, default: 0, min: 0 },
+      referredAgentsCount: { type: Number, default: 0, min: 0 },
+      agentReferralEarnings: { type: Number, default: 0, min: 0 },
       totalEarnings: { type: Number, default: 0, min: 0 },
     },
     notes: {

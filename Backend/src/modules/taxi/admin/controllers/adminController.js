@@ -13,6 +13,7 @@ import { Agent } from '../../agent/models/Agent.js';
 import { AgentWallet } from '../../agent/models/AgentWallet.js';
 import { AgentNeededDocument } from '../models/AgentNeededDocument.js';
 import { AgentWithdrawalRequest } from '../../agent/models/AgentWithdrawalRequest.js';
+import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { listAgentWalletTransactions, applyAgentWalletAdjustment } from '../../agent/services/agentWalletService.js';
 import { getDefaultAgentCommissionConfig, saveDefaultAgentCommissionConfig, handleBusBookingCommissionReversal } from '../../agent/services/agentCommissionService.js';
@@ -823,6 +824,53 @@ export const updateAgent = asyncHandler(async (req, res) => {
     await agent.save();
   }
 
+  if (normalizedKycStatus === 'verified' && agent.referredByAgent && !agent.referralRewardPaid) {
+    try {
+      const settingDoc = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
+      const agentReferral = settingDoc?.referral?.agent || {};
+      const agentToAgentEnabled = agentReferral.agent_to_agent_enabled !== false;
+      const trigger = String(agentReferral.reward_trigger || 'on_approval').trim().toLowerCase();
+
+      if (agentToAgentEnabled && trigger === 'on_approval') {
+        const bonusAmount = Number(agentReferral.agent_referral_bonus || 0);
+        const welcomeAmount = Number(agentReferral.welcome_bonus || 0);
+
+        if (bonusAmount > 0) {
+          await applyAgentWalletAdjustment({
+            agentId: agent.referredByAgent,
+            amount: bonusAmount,
+            kind: 'credit',
+            title: `Referral bonus for recruiting agent ${agent.name || agent.phone}`,
+            source: 'referral_agent',
+            referenceKey: `agent_ref_bonus_${agent._id}_referrer`,
+            metadata: { referredAgentId: String(agent._id) },
+          });
+          await Agent.updateOne(
+            { _id: agent.referredByAgent },
+            { $inc: { 'metrics.agentReferralEarnings': bonusAmount } },
+          );
+        }
+
+        if (welcomeAmount > 0) {
+          await applyAgentWalletAdjustment({
+            agentId: agent._id,
+            amount: welcomeAmount,
+            kind: 'credit',
+            title: 'Agent Welcome Bonus',
+            source: 'referral_welcome',
+            referenceKey: `agent_welcome_bonus_${agent._id}`,
+            metadata: { referredBy: String(agent.referredByAgent) },
+          });
+        }
+
+        agent.referralRewardPaid = true;
+        await agent.save();
+      }
+    } catch (referralErr) {
+      console.error('Error crediting agent referral rewards on KYC verification:', referralErr);
+    }
+  }
+
   const wallet = await AgentWallet.findOne({ agentId: agent._id }).lean();
   ok(res, serializeAgentAdmin(agent.toObject(), wallet));
 });
@@ -1260,6 +1308,10 @@ export const updateReferralSettings = asyncHandler(async (req, res) =>
 
 export const getReferralDashboard = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getReferralDashboard()),
+);
+
+export const getAgentReferralTrees = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.getAgentReferralTrees()),
 );
 
 export const getServiceLocations = asyncHandler(async (req, res) =>

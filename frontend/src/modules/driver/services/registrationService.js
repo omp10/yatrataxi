@@ -247,7 +247,8 @@ const withDriverAuth = (config = {}) => {
   };
 };
 
-export const getCurrentDriver = () => api.get("/drivers/me", withDriverAuth());
+export const getCurrentDriver = (params) =>
+  api.get("/drivers/me", withDriverAuth(params ? { params } : {}));
 
 export const getDriverRideHistory = (params = {}) =>
   api.get("/rides", withDriverAuth({ params }));
@@ -351,6 +352,9 @@ export const createOwnerFleetDriver = (payload) =>
 
 export const updateOwnerFleetDriver = (driverId, payload) =>
   api.patch(`/drivers/fleet/drivers/${driverId}`, payload, withDriverAuth());
+
+export const deleteOwnerFleetDriver = (driverId) =>
+  api.delete(`/drivers/fleet/drivers/${driverId}`, withDriverAuth());
 
 export const getOwnerFleetVehicles = () =>
   api.get("/drivers/fleet/vehicles", withDriverAuth());

@@ -5069,9 +5069,29 @@ export const updateSubscriptionSettings = async (payload) => {
   return setting.subscription;
 };
 
+export const DEFAULT_AGENT_REFERRAL_SETTINGS = {
+  enabled: true,
+  agent_to_user_enabled: true,
+  agent_to_agent_enabled: true,
+  agent_referral_bonus: 500,
+  welcome_bonus: 100,
+  reward_trigger: 'on_approval', // 'on_approval' | 'first_booking'
+  override_commission_enabled: true,
+  override_commission_rate: 1,
+  min_bookings_for_payout: 1,
+};
+
 export const getReferralSettings = async (type) => {
   const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
-  const referral = setting?.referral || { driver: { enabled: false, type: 'instant_referrer', amount: 0 }, user: { enabled: false, type: 'instant_referrer', amount: 0 } };
+  const referral = {
+    driver: { enabled: false, type: 'instant_referrer', amount: 0 },
+    user: { enabled: false, type: 'instant_referrer', amount: 0 },
+    agent: DEFAULT_AGENT_REFERRAL_SETTINGS,
+    ...(setting?.referral || {}),
+  };
+  if (type === 'agent' && !referral.agent) {
+    referral.agent = DEFAULT_AGENT_REFERRAL_SETTINGS;
+  }
   return type ? referral[type] : referral;
 };
 
@@ -5123,6 +5143,19 @@ export const updateReferralSettings = async (type, payload) => {
     updateData.reward_features = sanitizeReferralRewardFeatures(payload.reward_features);
   }
 
+  if (type === 'agent') {
+    updateData.agent_to_user_enabled = Boolean(payload.agent_to_user_enabled ?? true);
+    updateData.agent_to_agent_enabled = Boolean(payload.agent_to_agent_enabled ?? true);
+    updateData.agent_referral_bonus = Math.max(0, Number(payload.agent_referral_bonus ?? 500));
+    updateData.welcome_bonus = Math.max(0, Number(payload.welcome_bonus ?? 100));
+    updateData.reward_trigger = ['on_approval', 'first_booking'].includes(String(payload.reward_trigger || '').toLowerCase())
+      ? String(payload.reward_trigger).toLowerCase()
+      : 'on_approval';
+    updateData.override_commission_enabled = Boolean(payload.override_commission_enabled ?? true);
+    updateData.override_commission_rate = Math.max(0, Number(payload.override_commission_rate ?? 1));
+    updateData.min_bookings_for_payout = Math.max(0, Number(payload.min_bookings_for_payout ?? 1));
+  }
+
   const setting = await AdminBusinessSetting.findOneAndUpdate(
     { scope: 'default' },
     { $set: { [updateKey]: updateData } },
@@ -5130,6 +5163,43 @@ export const updateReferralSettings = async (type, payload) => {
   );
 
   return setting.referral[type];
+};
+
+export const getAgentReferralTrees = async () => {
+  const agents = await Agent.find()
+    .select('name phone email referralCode referredByAgent kycStatus status metrics createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const agentMap = new Map();
+  agents.forEach((a) => agentMap.set(String(a._id), a));
+
+  const list = agents.map((agent) => {
+    const parent = agent.referredByAgent ? agentMap.get(String(agent.referredByAgent)) : null;
+    return {
+      id: String(agent._id),
+      name: agent.name || 'Unnamed Agent',
+      phone: agent.phone || '',
+      email: agent.email || '',
+      referralCode: agent.referralCode || '',
+      kycStatus: agent.kycStatus || 'pending',
+      status: agent.status || 'inactive',
+      referredAgentsCount: Number(agent.metrics?.referredAgentsCount || 0),
+      totalCustomers: Number(agent.metrics?.totalCustomers || 0),
+      agentReferralEarnings: Number(agent.metrics?.agentReferralEarnings || 0),
+      referredBy: parent
+        ? {
+            id: String(parent._id),
+            name: parent.name || 'Agent',
+            phone: parent.phone || '',
+            referralCode: parent.referralCode || '',
+          }
+        : null,
+      createdAt: agent.createdAt,
+    };
+  });
+
+  return { results: list };
 };
 
 export const getReferralDashboard = async () => {

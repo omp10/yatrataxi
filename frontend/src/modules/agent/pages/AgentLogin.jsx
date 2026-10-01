@@ -18,6 +18,14 @@ const AgentLogin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const refFromQuery = new URLSearchParams(location.search).get('ref') || '';
+
+    useEffect(() => {
+        if (refFromQuery) {
+            sessionStorage.setItem('pendingAgentReferralCode', refFromQuery.trim().toUpperCase());
+        }
+    }, [refFromQuery]);
+
     useEffect(() => {
         if (getLocalAgentToken()) {
             navigate('/taxi/agent', { replace: true });

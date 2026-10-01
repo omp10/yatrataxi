@@ -20,6 +20,9 @@ const AgentOnboarding = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
+  const [referralCode, setReferralCode] = useState(() => {
+    return (typeof window !== 'undefined' ? sessionStorage.getItem('pendingAgentReferralCode') || '' : '').trim().toUpperCase();
+  });
   const [documents, setDocuments] = useState({});
   const [documentMeta, setDocumentMeta] = useState({});
   const [uploadingKey, setUploadingKey] = useState('');
@@ -131,10 +134,12 @@ const AgentOnboarding = () => {
         name,
         email,
         notes,
+        referralCode: referralCode.trim().toUpperCase(),
         documents,
         documentMeta,
       });
       clearAgentLoginSession();
+      sessionStorage.removeItem('pendingAgentReferralCode');
       const payload = response?.data?.data || response?.data || {};
       navigate('/taxi/agent/pending', {
         replace: true,
@@ -175,6 +180,12 @@ const AgentOnboarding = () => {
             <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Full name" className="w-full rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8" />
             <input value={phone} disabled className="w-full rounded-3xl border border-[#d9e7f3] bg-slate-50 px-5 py-4 text-[15px] font-semibold text-slate-500 outline-none" />
             <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email (optional)" className="w-full rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8" />
+            <input
+              value={referralCode}
+              onChange={(event) => setReferralCode(event.target.value.toUpperCase())}
+              placeholder="Agent Referral Code (optional)"
+              className="w-full rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8 font-mono"
+            />
             <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notes for admin (optional)" className="min-h-24 w-full resize-none rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8" />
           </div>
         </section>

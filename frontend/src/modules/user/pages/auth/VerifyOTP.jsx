@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, ChevronRight, MessageSquare } from 'lucide-react';
 import { userAuthService } from '../../services/authService';
+import { userService } from '../../services/userService';
 import { useSettings } from '../../../../shared/context/SettingsContext';
 import loginIllustration from '../../../../assets/images/login-illustration.png';
 
@@ -105,6 +106,13 @@ const VerifyOTP = () => {
         localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
         syncPushTokens();
         sessionStorage.removeItem(PENDING_OTP_PHONE_KEY);
+        if (referralCode) {
+          try {
+            await userService.linkAgentByQr({ qrValue: referralCode });
+          } catch {
+            // Already linked or user referral
+          }
+        }
         setTimeout(() => navigate('/taxi/user', { replace: true }), 1000);
         return;
       }
