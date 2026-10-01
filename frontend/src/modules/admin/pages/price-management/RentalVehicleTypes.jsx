@@ -129,10 +129,11 @@ const RENTAL_BLUEPRINT_TEMPLATES = [
 ];
 
 const DEFAULT_PRICING = [
-  { id: 'pkg-6h', label: '6 Hours', durationHours: '', price: '', includedKm: '', extraHourPrice: '', extraKmPrice: '', active: true },
-  { id: 'pkg-12h', label: '12 Hours', durationHours: '', price: '', includedKm: '', extraHourPrice: '', extraKmPrice: '', active: true },
-  { id: 'pkg-24h', label: '24 Hours', durationHours: '', price: '', includedKm: '', extraHourPrice: '', extraKmPrice: '', active: true },
+  { id: 'pkg-1', label: 'Package 1', durationHours: '', price: '', includedKm: '', extraHourPrice: '', extraKmPrice: '', active: true },
 ];
+
+// Categories seeded from existing rental vehicles on first load; admin can also type a custom one
+const FALLBACK_VEHICLE_CATEGORIES = ['Bike', 'Auto', 'Car', 'SUV', 'Van'];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -302,12 +303,14 @@ const RentalVehicleTypes = ({ mode: propMode }) => {
   const isView = propMode === 'view';
   const [items, setItems] = useState([]);
   const [serviceStores, setServiceStores] = useState([]);
+  const [dynamicCategories, setDynamicCategories] = useState(FALLBACK_VEHICLE_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState(buildDefaultForm);
   const [togglingIds, setTogglingIds] = useState([]);
   const [galleryImageUrl, setGalleryImageUrl] = useState('');
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -333,6 +336,18 @@ const RentalVehicleTypes = ({ mode: propMode }) => {
         if (!mounted) return;
         setItems(results);
         setServiceStores(serviceStoreResults);
+        // Seed category dropdown from existing vehicles
+        const existingCategories = [
+          ...new Set(
+            results
+              .map((v) => String(v.vehicleCategory || '').trim())
+              .filter(Boolean),
+          ),
+        ];
+        const mergedCategories = [
+          ...new Set([...FALLBACK_VEHICLE_CATEGORIES, ...existingCategories]),
+        ];
+        setDynamicCategories(mergedCategories);
 
         if (id) {
           const selected = results.find((item) => String(item.id || item._id) === String(id));
@@ -1002,17 +1017,37 @@ const RentalVehicleTypes = ({ mode: propMode }) => {
           <div>
             <label className={labelClass}>Category *</label>
             <select
-              value={formData.vehicleCategory}
-              onChange={(event) => updateForm('vehicleCategory', event.target.value)}
+              value={dynamicCategories.includes(formData.vehicleCategory) ? formData.vehicleCategory : '__custom__'}
+              onChange={(event) => {
+                if (event.target.value === '__custom__') {
+                  updateForm('vehicleCategory', customCategoryInput || '');
+                } else {
+                  setCustomCategoryInput('');
+                  updateForm('vehicleCategory', event.target.value);
+                }
+              }}
               className={inputClass}
             >
-              {['Bike', 'Auto', 'Car', 'SUV', 'Van'].map((option) => (
+              {dynamicCategories.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))}
+              <option value="__custom__">+ Add custom category</option>
             </select>
-            <p className="mt-2 text-xs text-slate-500">Choose the overall class so the layout and pricing feel matched to the vehicle type.</p>
+            {(!dynamicCategories.includes(formData.vehicleCategory) || formData.vehicleCategory === '') && (
+              <input
+                type="text"
+                value={customCategoryInput}
+                onChange={(event) => {
+                  setCustomCategoryInput(event.target.value);
+                  updateForm('vehicleCategory', event.target.value);
+                }}
+                placeholder="Type custom category (e.g. Truck, E-Bike)"
+                className={`${inputClass} mt-2`}
+              />
+            )}
+            <p className="mt-2 text-xs text-slate-500">Select from existing categories or type a custom one. New categories appear in future dropdowns automatically.</p>
           </div>
 
           <div>

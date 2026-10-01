@@ -963,9 +963,9 @@ const buildRentalBlueprintTemplate = (templateKey = 'compact_4') => {
 };
 
 const DEFAULT_RENTAL_PRICING = [
-  { id: 'pkg-6h', label: '6 Hours', durationHours: 6, price: 799, includedKm: 60, extraHourPrice: 120, extraKmPrice: 12, active: true },
-  { id: 'pkg-12h', label: '12 Hours', durationHours: 12, price: 1299, includedKm: 120, extraHourPrice: 110, extraKmPrice: 11, active: true },
-  { id: 'pkg-24h', label: '24 Hours', durationHours: 24, price: 1999, includedKm: 240, extraHourPrice: 95, extraKmPrice: 10, active: true },
+  // No hardcoded amounts — admin must configure pricing explicitly.
+  // These rows serve only as structural placeholders so the pricing array is never null.
+  { id: 'pkg-1', label: 'Package 1', durationHours: 1, price: 0, includedKm: 0, extraHourPrice: 0, extraKmPrice: 0, active: true },
 ];
 
 const normalizeRentalPricingItem = (item = {}, index = 0) => ({
