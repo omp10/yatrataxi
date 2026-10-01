@@ -11,24 +11,23 @@ import {
 } from 'lucide-react';
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const TIME_OPTIONS = [
-  '06:00',
-  '07:00',
-  '08:00',
-  '09:00',
-  '10:00',
-  '11:00',
-  '12:00',
-  '13:00',
-  '14:00',
-  '15:00',
-  '16:00',
-  '17:00',
-  '18:00',
-  '19:00',
-  '20:00',
-  '21:00',
-];
+// Operating-hour config — easy to extend later from a store-settings API response.
+// startHour / endHour are inclusive bounds (24h); intervalMinutes controls slot granularity.
+const TIME_CONFIG = { startHour: 5, endHour: 22, endMinute: 30, intervalMinutes: 30 };
+
+const generateTimeOptions = ({ startHour, endHour, endMinute, intervalMinutes }) => {
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const options = [];
+  for (let totalMinutes = startHour * 60; ; totalMinutes += intervalMinutes) {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h > endHour || (h === endHour && m > endMinute)) break;
+    options.push(`${pad2(h)}:${pad2(m)}`);
+  }
+  return options;
+};
+
+const TIME_OPTIONS = generateTimeOptions(TIME_CONFIG);
 
 const pad = (n) => String(n).padStart(2, '0');
 
