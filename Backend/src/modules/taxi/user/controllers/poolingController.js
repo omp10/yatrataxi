@@ -164,16 +164,56 @@ const serializePoolingBooking = (booking) => {
 };
 
 export const searchPoolingRoutes = asyncHandler(async (req, res) => {
-  const { from, to } = req.query;
+  const rawFrom = toCleanString(req.query.from);
+  const rawTo = toCleanString(req.query.to);
+  const from = rawFrom.toLowerCase();
+  const to = rawTo.toLowerCase();
 
-  const routes = await PoolingRoute.find({
+  const query = {
     status: 'active',
     active: { $ne: false },
-    $or: [
-      { originLabel: { $regex: from || '', $options: 'i' } },
-      { destinationLabel: { $regex: to || '', $options: 'i' } },
-    ],
-  }).populate('assignedVehicleTypeIds');
+  };
+
+  if (from || to) {
+    const conditions = [];
+    if (from) {
+      conditions.push({ originLabel: { $regex: rawFrom, $options: 'i' } });
+      conditions.push({ 'pickupPoints.name': { $regex: rawFrom, $options: 'i' } });
+      conditions.push({ 'stops.name': { $regex: rawFrom, $options: 'i' } });
+    }
+    if (to) {
+      conditions.push({ destinationLabel: { $regex: rawTo, $options: 'i' } });
+      conditions.push({ 'dropPoints.name': { $regex: rawTo, $options: 'i' } });
+      conditions.push({ 'stops.name': { $regex: rawTo, $options: 'i' } });
+    }
+    query.$or = conditions;
+  }
+
+  let routes = await PoolingRoute.find(query).populate('assignedVehicleTypeIds').lean();
+
+  if (from || to) {
+    const scoreRoute = (route) => {
+      const origin = (route.originLabel || '').trim().toLowerCase();
+      const destination = (route.destinationLabel || '').trim().toLowerCase();
+
+      const originExact = from && origin === from;
+      const destExact = to && destination === to;
+
+      if (originExact && destExact) return 10;
+
+      const originIncludes = from && (origin.includes(from) || (route.pickupPoints || []).some(p => (p.name || '').toLowerCase().includes(from)));
+      const destIncludes = to && (destination.includes(to) || (route.dropPoints || []).some(d => (d.name || '').toLowerCase().includes(to)));
+
+      if (originIncludes && destIncludes) return 8;
+      if (originExact) return 5;
+      if (originIncludes) return 4;
+      if (destExact) return 3;
+      if (destIncludes) return 2;
+      return 0;
+    };
+
+    routes.sort((a, b) => scoreRoute(b) - scoreRoute(a));
+  }
 
   return ok(res, routes, 'Routes fetched successfully');
 });
