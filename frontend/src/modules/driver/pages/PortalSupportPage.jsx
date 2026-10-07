@@ -55,7 +55,7 @@ const PortalSupportPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-stone-50 text-slate-900">
+    <div className="min-h-screen overflow-x-hidden bg-stone-50 text-slate-900">
       <div className="fixed left-0 right-0 top-0 z-50 border-b border-stone-200 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-6">
           <button
@@ -88,16 +88,16 @@ const PortalSupportPage = () => {
               <a
                 key={item.title}
                 href={item.href}
-                className="flex items-center gap-4 rounded-[26px] border border-white/10 bg-white/5 px-5 py-5 transition hover:bg-white/10"
+                className="flex min-w-0 items-center gap-4 rounded-[26px] border border-white/10 bg-white/5 px-4 py-5 transition hover:bg-white/10 sm:px-5"
               >
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-[#f4b400]">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/5 text-[#f4b400]">
                   <item.Icon size={22} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-black uppercase tracking-[0.24em] text-stone-400">
                     {item.title}
                   </p>
-                  <p className="mt-1 truncate text-xl font-black text-white md:text-[1.9rem]">
+                  <p className="mt-1 break-words text-base font-black text-white sm:text-xl md:text-[1.9rem]">
                     {item.value}
                   </p>
                   <p className="mt-1 text-sm font-bold text-stone-300">
@@ -147,7 +147,7 @@ const PortalSupportPage = () => {
               <p className="mt-5 text-[11px] font-black uppercase tracking-[0.24em] text-stone-400">
                 {card.title}
               </p>
-              <p className="mt-2 text-xl font-black leading-tight text-slate-900">
+              <p className="mt-2 break-words text-xl font-black leading-tight text-slate-900">
                 {card.value}
               </p>
               <p className="mt-3 text-sm font-bold leading-6 text-slate-500">

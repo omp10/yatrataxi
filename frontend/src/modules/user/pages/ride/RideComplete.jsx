@@ -179,7 +179,9 @@ const RideComplete = () => {
           setRideLiveStatus(nextLiveStatus);
         }
 
-        if (!active || !feedback) {
+        // Only hydrate from the server once feedback was actually submitted; otherwise the 5s
+        // poll would overwrite what the rider is currently selecting (tip / rating / note).
+        if (!active || !feedback || !feedback.submittedAt) {
           return;
         }
 

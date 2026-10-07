@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronDown, Filter, LoaderCircle, MoreVertical, Search } from 'lucide-react';
+import RideRowActions, { getTripStatusLabel } from '../../components/ui/RideRowActions';
 import { adminService } from '../../services/adminService';
 
 const TABS = ['All', 'Completed', 'Cancelled', 'Upcoming', 'On Trip'];
@@ -199,9 +200,7 @@ const Deliveries = () => {
                     </span>
                   </td>
                   <td className="border-b border-gray-200 px-4 py-5">
-                    <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700">
-                      <MoreVertical size={18} />
-                    </button>
+                    <RideRowActions row={row} />
                   </td>
                 </tr>
               ))}

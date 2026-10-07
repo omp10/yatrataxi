@@ -852,8 +852,8 @@ const DriverDetails = () => {
                           <td className="px-6 py-3">
                             <div className="font-semibold text-gray-900">{doc.name}</div>
                           </td>
-                          <td className="px-4 py-3">{doc.identify_number}</td>
-                          <td className="px-4 py-3">{doc.expiry_date}</td>
+                          <td className="px-4 py-3">{doc.identify_number || "-"}</td>
+                          <td className="px-4 py-3">{doc.expiry_date || "-"}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               String(doc.status || '').toLowerCase() === 'approved' 

@@ -87,8 +87,8 @@ const ManageDrivers = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
-      <header className="flex items-center gap-4 mb-8 text-slate-900 uppercase">
+    <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-clip">
+      <header className="sticky top-0 z-30 -mx-6 -mt-10 px-6 pt-10 pb-3 bg-[#f8f9fb] flex items-center gap-4 mb-8 text-slate-900 uppercase">
         <button
           onClick={() => navigate(`${routePrefix}/profile`)}
           className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">

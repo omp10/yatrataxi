@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, FileText,
-  MapPin, Star, Package, Wrench, Gift, QrCode, Trash2, Check, BusFront, 
+  MapPin, Package, Wrench, Gift, QrCode, Trash2, Check, BusFront, 
   Settings, CreditCard, Heart, Map, MessageSquare, History, Phone
 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
@@ -72,7 +72,6 @@ const Profile = () => {
     profileImage: '',
     stats: {
       trips: 0,
-      rating: 4.9,
       wallet: 0
     }
   });
@@ -144,13 +143,6 @@ const Profile = () => {
           user.wallet_amount,
           stored?.walletBalance,
         );
-        const dynamicRating = pickNumber(
-          user.rating,
-          user.avgRating,
-          user.average_rating,
-          stored?.rating,
-          4.9,
-        );
         
         setProfile({
           name: user.name || stored?.name || 'User',
@@ -158,7 +150,6 @@ const Profile = () => {
           profileImage: user.profileImage || user.profile_image || stored?.profileImage || '',
           stats: {
             trips: dynamicTripCount,
-            rating: dynamicRating,
             wallet: dynamicWalletBalance,
           }
         });
@@ -167,7 +158,6 @@ const Profile = () => {
           ...user,
           walletBalance: dynamicWalletBalance,
           totalRides: dynamicTripCount,
-          rating: dynamicRating,
         }));
       } catch (err) {
         console.error('Failed to load profile', err);
@@ -178,6 +168,7 @@ const Profile = () => {
   }, [navigate]);
 
   const handleLogout = () => {
+    if (!window.confirm('Are you sure you want to log out?')) return;
     clearCurrentRide();
     socketService.disconnect();
     clearLocalUserSession();
@@ -211,7 +202,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 max-w-lg mx-auto pb-28 relative overflow-x-hidden font-['Inter']">
+    <div className="min-h-screen bg-slate-50 max-w-lg mx-auto pb-28 relative overflow-x-clip font-['Inter']">
       {/* Premium Header Background */}
       <div className="absolute top-0 inset-x-0 h-80 bg-slate-900 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/30 via-slate-900 to-slate-900" />
@@ -221,8 +212,8 @@ const Profile = () => {
 
       <div className="relative z-10">
         {/* Header Section */}
-        <div className="px-6 pt-12 pb-8">
-          <div className="flex items-center justify-between mb-8">
+        <div className="sticky top-0 z-40 bg-slate-900 px-6 pt-12 pb-4">
+          <div className="flex items-center justify-between">
             <h1 className="font-['Outfit'] text-2xl font-extrabold text-white tracking-tight">Profile</h1>
             <MotionButton
               whileHover={{ scale: 1.05 }}
@@ -233,6 +224,8 @@ const Profile = () => {
               <Settings size={20} />
             </MotionButton>
           </div>
+        </div>
+        <div className="px-6 pt-4 pb-8">
 
           {/* Profile Hero Card */}
           <MotionDiv
@@ -269,19 +262,12 @@ const Profile = () => {
             </div>
 
             {/* Quick Stats Row */}
-            <div className="grid grid-cols-3 gap-3 mt-8 pt-6 border-t border-slate-50">
+            <div className="grid grid-cols-2 gap-3 mt-8 pt-6 border-t border-slate-50">
               <div className="text-center">
                 <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-300">Total Trips</p>
                 <p className="font-['Outfit'] text-[18px] font-extrabold text-slate-900 mt-1">{profile.stats.trips}</p>
               </div>
-              <div className="text-center border-x border-slate-50">
-                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-300">Rating</p>
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  <Star size={14} className="text-amber-400 fill-amber-400" />
-                  <p className="font-['Outfit'] text-[18px] font-extrabold text-slate-900">{profile.stats.rating}</p>
-                </div>
-              </div>
-              <div className="text-center">
+              <div className="text-center border-l border-slate-50">
                 <p className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-300">Credits</p>
                 <p className="font-['Outfit'] text-[18px] font-extrabold text-indigo-600 mt-1">₹{profile.stats.wallet}</p>
               </div>

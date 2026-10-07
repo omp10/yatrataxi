@@ -273,10 +273,6 @@ const PendingOwners = () => {
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 items-end">
           <div>
-            <label className={labelClass}>
-              <Search size={12} className="inline mr-1 text-gray-400" />
-              Search
-            </label>
             <input
               className={inputClass}
               placeholder="Search by owner, company, phone, or location"

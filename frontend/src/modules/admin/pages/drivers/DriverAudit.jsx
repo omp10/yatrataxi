@@ -240,8 +240,8 @@ const DriverAudit = () => {
                           <span className="text-[13px] font-black text-gray-950 tracking-tight">{doc.name}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-5 text-[12px] font-bold text-gray-500">{doc.number}</td>
-                      <td className="px-5 py-5 text-[12px] font-bold text-gray-500">{doc.expiry}</td>
+                      <td className="px-5 py-5 text-[12px] font-bold text-gray-500">{doc.number || "-"}</td>
+                      <td className="px-5 py-5 text-[12px] font-bold text-gray-500">{doc.expiry || "-"}</td>
                       <td className="px-5 py-5 text-center">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${doc.status === 'Verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                           {doc.status}

@@ -111,6 +111,11 @@ const AgentOnboarding = () => {
       return;
     }
 
+    if (!/^[A-Za-z][A-Za-z .'-]{1,59}$/.test(name.trim())) {
+      setError('Full name can only contain letters and spaces');
+      return;
+    }
+
     if (requiredTemplateIssue?.has_identify_number && !String(documentMeta[requiredTemplateIssue.id]?.documentNumber || '').trim()) {
       setError(`Please enter the ID number for ${requiredTemplateIssue.name}`);
       return;
@@ -177,7 +182,7 @@ const AgentOnboarding = () => {
 
         <section className="rounded-[34px] border border-white/70 bg-white/85 p-6 shadow-[0_22px_50px_rgba(20,58,90,0.08)] backdrop-blur-xl space-y-4">
           <div className="grid gap-4">
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Full name" className="w-full rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8" />
+            <input value={name} maxLength={60} onChange={(event) => setName(event.target.value.replace(/[^A-Za-z .'-]/g, '').replace(/s{2,}/g, ' '))} placeholder="Full name" className="w-full rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8" />
             <input value={phone} disabled className="w-full rounded-3xl border border-[#d9e7f3] bg-slate-50 px-5 py-4 text-[15px] font-semibold text-slate-500 outline-none" />
             <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email (optional)" className="w-full rounded-3xl border border-[#d9e7f3] bg-white px-5 py-4 text-[15px] font-semibold text-slate-900 outline-none focus:border-[#143a5a] focus:ring-4 focus:ring-[#143a5a]/8" />
             <input
@@ -302,7 +307,7 @@ const AgentOnboarding = () => {
           </div>
         ) : null}
 
-        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/90 to-transparent p-8">
+        <div className="pt-2 pb-4">
           <div className="mx-auto max-w-lg">
             <button type="button" onClick={handleSubmit} disabled={loading || !isComplete} className="flex w-full items-center justify-center gap-3 rounded-[26px] bg-[#143a5a] px-5 py-4 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_18px_36px_rgba(20,58,90,0.22)] transition disabled:cursor-not-allowed disabled:opacity-50">
               {loading ? 'Submitting...' : 'Submit For Verification'}

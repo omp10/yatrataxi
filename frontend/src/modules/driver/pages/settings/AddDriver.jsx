@@ -126,8 +126,8 @@ const AddDriver = () => {
     };
 
     return (
-        <div className="min-h-screen bg-white font-sans p-5 pt-8 select-none overflow-x-hidden pb-32">
-            <header className="mb-6 flex items-center justify-between">
+        <div className="min-h-screen bg-white font-sans p-5 pt-8 select-none overflow-x-clip pb-32">
+            <header className="sticky top-0 z-30 -mx-5 -mt-8 px-5 pt-8 pb-3 bg-white sticky top-0 z-30 -mx-5 -mt-8 px-5 pt-8 pb-3 bg-white mb-6 flex items-center justify-between">
                 <button onClick={() => navigate(-1)} className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center text-slate-900 active:scale-95 transition-transform">
                     <ArrowLeft size={18} strokeWidth={2.5} />
                 </button>

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getTodayDateString, isPastDateString } from '../../../../shared/utils/dateHelpers';
 import {
   clearDriverRegistrationSession,
   completeDriverOnboarding,
@@ -282,6 +283,10 @@ const StepDocuments = () => {
   };
 
   const handleMetaChange = (templateId, fieldName, nextValue) => {
+    if (fieldName === 'expiryDate' && isPastDateString(nextValue)) {
+      setError('Expiry date cannot be in the past');
+      return;
+    }
     const nextMeta = {
       ...(documentMeta[templateId] || {}),
       [fieldName]: nextValue,
@@ -480,12 +485,12 @@ const StepDocuments = () => {
 
   return (
     <div 
-        className="min-h-screen bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-8 select-none overflow-x-hidden"
+        className="min-h-screen bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-8 select-none overflow-x-clip"
         style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
     >
       <main className="mx-auto max-w-sm space-y-6">
-        <header className="space-y-5">
-            <div className="flex items-center justify-between">
+        <header className="contents">
+            <div className="sticky top-0 z-40 -mx-5 mb-6 flex items-center justify-between bg-[#f6efe4]/90 px-5 py-2 backdrop-blur-md">
                 <button
                     onClick={handleBackNavigation}
                     className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm transition-transform active:scale-95"
@@ -682,6 +687,7 @@ const StepDocuments = () => {
                                 </label>
                                 <input
                                     type="date"
+                                    min={getTodayDateString()}
                                     value={documentMeta[template.id]?.expiryDate || ''}
                                     onChange={(event) => handleMetaChange(template.id, 'expiryDate', event.target.value)}
                                     className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0"

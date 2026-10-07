@@ -209,9 +209,18 @@ const AgentReferral = () => {
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">
               {isCustomerTab ? 'Customer Deep Link' : 'Agent Recruitment Deep Link'}
             </p>
-            <p className="mt-2 break-all text-xs font-semibold text-[#143a5a]">
-              {activeLink || 'Generating link...'}
-            </p>
+            {activeLink ? (
+              <a
+                href={activeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block break-all text-xs font-semibold text-[#0d6aa8] underline"
+              >
+                {activeLink}
+              </a>
+            ) : (
+              <p className="mt-2 break-all text-xs font-semibold text-[#143a5a]">Generating link...</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

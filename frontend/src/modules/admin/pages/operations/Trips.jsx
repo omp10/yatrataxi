@@ -1,6 +1,7 @@
 import React from 'react';
 import { Filter, MoreVertical, Search, Loader2, ChevronRight, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
+import RideRowActions, { getTripStatusLabel } from '../../components/ui/RideRowActions';
 import { adminService } from '../../services/adminService';
 
 const STATUS_STYLES = {
@@ -36,6 +37,7 @@ const normalizeTab = (tab) => {
 };
 
 const normalizeRow = (row = {}) => ({
+  ...row,
   id: String(row._id || row.id || row.requestId || Math.random()),
   requestId: row.requestId || row.request_id || row.ride_request_id || '--',
   date: row.date || row.createdAt || row.created_at || row.trip_date || row.updatedAt,
@@ -174,7 +176,7 @@ const Trips = () => {
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.transportType}</td>
                       <td className="px-6 py-5">
                         <span className={`inline-block px-3 py-1 text-[10px] font-bold rounded uppercase ${STATUS_STYLES[row.tripStatus] || 'bg-slate-200 text-slate-700'}`}>
-                          {row.tripStatus || 'UNKNOWN'}
+                          {getTripStatusLabel(row)}
                         </span>
                       </td>
                       <td className="px-6 py-5">
@@ -183,9 +185,7 @@ const Trips = () => {
                         </span>
                       </td>
                       <td className="px-6 py-5">
-                        <button className="text-slate-400 hover:text-slate-800">
-                          <MoreVertical size={18} />
-                        </button>
+                        <RideRowActions row={row} />
                       </td>
                     </tr>
                   ))

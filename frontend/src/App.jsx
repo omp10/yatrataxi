@@ -196,6 +196,7 @@ const AdminDashboard = lazy(() => import('./modules/admin/pages/dashboard/MainDa
 const AdminCentralizedBookings = lazy(() => import('./modules/admin/pages/bookings/CentralizedBookings'));
 const AdminEarnings = lazy(() => import('./modules/admin/pages/dashboard/AdminEarnings'));
 const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
+const AdminProfile = lazy(() => import('./modules/admin/pages/management/AdminProfile'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
 const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
 const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
@@ -1176,6 +1177,7 @@ function App() {
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Navigate to="/admin/dashboard" />} />
                 <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="profile" element={<AdminProfile />} />
                 <Route path="bookings" element={<AdminCentralizedBookings />} />
                 <Route path="centralized-bookings" element={<AdminCentralizedBookings />} />
                 <Route path="earnings" element={<AdminEarnings />} />

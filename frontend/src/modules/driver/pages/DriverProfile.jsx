@@ -30,6 +30,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
 import { clearDriverAuthState, getCurrentDriver, updateDriverProfile } from '../services/registrationService';
+import useBodyScrollLock from '../../../shared/hooks/useBodyScrollLock';
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response || null;
 const ROUTE_BOOKING_STORAGE_KEY = 'driver_route_booking_preferences';
@@ -79,6 +80,7 @@ const DriverProfile = () => {
     const [routeBookingPreferences, setRouteBookingPreferences] = useState(() => readRouteBookingPreferences());
     const [isLogoutOpen, setIsLogoutOpen] = useState(false);
     const [legalModal, setLegalModal] = useState(null); 
+    useBodyScrollLock(Boolean(legalModal));
     const [driver, setDriver] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
@@ -331,7 +333,7 @@ Processing Time: Refunds are typically credited back to the original payment met
     ];
 
     return (
-        <div className="min-h-screen bg-white font-sans select-none overflow-x-hidden pb-32">
+        <div className="min-h-screen bg-white font-sans select-none overflow-x-clip pb-32">
             {/* Header - Compact & Aligned */}
             <header className="px-5 pt-4 pb-4 border-b border-slate-50 sticky top-0 bg-white z-[60]">
                 <div className="flex items-center justify-between mb-4">

@@ -77,6 +77,17 @@ export const PageGuideDropdown = ({ buttonClassName = '', showTextLabel = true, 
     };
   }, [isOpen]);
 
+  // Lock the page scroller while the guide is open so the background doesn't scroll behind it
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const scrollers = Array.from(document.querySelectorAll('main'));
+    const previous = scrollers.map((el) => el.style.overflowY);
+    scrollers.forEach((el) => { el.style.overflowY = 'hidden'; });
+    return () => {
+      scrollers.forEach((el, index) => { el.style.overflowY = previous[index]; });
+    };
+  }, [isOpen]);
+
   // Filtered guides when searching
   const filteredSearchGuides = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

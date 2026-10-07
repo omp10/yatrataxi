@@ -318,10 +318,10 @@ const DriverList = ({ mode = 'approved' }) => {
                         <button
                           type="button"
                           onClick={() => window.open(driver.onlineSelfieImage, '_blank', 'noopener,noreferrer')}
-                          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-2 py-1.5 hover:bg-slate-50 transition-colors"
+                          className="flex max-w-[190px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-1.5 hover:bg-slate-50 transition-colors"
                         >
-                          <img src={driver.onlineSelfieImage} alt={`${driver.name} selfie`} className="h-10 w-10 rounded-lg object-cover" />
-                          <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                          <img src={driver.onlineSelfieImage} alt={`${driver.name} selfie`} className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                          <span className="min-w-0 break-words text-[11px] font-semibold leading-tight text-slate-500">
                             {formatDate(driver.onlineSelfieCapturedAt)}
                           </span>
                         </button>
@@ -420,15 +420,6 @@ const DriverList = ({ mode = 'approved' }) => {
               className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
             >
               <Edit2 size={13} className="text-gray-400" /> Edit
-            </button>
-            <button
-              onClick={() => {
-                closeMenu();
-                setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
-              }}
-              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-            >
-              <Key size={13} className="text-gray-400" /> Update Password
             </button>
             <button
               onClick={() => {

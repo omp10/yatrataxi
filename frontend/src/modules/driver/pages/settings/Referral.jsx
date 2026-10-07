@@ -189,7 +189,7 @@ const DriverReferral = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f7fb] font-sans p-5 pt-8 pb-10">
-      <header className="mb-5 flex items-center gap-3">
+      <header className="sticky top-0 z-30 -mx-5 -mt-8 px-5 pt-8 pb-3 bg-[#f5f7fb] mb-5 flex items-center gap-3">
         <button
           onClick={() => navigate(`${routePrefix}/profile`)}
           className="w-9 h-9 rounded-xl border border-gray-200 bg-white flex items-center justify-center shadow-sm"
@@ -199,7 +199,7 @@ const DriverReferral = () => {
         <h1 className="text-[19px] font-semibold text-gray-900">Referrals</h1>
       </header>
 
-      <div className="rounded-[28px] border border-gray-200 bg-white shadow-sm overflow-hidden max-w-md mx-auto">
+      <div className="rounded-[28px] border border-gray-200 bg-white shadow-sm overflow-x-clip max-w-md mx-auto">
         <div className="bg-[#1830b8] px-5 py-5 text-white flex items-center justify-between">
           <div>
             <p className="text-[26px] font-semibold leading-tight">{bannerText}</p>

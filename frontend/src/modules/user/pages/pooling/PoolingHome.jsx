@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { userService } from '../../services/userService';
 import toast from 'react-hot-toast';
+import { getTodayDateString } from '../../../../shared/utils/dateHelpers';
 
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
@@ -294,6 +295,7 @@ const PoolingHome = () => {
               </div>
               <input
                 type="date"
+                min={getTodayDateString()}
                 value={search.date}
                 onChange={(e) => setSearch({ ...search, date: e.target.value })}
                 className="w-full rounded-[24px] bg-slate-50 py-5 pl-12 pr-4 text-sm font-black text-slate-900 outline-none transition focus:ring-4 focus:ring-indigo-50 border border-transparent focus:border-indigo-100 appearance-none"

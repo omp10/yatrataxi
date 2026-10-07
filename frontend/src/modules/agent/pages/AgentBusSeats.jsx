@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Armchair, Bus, CalendarDays, ChevronRight, Loader2, MapPinned, Phone, RotateCcw, UserRound, X } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { agentService } from '../services/agentService';
+import useBodyScrollLock from '../../../shared/hooks/useBodyScrollLock';
 
 const formatMoney = (value) => `Rs ${Number(value || 0).toFixed(0)}`;
 
@@ -151,6 +152,7 @@ const AgentBusSeats = () => {
   const [seatLayout, setSeatLayout] = useState(null);
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [showPassengerForm, setShowPassengerForm] = useState(false);
+  useBodyScrollLock(showPassengerForm);
   const [passenger, setPassenger] = useState({
     name: '',
     phone: '',

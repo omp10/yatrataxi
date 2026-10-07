@@ -4,11 +4,14 @@ import { ArrowLeft, Camera, CheckCircle2, Eye, FileText, Loader2, RefreshCw, X }
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getCurrentDriver, getDriverDocumentTemplates, updateDriverDocument } from '../../services/registrationService';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
+import toast from 'react-hot-toast';
+import { getTodayDateString, isPastDateString } from '../../../../shared/utils/dateHelpers';
 import {
   flattenDriverDocumentFields,
   getDocumentPreviewUrl,
   normalizeDriverDocumentTemplates,
 } from '../../utils/documentTemplates';
+import useBodyScrollLock from '../../../../shared/hooks/useBodyScrollLock';
 
 const formatDate = (value) => {
   if (!value) return 'Uploaded';
@@ -83,6 +86,7 @@ const DriverDocuments = () => {
   const focusDocumentKey = String(location.state?.focusDocumentKey || '').trim();
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
+  useBodyScrollLock(Boolean(selectedDoc));
   const [driver, setDriver] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -288,8 +292,8 @@ const DriverDocuments = () => {
   }, [docs, focusDocumentKey, imageUploading, isLoading]);
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
-      <header className="flex items-center gap-4 mb-8">
+    <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-clip">
+      <header className="sticky top-0 z-30 -mx-6 -mt-10 px-6 pt-10 pb-3 bg-[#f8f9fb] flex items-center gap-4 mb-8">
         <button onClick={() => navigate(`${routePrefix}/profile`)} className="w-9 h-9 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-600 hover:text-slate-900 active:scale-95 transition-all">
           <ArrowLeft size={18} strokeWidth={2.5} />
         </button>
@@ -335,9 +339,10 @@ const DriverDocuments = () => {
                   </label>
                   <input
                     type="date"
+                    min={getTodayDateString()}
                     value={editingExpiryDate}
                     disabled={isSavingExpiry}
-                    onChange={(e) => setEditingExpiryDate(e.target.value)}
+                    onChange={(e) => (isPastDateString(e.target.value) ? toast.error("Expiry date cannot be in the past") : setEditingExpiryDate(e.target.value))}
                     className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-[13px] font-bold text-slate-900 focus:outline-none focus:border-slate-400 focus:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>

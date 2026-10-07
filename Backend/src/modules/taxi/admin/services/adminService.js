@@ -50,6 +50,7 @@ import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { SupportTicket } from '../../support/models/SupportTicket.js';
 import TaxiTransportType from '../models/TaxiTransportType.js';
+import { randomBytes } from 'crypto';
 import { comparePassword, hashPassword } from '../../driver/services/authService.js';
 import {
   applyDriverWalletAdjustment,
@@ -4693,10 +4694,11 @@ export const createDriver = async (payload = {}, currentAdmin = null) => {
 
   if (!name) throw new ApiError(400, 'Driver name is required');
   if (!phone) throw new ApiError(400, 'Driver phone is required');
-  if (!password || password.length < 6) {
+  // Drivers sign in with OTP, so a password is optional; a random one satisfies the schema.
+  if (password && password.length < 6) {
     throw new ApiError(400, 'Password must be at least 6 characters');
   }
-  if (passwordConfirmation && password !== passwordConfirmation) {
+  if (password && passwordConfirmation && password !== passwordConfirmation) {
     throw new ApiError(400, 'Password confirmation does not match');
   }
 
@@ -4777,7 +4779,7 @@ export const createDriver = async (payload = {}, currentAdmin = null) => {
     profile_picture: profilePicture,
     profileImage: profilePicture,
     gender: String(payload.gender || '').trim(),
-    password: await hashPassword(password),
+    password: await hashPassword(password || randomBytes(16).toString('hex')),
     vehicleType,
     vehicleIconType,
     vehicleTypeId: vehicleTypeId && mongoose.isValidObjectId(vehicleTypeId) ? toObjectId(vehicleTypeId) : null,
@@ -5498,10 +5500,19 @@ const toAdminRideRow = (ride) => {
     tripStatus = 'ACCEPTED';
   }
 
+  // A scheduled ride that has been accepted but whose pickup time is still ahead is "upcoming".
+  const scheduledAtMs = ride.scheduledAt ? new Date(ride.scheduledAt).getTime() : NaN;
+  const isScheduled = Number.isFinite(scheduledAtMs);
+  if (isScheduled && tripStatus === 'ACCEPTED' && scheduledAtMs > Date.now()) {
+    tripStatus = 'UPCOMING';
+  }
+
   return {
     id: String(ride._id),
     requestId: requestCode,
     date: ride.createdAt,
+    isScheduled,
+    scheduledAt: isScheduled ? ride.scheduledAt : null,
     userName: ride.userId?.name || 'Unknown User',
     driverName: ride.driverId?.name || 'Unassigned',
     transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Taxi',
@@ -5628,20 +5639,17 @@ export const listOngoingRides = async (query = {}) => {
     status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
   };
 
-  if (tab === 'accepted') {
-    filter.status = RIDE_STATUS.ACCEPTED;
-  } else if (tab === 'ongoing') {
+  if (tab === 'ongoing') {
     filter.status = RIDE_STATUS.ONGOING;
-  } else if (tab === 'upcoming') {
-    filter.status = RIDE_STATUS.SEARCHING;
   }
+  // accepted / upcoming are split per row below, because accepted scheduled rides count as upcoming.
 
   const fetchLimit = Math.max(page * limit * 10, 200);
 
   const rides = await Ride.find(filter)
     .sort({ createdAt: -1 })
     .limit(fetchLimit)
-    .select('status liveStatus serviceType createdAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation lastDriverLocation userId driverId vehicleIconType')
+    .select('status liveStatus serviceType createdAt scheduledAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation lastDriverLocation userId driverId vehicleIconType')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
@@ -5697,7 +5705,7 @@ export const listRideRequests = async (query = {}) => {
   const rides = await Ride.find(filter)
     .sort({ createdAt: -1 })
     .limit(fetchLimit)
-    .select('status liveStatus serviceType createdAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation lastDriverLocation userId driverId vehicleIconType')
+    .select('status liveStatus serviceType createdAt scheduledAt fare paymentMethod pickupAddress dropAddress pickupLocation dropLocation lastDriverLocation userId driverId vehicleIconType')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
@@ -6639,11 +6647,13 @@ export const getOwnerById = async (id, currentAdmin = null) => {
     if (!payload.email?.trim()) {
       throw new ApiError(400, 'Email is required');
     }
-    if (!payload.password || String(payload.password).length < 6) {
-      throw new ApiError(400, 'Password must be at least 6 characters');
-    }
-    if (payload.password !== payload.password_confirmation) {
-      throw new ApiError(400, 'Passwords do not match');
+    if (payload.password) {
+      if (String(payload.password).length < 6) {
+        throw new ApiError(400, 'Password must be at least 6 characters');
+      }
+      if (payload.password !== payload.password_confirmation) {
+        throw new ApiError(400, 'Passwords do not match');
+      }
     }
 
     const normalizedEmail = String(payload.email).trim().toLowerCase();
@@ -6667,7 +6677,7 @@ export const getOwnerById = async (id, currentAdmin = null) => {
       name: String(payload.name).trim(),
       mobile: normalizedMobile,
       email: normalizedEmail,
-      password: await hashPassword(String(payload.password)),
+      password: await hashPassword(String(payload.password || randomBytes(16).toString('hex'))),
       service_location_id: serviceLocationId,
       legacy_service_location_id:
         payload.legacy_service_location_id || (serviceLocationId ? '' : payload.service_location_id || ''),

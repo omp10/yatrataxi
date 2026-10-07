@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Clock, Map, User } from 'lucide-react';
 import { useSettings, normalizeAssetUrl } from '../../../shared/context/SettingsContext';
+import useKeyboardOpen from '../../../shared/hooks/useKeyboardOpen';
 import busIcon from '../../../assets/3d images/AutoCab/bus.png';
 
 const isEnabledFlag = (value) => {
@@ -26,6 +27,7 @@ const BottomNavbar = () => {
   const busModule = (modules || []).find(m => m.service_type === 'bus' || m.name.toLowerCase() === 'bus');
   const dynamicBusIcon = busModule?.mobile_menu_icon ? normalizeAssetUrl(busModule.mobile_menu_icon) : busIcon;
   const showNavSkeleton = loading && !hasBootstrapSettings;
+  const keyboardOpen = useKeyboardOpen();
 
   const navItems = [
     { icon: Home, label: 'Ride', path: '/taxi/user' },
@@ -34,6 +36,8 @@ const BottomNavbar = () => {
     { icon: Map, label: 'Support', path: '/taxi/user/support' },
     { icon: User, label: 'Profile', path: '/taxi/user/profile' },
   ];
+
+  if (keyboardOpen) return null;
 
   if (showNavSkeleton) {
     return (

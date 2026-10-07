@@ -1,12 +1,14 @@
 import React from 'react';
 import { Filter, MoreVertical, Search, Loader2, ChevronRight, Menu, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import RideRowActions, { getTripStatusLabel } from '../../components/ui/RideRowActions';
 import { adminService } from '../../services/adminService';
 
 const STATUS_STYLES = {
   ACCEPTED: 'bg-[#10B981] text-white', // Emerald/Green from image
   UPCOMING: 'bg-[#F59E0B] text-white', // Amber from image
   ONGOING: 'bg-[#3B82F6] text-white', 
+  SCHEDULED: 'bg-[#8B5CF6] text-white',
 };
 
 const PAYMENT_STYLES = {
@@ -32,6 +34,8 @@ const Ongoing = () => {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [showFilters, setShowFilters] = React.useState(false);
+  const [paymentFilter, setPaymentFilter] = React.useState('ALL');
 
   const loadRows = React.useCallback(async () => {
     setLoading(true);
@@ -54,6 +58,10 @@ const Ongoing = () => {
   React.useEffect(() => {
     loadRows();
   }, [loadRows]);
+
+  const visibleRows = paymentFilter === 'ALL'
+    ? rows
+    : rows.filter((row) => String(row.paymentOption || 'CASH').toUpperCase() === paymentFilter);
 
   const handleDelete = async (ride) => {
     const confirmed = window.confirm(`Delete ride ${ride.requestId}? This will remove it for both rider and driver.`);
@@ -114,12 +122,34 @@ const Ongoing = () => {
             </div>
 
             <div className="flex items-center gap-3">
-              <button className="w-10 h-10 border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:bg-gray-50">
-                <Search size={18} />
-              </button>
-              <button className="flex items-center gap-2 px-5 py-2.5 bg-[#f46b45] text-white rounded-lg text-[13px] font-bold shadow-sm">
+              <div className="relative">
+                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search requests"
+                  className="h-10 w-52 rounded-full border border-slate-200 pl-9 pr-3 text-[13px] outline-none focus:border-indigo-400"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFilters((current) => !current)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#f46b45] text-white rounded-lg text-[13px] font-bold shadow-sm"
+              >
                 <Filter size={16} /> Filters
               </button>
+              {showFilters ? (
+                <select
+                  value={paymentFilter}
+                  onChange={(event) => setPaymentFilter(event.target.value)}
+                  className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none"
+                >
+                  <option value="ALL">All payments</option>
+                  <option value="CASH">Cash</option>
+                  <option value="CARD">Card</option>
+                  <option value="WALLET">Wallet</option>
+                </select>
+              ) : null}
             </div>
           </div>
 
@@ -141,8 +171,8 @@ const Ongoing = () => {
                       <Loader2 className="animate-spin text-slate-300 mx-auto" size={32} />
                     </td>
                   </tr>
-                ) : rows.length > 0 ? (
-                  rows.map((row) => (
+                ) : visibleRows.length > 0 ? (
+                  visibleRows.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/30">
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.requestId}</td>
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{formatDate(row.date)}</td>
@@ -150,8 +180,8 @@ const Ongoing = () => {
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.driverName || '----'}</td>
                       <td className="px-6 py-5 text-[14px] text-slate-600 font-medium">{row.transportType}</td>
                       <td className="px-6 py-5">
-                        <span className={`inline-block px-3 py-1 text-[10px] font-bold rounded uppercase ${STATUS_STYLES[row.tripStatus] || 'bg-slate-200 text-slate-700'}`}>
-                          {row.tripStatus}
+                        <span className={`inline-block px-3 py-1 text-[10px] font-bold rounded uppercase ${STATUS_STYLES[getTripStatusLabel(row)] || STATUS_STYLES[row.tripStatus] || 'bg-slate-200 text-slate-700'}`}>
+                          {getTripStatusLabel(row)}
                         </span>
                       </td>
                       <td className="px-6 py-5">
@@ -164,9 +194,7 @@ const Ongoing = () => {
                            <button onClick={() => handleDelete(row)} className="text-rose-400 hover:text-rose-600">
                              <Trash2 size={16} />
                            </button>
-                           <button className="text-slate-400 hover:text-slate-800">
-                             <MoreVertical size={18} />
-                           </button>
+                           <RideRowActions row={row} />
                          </div>
                       </td>
                     </tr>

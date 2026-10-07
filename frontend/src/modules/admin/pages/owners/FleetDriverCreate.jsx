@@ -105,11 +105,6 @@ const FleetDriverCreate = () => {
 
     if (submitting) return;
 
-    if (formData.password !== formData.password_confirmation) {
-      alert('Passwords do not match');
-      return;
-    }
-
     setSubmitting(true);
 
     try {
@@ -118,7 +113,6 @@ const FleetDriverCreate = () => {
         mobile: formData.mobile,
         phone: formData.mobile,
         email: formData.email,
-        password: formData.password,
         gender: formData.gender,
         owner_id: formData.owner_id,
         service_location_id: formData.service_location_id,
@@ -261,34 +255,6 @@ const FleetDriverCreate = () => {
                 value={formData.email}
                 onChange={(event) => setField('email', event.target.value)}
                 placeholder="Enter Email"
-                className={inputClass}
-              />
-            </div>
-
-            <div>
-              <label className={labelClass}>
-                Password <span className="text-red-500">*</span>
-              </label>
-              <input
-                required
-                type="password"
-                value={formData.password}
-                onChange={(event) => setField('password', event.target.value)}
-                placeholder="Enter Password"
-                className={inputClass}
-              />
-            </div>
-
-            <div>
-              <label className={labelClass}>
-                Confirm Password <span className="text-red-500">*</span>
-              </label>
-              <input
-                required
-                type="password"
-                value={formData.password_confirmation}
-                onChange={(event) => setField('password_confirmation', event.target.value)}
-                placeholder="Confirm Password"
                 className={inputClass}
               />
             </div>

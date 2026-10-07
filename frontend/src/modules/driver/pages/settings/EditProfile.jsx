@@ -107,8 +107,8 @@ const EditProfile = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans p-6 pt-10 overflow-hidden">
-            <header className="flex items-center gap-4 mb-8">
+        <div className="min-h-screen bg-slate-50 font-sans p-6 pt-10 overflow-x-clip">
+            <header className="sticky top-0 z-30 -mx-6 -mt-10 px-6 pt-10 pb-3 bg-slate-50 sticky top-0 z-30 -mx-6 -mt-10 px-6 pt-10 pb-3 bg-slate-50 flex items-center gap-4 mb-8">
                 <button onClick={() => navigate(`${routePrefix}/profile`)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center active:scale-95 transition-transform">
                     <ArrowLeft size={18} />
                 </button>

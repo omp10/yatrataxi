@@ -114,7 +114,7 @@ const AgentLogin = () => {
                             <Building2 size={36} className="text-[#143a5a]" strokeWidth={2.5} />
                         </motion.div>
                         <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-                            Hello!
+                            Agent Login
                         </h1>
                         <p className="text-slate-500 font-medium text-lg">
                             Sign in to your agent account
@@ -162,7 +162,7 @@ const AgentLogin = () => {
                                 className="h-6 w-6 rounded-lg border-2 border-slate-100 bg-slate-50 text-[#143a5a] focus:ring-[#143a5a] transition-all cursor-pointer"
                             />
                             <label htmlFor="terms" className="text-sm font-medium text-slate-400 leading-snug cursor-pointer select-none">
-                                I accept the <span className="text-[#143a5a] font-bold hover:underline">Terms</span> & <span className="text-[#143a5a] font-bold hover:underline">Privacy</span>
+                                I accept the <Link to="/terms" onClick={(event) => event.stopPropagation()} className="text-[#143a5a] font-bold underline">Terms</Link> & <Link to="/privacy" onClick={(event) => event.stopPropagation()} className="text-[#143a5a] font-bold underline">Privacy</Link>
                             </label>
                         </div>
 
@@ -183,6 +183,7 @@ const AgentLogin = () => {
                     <div className="text-center">
                         <button
                             type="button"
+                            onClick={() => navigate('/support')}
                             className="text-slate-400 text-sm font-bold hover:text-slate-600 transition-colors"
                         >
                             Need help? <span className="text-[#143a5a]">Contact Support</span>

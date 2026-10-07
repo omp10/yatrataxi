@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronRight, Loader2, LockKeyhole, MapPinned, Shield, UserRound } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import PasswordInput from '../../components/ui/PasswordInput';
 import { adminService } from '../../services/adminService';
 import { ADMIN_PERMISSION_GROUPS } from '../../constants/adminAccess';
 
@@ -340,8 +341,7 @@ const AdminCreate = () => {
               <div className="space-y-5">
                 <div>
                   <label className={labelClass}>Password</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={form.password}
                     onChange={(event) => setField('password', event.target.value)}
                     className={inputClass}
@@ -349,8 +349,7 @@ const AdminCreate = () => {
                 </div>
                 <div>
                   <label className={labelClass}>Confirm Password</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={form.passwordConfirmation}
                     onChange={(event) => setField('passwordConfirmation', event.target.value)}
                     className={inputClass}

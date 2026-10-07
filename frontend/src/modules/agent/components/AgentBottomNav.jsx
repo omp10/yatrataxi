@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, ReceiptText, QrCode, Wallet, UserRound } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import useKeyboardOpen from '../../../shared/hooks/useKeyboardOpen';
 
 const tabs = [
   { label: 'Home', path: '/taxi/agent', Icon: Home },
@@ -13,6 +14,9 @@ const tabs = [
 const AgentBottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const keyboardOpen = useKeyboardOpen();
+
+  if (keyboardOpen) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 mx-auto w-full max-w-lg px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-3">

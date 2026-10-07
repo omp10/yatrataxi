@@ -23,7 +23,7 @@ const DriverSupport = () => {
 
     return (
         <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32">
-            <header className="flex items-center gap-4 mb-6 text-slate-900 uppercase">
+            <header className="sticky top-0 z-30 -mx-6 -mt-10 px-6 pt-10 pb-3 bg-[#f8f9fb] flex items-center gap-4 mb-6 text-slate-900 uppercase">
                 <button onClick={() => navigate(`${routePrefix}/profile`)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
                     <ArrowLeft size={18} />
                 </button>
@@ -55,7 +55,7 @@ const DriverSupport = () => {
             </AnimatePresence>
 
             <main className="space-y-6">
-                <div className="relative group overflow-hidden bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                <div className="relative group overflow-x-clip bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
                     <Search size={18} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
                     <input 
                         type="text" 
