@@ -166,6 +166,7 @@ const serializePoolingBooking = (booking) => {
 export const searchPoolingRoutes = asyncHandler(async (req, res) => {
   const rawFrom = toCleanString(req.query.from);
   const rawTo = toCleanString(req.query.to);
+  const rawDate = toCleanString(req.query.date || req.query.travelDate);
   const from = rawFrom.toLowerCase();
   const to = rawTo.toLowerCase();
 
@@ -191,6 +192,77 @@ export const searchPoolingRoutes = asyncHandler(async (req, res) => {
 
   let routes = await PoolingRoute.find(query).populate('assignedVehicleTypeIds').lean();
 
+  const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let normalizedTravelDate = '';
+  if (rawDate) {
+    try {
+      normalizedTravelDate = normalizeTravelDate(rawDate);
+      const [y, m, d] = normalizedTravelDate.split('-').map(Number);
+      const dayOfWeek = DAY_LABELS[new Date(y, m - 1, d).getDay()] || '';
+
+      if (dayOfWeek) {
+        routes = routes
+          .map((route) => {
+            const filteredSchedules = (route.schedules || []).filter((s) => {
+              if (s.status && s.status !== 'active') return false;
+              if (!Array.isArray(s.activeDays) || s.activeDays.length === 0) return true;
+              return s.activeDays.includes(dayOfWeek);
+            });
+            return {
+              ...route,
+              schedules: filteredSchedules,
+            };
+          })
+          .filter((route) => route.schedules.length > 0);
+      }
+    } catch {
+      // non-blocking
+    }
+  }
+
+  // Sort each route's schedules chronologically by departureTime
+  routes.forEach((route) => {
+    if (Array.isArray(route.schedules)) {
+      route.schedules.sort((a, b) => {
+        const aTime = String(a.departureTime || '').trim();
+        const bTime = String(b.departureTime || '').trim();
+        return aTime.localeCompare(bTime);
+      });
+    }
+  });
+
+  // Attach booked seat count for the travel date if available
+  if (normalizedTravelDate && routes.length > 0) {
+    try {
+      const routeIds = routes.map((r) => r._id);
+      const reservations = await PoolingSeatReservation.find({
+        route: { $in: routeIds },
+        travelDate: normalizedTravelDate,
+      })
+        .select('route vehicle scheduleId seatId')
+        .lean();
+
+      const reservationCounts = {};
+      reservations.forEach((item) => {
+        const key = `${String(item.route)}:${String(item.scheduleId || '')}`;
+        reservationCounts[key] = (reservationCounts[key] || 0) + 1;
+      });
+
+      routes.forEach((route) => {
+        route.schedules = (route.schedules || []).map((s) => {
+          const key = `${String(route._id)}:${String(s.id || '')}`;
+          const bookedCount = reservationCounts[key] || 0;
+          return {
+            ...s,
+            bookedSeatCount: bookedCount,
+          };
+        });
+      });
+    } catch {
+      // non-blocking
+    }
+  }
+
   if (from || to) {
     const scoreRoute = (route) => {
       const origin = (route.originLabel || '').trim().toLowerCase();
@@ -212,7 +284,20 @@ export const searchPoolingRoutes = asyncHandler(async (req, res) => {
       return 0;
     };
 
-    routes.sort((a, b) => scoreRoute(b) - scoreRoute(a));
+    routes.sort((a, b) => {
+      const scoreDiff = scoreRoute(b) - scoreRoute(a);
+      if (scoreDiff !== 0) return scoreDiff;
+      const aFirstTime = String(a.schedules?.[0]?.departureTime || '99:99');
+      const bFirstTime = String(b.schedules?.[0]?.departureTime || '99:99');
+      return aFirstTime.localeCompare(bFirstTime);
+    });
+  } else {
+    // Default sort by earliest departure time
+    routes.sort((a, b) => {
+      const aFirstTime = String(a.schedules?.[0]?.departureTime || '99:99');
+      const bFirstTime = String(b.schedules?.[0]?.departureTime || '99:99');
+      return aFirstTime.localeCompare(bFirstTime);
+    });
   }
 
   return ok(res, routes, 'Routes fetched successfully');

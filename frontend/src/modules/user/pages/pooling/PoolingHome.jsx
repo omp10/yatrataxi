@@ -21,6 +21,8 @@ import { getTodayDateString } from '../../../../shared/utils/dateHelpers';
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
 
+import { formatTime12Hour } from '../../utils/poolingTimeUtils';
+
 const toCleanString = (value = '') => String(value || '').trim();
 
 const formatDurationFromSchedule = (schedule = {}) => {
@@ -55,13 +57,19 @@ const getPrimarySchedule = (route = {}) => {
 const normalizePopularRoute = (route = {}) => {
   const schedule = getPrimarySchedule(route);
   const middleStopCount = Array.isArray(route?.stops) ? route.stops.length : 0;
+  const duration = formatDurationFromSchedule(schedule);
+
+  let timeDisplay = 'Daily Schedule';
+  if (schedule?.departureTime) {
+    timeDisplay = `${formatTime12Hour(schedule.departureTime)}${duration ? ` • ${duration}` : ''}`;
+  }
 
   return {
     id: route._id || route.id,
     from: toCleanString(route.originLabel) || 'Origin',
     to: toCleanString(route.destinationLabel) || 'Destination',
     price: Number(route.farePerSeat || 0),
-    time: formatDurationFromSchedule(schedule) || (schedule?.departureTime && schedule?.arrivalTime ? `${schedule.departureTime} - ${schedule.arrivalTime}` : 'Schedule available'),
+    time: timeDisplay,
     scheduleLabel: toCleanString(schedule?.label) || 'Shared route',
     seats: Number(route.maxSeatsPerBooking || 0),
     stopCount: middleStopCount,

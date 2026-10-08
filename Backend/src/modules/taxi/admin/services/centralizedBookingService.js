@@ -162,6 +162,17 @@ const mapPoolingToUnified = (booking) => {
 
   const fare = Number(booking.fare || booking.totalFare || 0);
 
+  const matchedSchedule = booking.route?.schedules?.find((s) => s.id === booking.scheduleId);
+  const scheduleTime = matchedSchedule?.departureTime || '';
+  let scheduledAt = booking.travelDate || booking.createdAt;
+  if (scheduleTime && booking.travelDate) {
+    try {
+      scheduledAt = `${new Date(booking.travelDate).toISOString().slice(0, 10)} ${scheduleTime}`;
+    } catch {
+      scheduledAt = booking.travelDate;
+    }
+  }
+
   return {
     id: String(booking._id),
     rawId: booking._id,
@@ -178,13 +189,14 @@ const mapPoolingToUnified = (booking) => {
     driverOrProvider: {
       name: booking.driver?.name || (booking.route?.driverName || 'Route Captain'),
       phone: booking.driver?.phone || '',
-      vehicle: booking.vehicle?.model ? `${booking.vehicle.model} (${booking.vehicle.registrationNumber || 'Car'})` : 'Shared Car',
+      vehicle: booking.vehicle?.model ? `${booking.vehicle.model} (${booking.vehicle.registrationNumber || booking.vehicle.vehicleNumber || 'Car'})` : (booking.vehicle?.name || 'Shared Car'),
       type: 'Shared Cab',
     },
     route: {
-      pickup: booking.pickupStopId || booking.pickupLocation || booking.route?.startLocation?.name || 'Pickup Stop',
-      drop: booking.dropStopId || booking.dropLocation || booking.route?.endLocation?.name || 'Drop Stop',
+      pickup: booking.pickupLabel || booking.pickupStopId || booking.pickupLocation || booking.route?.startLocation?.name || 'Pickup Stop',
+      drop: booking.dropLabel || booking.dropStopId || booking.dropLocation || booking.route?.endLocation?.name || 'Drop Stop',
       routeName: booking.route?.routeName || 'Intercity Pooling Route',
+      departureTime: scheduleTime,
     },
     fare,
     paymentMethod: String(booking.paymentMethod || 'CASH').toUpperCase(),
@@ -200,7 +212,7 @@ const mapPoolingToUnified = (booking) => {
         }
       : null,
     createdAt: booking.createdAt,
-    scheduledAt: booking.departureTime || booking.scheduledAt || booking.createdAt,
+    scheduledAt,
   };
 };
 
@@ -376,10 +388,10 @@ export const listCentralizedBookings = async (query = {}) => {
       ? PoolingBooking.find(poolingFilter)
           .sort({ createdAt: -1 })
           .limit(fetchLimit)
-          .select('bookingCode user route vehicle passenger seatsBooked totalFare fare bookingStatus status agentMeta createdAt travelDate')
+          .select('bookingId bookingCode user route vehicle passenger seatsBooked totalFare fare bookingStatus status agentMeta createdAt travelDate scheduleId pickupLabel dropLabel')
           .populate('user', 'name phone email')
-          .populate('route', 'routeName startLocation endLocation')
-          .populate('vehicle', 'model registrationNumber')
+          .populate('route', 'routeName startLocation endLocation schedules')
+          .populate('vehicle', 'name model registrationNumber vehicleNumber')
           .lean()
       : [],
     shouldFetchBus

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -6,40 +6,67 @@ import {
   Clock, 
   Users, 
   ChevronRight, 
-  Filter,
-  Car,
-  Star,
-  ShieldCheck,
-  Zap,
-  Ticket,
-  Navigation,
+  Car, 
+  Star, 
+  ShieldCheck, 
+  Zap, 
   Calendar,
+  ArrowRight,
+  Armchair,
+  SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { userService } from '../../services/userService';
 import toast from 'react-hot-toast';
+import {
+  formatTime12Hour,
+  getJourneyDuration,
+  getTimePeriodCategory,
+  formatDateDisplay,
+  getTimeSlotStatus,
+  parseTimeToMinutes,
+} from '../../utils/poolingTimeUtils';
 
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
 
+const TIME_FILTERS = [
+  { id: 'all', label: 'All Times', icon: '🕒' },
+  { id: 'morning', label: 'Morning', sub: '4 AM - 12 PM', icon: '🌅' },
+  { id: 'afternoon', label: 'Afternoon', sub: '12 PM - 5 PM', icon: '☀️' },
+  { id: 'evening', label: 'Evening', sub: '5 PM - 9 PM', icon: '🌆' },
+  { id: 'night', label: 'Night', sub: '9 PM - 4 AM', icon: '🌙' },
+];
+
+const SORT_OPTIONS = [
+  { id: 'time_asc', label: 'Earliest Departure' },
+  { id: 'time_desc', label: 'Latest Departure' },
+  { id: 'price_asc', label: 'Lowest Fare' },
+];
+
 const PoolingList = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const from = searchParams.get('from');
-  const to = searchParams.get('to');
-  const date = searchParams.get('date');
+  const from = searchParams.get('from') || '';
+  const to = searchParams.get('to') || '';
+  const initialDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
+  const [selectedDate, setSelectedDate] = useState(initialDate);
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTimeFilter, setActiveTimeFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('time_asc');
+  const [selectedScheduleMap, setSelectedScheduleMap] = useState({});
 
   useEffect(() => {
-    fetchRoutes();
-  }, [from, to, date]);
+    fetchRoutes(selectedDate);
+  }, [from, to, selectedDate]);
 
-  const fetchRoutes = async () => {
+  const fetchRoutes = async (queryDate) => {
     setLoading(true);
     try {
-      const res = await userService.searchPoolingRoutes({ from, to, date });
+      const res = await userService.searchPoolingRoutes({ from, to, date: queryDate });
       let data = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : [];
 
       if (from || to) {
@@ -70,202 +97,407 @@ const PoolingList = () => {
       }
 
       setRoutes(data);
-    } catch (error) {
-      toast.error('Failed to fetch routes');
+    } catch {
+      toast.error('Failed to fetch available sharing cars');
     } finally {
       setLoading(false);
     }
   };
 
+  // Expand routes into scheduled trip instances so every departure time is an explicit option
+  const trips = useMemo(() => {
+    const list = [];
+    routes.forEach((route) => {
+      const vehicle = route.assignedVehicleTypeIds?.[0] || {};
+      const activeSchedules = Array.isArray(route.schedules) && route.schedules.length > 0
+        ? route.schedules
+        : [
+            {
+              id: 'standard-slot',
+              label: 'Standard Trip',
+              departureTime: '08:00',
+              arrivalTime: '11:00',
+              status: 'active',
+            },
+          ];
+
+      activeSchedules.forEach((schedule) => {
+        list.push({
+          tripId: `${route._id}-${schedule.id}`,
+          route,
+          schedule,
+          vehicle,
+          departureTime: schedule.departureTime || '08:00',
+          arrivalTime: schedule.arrivalTime || '11:00',
+          duration: getJourneyDuration(schedule.departureTime, schedule.arrivalTime),
+          timeCategory: getTimePeriodCategory(schedule.departureTime),
+          allSchedules: activeSchedules,
+        });
+      });
+    });
+
+    // Apply Time Filter
+    let filtered = list;
+    if (activeTimeFilter !== 'all') {
+      filtered = filtered.filter((t) => t.timeCategory === activeTimeFilter);
+    }
+
+    // Apply Sorting
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'time_asc') {
+        return parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime);
+      }
+      if (sortBy === 'time_desc') {
+        return parseTimeToMinutes(b.departureTime) - parseTimeToMinutes(a.departureTime);
+      }
+      if (sortBy === 'price_asc') {
+        return Number(a.route.farePerSeat || 0) - Number(b.route.farePerSeat || 0);
+      }
+      return 0;
+    });
+  }, [routes, activeTimeFilter, sortBy]);
+
+  // Handle user selecting a sharing car trip
+  const handleSelectTrip = (trip) => {
+    const activeSchedule = selectedScheduleMap[trip.route._id] || trip.schedule;
+    navigate(`/taxi/user/pooling/seats/${trip.route._id}`, {
+      state: {
+        travelDate: selectedDate,
+        scheduleId: activeSchedule.id,
+        schedule: activeSchedule,
+      },
+    });
+  };
+
+  // Quick date change helpers
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowObj = new Date();
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowStr = tomorrowObj.toISOString().split('T')[0];
+
   return (
-    <div className="min-h-screen bg-slate-100 max-w-lg mx-auto font-sans pb-24 selection:bg-indigo-100">
-      {/* Immersive Header */}
-      <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-xl px-5 pt-12 pb-6 shadow-sm border-b border-slate-200/80">
-        <div className="flex items-center gap-4 mb-6">
+    <div className="min-h-screen bg-slate-100 max-w-lg mx-auto font-sans pb-28 selection:bg-indigo-100">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-xl px-5 pt-10 pb-4 shadow-sm border-b border-slate-200/80">
+        <div className="flex items-center gap-3 mb-3">
           <button 
             onClick={() => navigate('/taxi/user/pooling')}
-            className="w-11 h-11 rounded-2xl border border-slate-100 bg-white flex items-center justify-center text-slate-900 shadow-sm active:scale-95 transition-all hover:bg-slate-50"
+            className="w-10 h-10 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-900 shadow-sm active:scale-95 transition-all hover:bg-slate-50"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} />
           </button>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-base font-black text-slate-900 leading-tight">{from}</span>
-              <ChevronRight size={14} className="text-slate-500 shrink-0" />
-              <span className="truncate text-base font-black text-slate-900 leading-tight">{to}</span>
+              <span className="truncate text-sm font-black text-slate-900 leading-tight">
+                {from || 'All Origins'}
+              </span>
+              <ChevronRight size={13} className="text-slate-400 shrink-0" />
+              <span className="truncate text-sm font-black text-slate-900 leading-tight">
+                {to || 'All Destinations'}
+              </span>
             </div>
-            <div className="flex items-center gap-2 mt-1">
-               <div className="flex items-center gap-1 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-                  <Calendar size={10} />
-                  {date}
-               </div>
-               <span className="bg-indigo-50 text-indigo-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Step 1/3</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+                {formatDateDisplay(selectedDate)}
+              </span>
+              <span className="text-slate-300">•</span>
+              <span className="text-[10px] font-bold text-slate-500">
+                {trips.length} time slots
+              </span>
             </div>
           </div>
-          <button className="w-11 h-11 rounded-2xl border border-slate-100 bg-white flex items-center justify-center text-slate-600 hover:text-slate-900 transition-colors">
-            <Filter size={18} />
-          </button>
+          <div className="flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-black text-indigo-600">
+            <Sparkles size={11} />
+            <span>Live Times</span>
+          </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="flex items-center gap-2 px-1">
-          <div className="h-1.5 flex-1 rounded-full bg-indigo-600 shadow-[0_0_8px_rgba(79,70,229,0.4)]" />
-          <div className="h-1.5 flex-1 rounded-full bg-slate-100" />
-          <div className="h-1.5 flex-1 rounded-full bg-slate-100" />
+        {/* Quick Date Switcher Pills */}
+        <div className="flex items-center gap-2 pt-1 pb-2">
+          <button
+            type="button"
+            onClick={() => setSelectedDate(todayStr)}
+            className={`px-3 py-1 rounded-full text-[11px] font-black transition-all ${
+              selectedDate === todayStr
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedDate(tomorrowStr)}
+            className={`px-3 py-1 rounded-full text-[11px] font-black transition-all ${
+              selectedDate === tomorrowStr
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Tomorrow
+          </button>
+          <div className="relative flex-1">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full text-[11px] font-black bg-slate-100 rounded-full px-3 py-1 text-slate-700 outline-none border border-transparent focus:border-indigo-300"
+            />
+          </div>
+        </div>
+
+        {/* Time Period Filter Chips */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 pb-1">
+          {TIME_FILTERS.map((filter) => {
+            const isActive = activeTimeFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setActiveTimeFilter(filter.id)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <span>{filter.icon}</span>
+                <span>{filter.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="px-5 pt-8">
+      {/* Sort & Results Bar */}
+      <div className="px-5 pt-4 flex items-center justify-between">
+        <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+          {trips.length} {trips.length === 1 ? 'Trip' : 'Trips'} Available
+        </p>
+        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-xl shadow-xs">
+          <SlidersHorizontal size={11} className="text-slate-400" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent text-[11px] font-bold outline-none cursor-pointer"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Sharing Cars List */}
+      <div className="px-5 pt-3">
         {loading ? (
           <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-44 w-full animate-pulse rounded-2xl bg-white border border-slate-200/80 shadow-sm" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 w-full animate-pulse rounded-3xl bg-white border border-slate-200 shadow-sm" />
             ))}
           </div>
-        ) : routes.length === 0 ? (
+        ) : trips.length === 0 ? (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-24 text-center"
+            className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-sm"
           >
-            <div className="mb-8 relative">
-               <div className="h-32 w-32 rounded-full bg-indigo-50/50 flex items-center justify-center text-indigo-100 animate-pulse" />
-               <Car size={56} className="absolute inset-0 m-auto text-indigo-200" />
+            <div className="mb-4 relative">
+              <div className="h-20 w-20 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400">
+                <Clock size={36} />
+              </div>
             </div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">No Rides Found</h3>
-            <p className="mt-3 max-w-[260px] text-sm font-medium text-slate-600 leading-relaxed">
-              We couldn't find any carpools matching your route for this date.
+            <h3 className="text-lg font-black text-slate-900 tracking-tight">No Sharing Cars at this Time</h3>
+            <p className="mt-2 max-w-[260px] text-xs font-medium text-slate-500 leading-relaxed">
+              No carpools match your selected time slot for {formatDateDisplay(selectedDate)}. Try selecting "All Times" or changing the date.
             </p>
             <button 
-              onClick={() => navigate('/taxi/user/pooling')}
-              className="mt-10 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white px-8 py-4 bg-slate-900 rounded-[20px] shadow-2xl shadow-slate-200 active:scale-95 transition-all"
+              onClick={() => setActiveTimeFilter('all')}
+              className="mt-6 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white px-6 py-3 bg-slate-900 rounded-2xl shadow-lg active:scale-95 transition-all"
             >
-              <ArrowLeft size={16} />
-              Modify Search
+              Show All Times
             </button>
           </motion.div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between px-2">
-               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-600">{routes.length} Available Rides</p>
-               <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest">
-                  <ShieldCheck size={12} />
-                  Verified
-               </div>
-            </div>
-
-            {routes.map((route, idx) => {
-              const vehicle = route.assignedVehicleTypeIds?.[0] || {};
+            {trips.map((trip, idx) => {
+              const { route, schedule, vehicle } = trip;
               const vehicleImage = (vehicle.images && vehicle.images.length > 0) ? vehicle.images[0] : taxiImg;
+              const vehicleCapacity = Number(vehicle.capacity || 4);
+              const bookedCount = Number(schedule.bookedSeatCount || 0);
+              const remainingSeats = Math.max(1, vehicleCapacity - bookedCount);
+              const timeStatus = getTimeSlotStatus(schedule.departureTime, selectedDate);
               const serviceTaxPercentage = Number(vehicle.serviceTaxPercentage || 0);
+
+              const formattedDep = formatTime12Hour(schedule.departureTime);
+              const formattedArr = formatTime12Hour(schedule.arrivalTime);
 
               return (
                 <motion.div
-                  key={route._id}
+                  key={trip.tripId}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.06 }}
+                  transition={{ delay: idx * 0.04 }}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() =>
-                    navigate(`/taxi/user/pooling/seats/${route._id}`, {
-                      state: {
-                        travelDate: date,
-                      },
-                    })
-                  }
-                  className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4.5 sm:p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-200 cursor-pointer"
+                  onClick={() => handleSelectTrip(trip)}
+                  className="group relative overflow-hidden rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-300 cursor-pointer"
                 >
-                  {/* Decorative Elements */}
-                  <div className="absolute top-0 right-0 -mr-12 -mt-12 h-36 w-36 rounded-full bg-slate-100/50 blur-2xl group-hover:bg-indigo-50/50 transition-colors pointer-events-none" />
-                  
-                  {/* Top: Route + Vehicle & Price */}
-                  <div className="flex items-start justify-between gap-3 relative z-10">
-                    {/* Route Timeline */}
-                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                      <div className="flex flex-col items-center pt-1 shrink-0">
-                        <div className="h-2.5 w-2.5 rounded-full border-2 border-indigo-600 bg-white shadow-[0_0_6px_rgba(79,70,229,0.3)]" />
-                        <div className="h-7 w-0.5 border-l-2 border-dashed border-slate-200 my-0.5" />
-                        <div className="h-2.5 w-2.5 rounded-full bg-slate-900" />
+                  {/* Top: Departure & Arrival Time Header */}
+                  <div className="bg-slate-50 rounded-2xl p-3.5 mb-3.5 border border-slate-100 flex items-center justify-between">
+                    {/* Departure info */}
+                    <div className="text-left">
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={13} className="text-indigo-600" />
+                        <span className="text-lg font-black tracking-tight text-slate-900 leading-none">
+                          {formattedDep}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pickup</p>
-                          <p className="text-sm font-black text-slate-900 truncate leading-tight mt-0.5">{route.originLabel}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Destination</p>
-                          <p className="text-sm font-black text-slate-900 truncate leading-tight mt-0.5">{route.destinationLabel}</p>
-                        </div>
-                      </div>
+                      <p className="text-[10px] font-bold text-slate-500 truncate max-w-[110px] mt-1">
+                        {route.originLabel}
+                      </p>
                     </div>
-                    
-                    {/* Vehicle Preview + Fare */}
-                    <div className="flex flex-col items-end shrink-0">
-                      <div className="mb-2 relative h-14 w-24 overflow-hidden rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-white transition-colors">
-                        <img src={vehicleImage} alt={vehicle.name} className="w-full h-full object-contain p-1 transform group-hover:scale-105 transition-transform duration-300" />
-                        <div className="absolute bottom-1 right-1 bg-white/90 backdrop-blur-xs px-1.5 py-0.5 rounded text-[8px] font-black text-slate-800 uppercase tracking-wider border border-slate-100">
-                          {vehicle.vehicleType || 'Sedan'}
-                        </div>
+
+                    {/* Journey arrow & duration */}
+                    <div className="flex flex-col items-center px-2">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        {trip.duration || 'Direct'}
+                      </span>
+                      <div className="flex items-center gap-1 my-1">
+                        <div className="h-0.5 w-6 bg-slate-300" />
+                        <ArrowRight size={10} className="text-slate-400" />
+                        <div className="h-0.5 w-6 bg-slate-300" />
                       </div>
-                      
-                      <div className="text-right">
-                        <div className="flex items-baseline justify-end gap-1">
-                          <span className="text-2xl font-black tracking-tight text-slate-900 leading-none">₹{route.farePerSeat}</span>
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">/ seat</span>
-                        </div>
+                      <span className="text-[9px] font-semibold text-slate-400">
+                        {schedule.label || 'Daily Run'}
+                      </span>
+                    </div>
+
+                    {/* Arrival info */}
+                    <div className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-lg font-black tracking-tight text-slate-900 leading-none">
+                          {formattedArr}
+                        </span>
                       </div>
+                      <p className="text-[10px] font-bold text-slate-500 truncate max-w-[110px] mt-1">
+                        {route.destinationLabel}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Middle Strip: Instant Badge, Seats Left & Tax info */}
-                  <div className="flex items-center justify-between py-2 border-y border-slate-100 my-3 relative z-10">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                        <Zap size={10} fill="currentColor" /> Instant
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600">
-                        <Users size={12} className="text-slate-400" /> {route.maxSeatsPerBooking} seats left
-                      </span>
-                    </div>
-                    {serviceTaxPercentage > 0 ? (
-                      <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">
-                        +{serviceTaxPercentage}% service tax
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                        All taxes incl.
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Footer Info: Captain details & Select Button */}
-                  <div className="flex items-center justify-between relative z-10 pt-0.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="relative shrink-0">
-                        <div className="h-9 w-9 overflow-hidden rounded-xl bg-slate-100 border border-slate-200">
-                          <img src={`https://ui-avatars.com/api/?name=${route.driverName || 'Verified'}&background=4f46e5&color=fff&bold=true&font-size=0.45`} alt="" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-emerald-500 border border-white flex items-center justify-center">
-                          <ShieldCheck size={7} className="text-white" />
-                        </div>
+                  {/* Middle: Vehicle details & Seat Fare */}
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Vehicle Preview */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-14 w-20 overflow-hidden rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center p-1 shrink-0 group-hover:scale-105 transition-transform">
+                        <img 
+                          src={vehicleImage} 
+                          alt={vehicle.name || 'Cab'} 
+                          className="h-full w-full object-contain" 
+                        />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-black text-slate-900 truncate leading-tight">{route.driverName || 'Verified Captain'}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <div className="flex items-center">
-                            {[...Array(5)].map((_, i) => (
-                              <Star key={i} size={8} className={i < 4 ? "text-amber-400 fill-amber-400" : "text-slate-200 fill-slate-200"} />
-                            ))}
-                          </div>
-                          <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider">4.8 • Top Pilot</span>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-black text-slate-900 truncate">
+                            {vehicle.name || vehicle.vehicleModel || 'Shared Cab'}
+                          </p>
+                          <span className="bg-slate-100 text-slate-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
+                            {vehicle.vehicleType || 'Car'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                            <Armchair size={11} />
+                            {remainingSeats} seats left
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            AC Vehicle
+                          </span>
                         </div>
                       </div>
                     </div>
-                    
-                    {/* "Select" Button (replacing the arrow) */}
-                    <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-wider shadow-sm group-hover:bg-indigo-600 group-hover:shadow-indigo-100 transition-all shrink-0">
-                      <span>Select</span>
-                      <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+
+                    {/* Fare */}
+                    <div className="text-right shrink-0">
+                      <div className="flex items-baseline justify-end gap-1">
+                        <span className="text-2xl font-black tracking-tight text-slate-900 leading-none">
+                          ₹{route.farePerSeat}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                          / seat
+                        </span>
+                      </div>
+                      {serviceTaxPercentage > 0 ? (
+                        <p className="text-[9px] font-bold text-amber-600 mt-0.5">
+                          +{serviceTaxPercentage}% tax
+                        </p>
+                      ) : (
+                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+                          All taxes incl.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Other Available Departure Times on this Route */}
+                  {trip.allSchedules.length > 1 && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0">
+                          Other times:
+                        </span>
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                          {trip.allSchedules.map((s) => {
+                            const isCurrent = s.id === schedule.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectTrip({
+                                    ...trip,
+                                    schedule: s,
+                                    departureTime: s.departureTime,
+                                    arrivalTime: s.arrivalTime,
+                                  });
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all shrink-0 ${
+                                  isCurrent
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                              >
+                                {formatTime12Hour(s.departureTime)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bottom Footer Action */}
+                  <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                        🚗
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-black text-slate-900 leading-tight">
+                          {route.driverName || 'Verified Pilot'}
+                        </p>
+                        <p className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                          <ShieldCheck size={9} /> Verified & GPS Tracked
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-wider shadow-sm group-hover:bg-indigo-600 transition-all shrink-0">
+                      <span>Book {formattedDep}</span>
+                      <ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
                     </div>
                   </div>
                 </motion.div>

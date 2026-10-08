@@ -22,6 +22,12 @@ import toast from 'react-hot-toast';
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
 
+import {
+  formatTime12Hour,
+  getJourneyDuration,
+  formatDateDisplay,
+} from '../../utils/poolingTimeUtils';
+
 const SEAT_LEGEND = [
   { key: 'available', label: 'Available', color: 'bg-white border-slate-200 text-slate-400' },
   { key: 'selected', label: 'Selected', color: 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-200 shadow-lg' },
@@ -47,9 +53,12 @@ const PoolingSeats = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const travelDate = location.state?.travelDate || '';
+  const passedScheduleId = location.state?.scheduleId || '';
+  const passedSchedule = location.state?.schedule || null;
 
   const [route, setRoute] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [selectedSchedule, setSelectedSchedule] = useState(passedSchedule);
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [bookedSeatIds, setBookedSeatIds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,15 +81,18 @@ const PoolingSeats = () => {
       setSelectedVehicle(nextVehicle);
 
       const activeSchedules = Array.isArray(routeData?.schedules) ? routeData.schedules : [];
-      const selectedSchedule =
+      const currentSchedule =
+        (passedScheduleId && activeSchedules.find((item) => String(item?.id) === String(passedScheduleId))) ||
+        passedSchedule ||
         activeSchedules.find((item) => String(item?.status || 'active') === 'active') ||
         activeSchedules[0] ||
         null;
+      setSelectedSchedule(currentSchedule);
 
       const seatAvailability = routeData?.seatAvailability || {};
       const availabilityKey =
-        nextVehicle?._id && selectedSchedule?.id
-          ? `${String(nextVehicle._id)}:${String(selectedSchedule.id)}`
+        nextVehicle?._id && currentSchedule?.id
+          ? `${String(nextVehicle._id)}:${String(currentSchedule.id)}`
           : '';
       const nextBookedSeatIds =
         availabilityKey && Array.isArray(seatAvailability[availabilityKey])
@@ -94,6 +106,21 @@ const PoolingSeats = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectSchedule = (newSchedule) => {
+    setSelectedSchedule(newSchedule);
+    setSelectedSeats([]);
+    const seatAvailability = route?.seatAvailability || {};
+    const availabilityKey =
+      selectedVehicle?._id && newSchedule?.id
+        ? `${String(selectedVehicle._id)}:${String(newSchedule.id)}`
+        : '';
+    const nextBooked =
+      availabilityKey && Array.isArray(seatAvailability[availabilityKey])
+        ? seatAvailability[availabilityKey]
+        : [];
+    setBookedSeatIds(nextBooked);
   };
 
   const toggleSeat = (seatId) => {
@@ -121,13 +148,8 @@ const PoolingSeats = () => {
       return;
     }
 
-    const activeSchedules = Array.isArray(route?.schedules) ? route.schedules : [];
-    const selectedSchedule =
-      activeSchedules.find((item) => String(item?.status || 'active') === 'active') ||
-      activeSchedules[0] ||
-      null;
     if (!selectedSchedule?.id) {
-      toast.error('No active schedule is available for this route');
+      toast.error('No active schedule is selected for this route');
       return;
     }
 
@@ -228,6 +250,54 @@ const PoolingSeats = () => {
             </div>
           </div>
         </div>
+
+        {/* Departure Time Banner & Schedule Switcher */}
+        {selectedSchedule && (
+          <div className="mt-3 rounded-2xl bg-indigo-50/70 border border-indigo-100 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock size={15} className="text-indigo-600" />
+                <span className="text-xs font-black text-slate-900">
+                  {formatTime12Hour(selectedSchedule.departureTime)} Departure
+                </span>
+                <span className="text-[10px] font-bold text-slate-400">
+                  ({getJourneyDuration(selectedSchedule.departureTime, selectedSchedule.arrivalTime) || 'Direct'})
+                </span>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-white px-2 py-0.5 rounded-full shadow-xs">
+                {selectedSchedule.label || 'Scheduled'}
+              </span>
+            </div>
+
+            {/* If route has multiple active schedules, allow switching departure time */}
+            {Array.isArray(route?.schedules) && route.schedules.length > 1 && (
+              <div className="mt-2.5 pt-2 border-t border-indigo-100/60 flex items-center gap-2">
+                <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 shrink-0">
+                  Switch Time:
+                </span>
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  {route.schedules.map((s) => {
+                    const isCurrent = s.id === selectedSchedule.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleSelectSchedule(s)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all shrink-0 ${
+                          isCurrent
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white border border-indigo-200/60 text-slate-700 hover:bg-indigo-100'
+                        }`}
+                      >
+                        {formatTime12Hour(s.departureTime)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="px-5 pt-8">

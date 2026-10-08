@@ -24,8 +24,16 @@ export const getServiceModulePath = (module = {}) => {
   if (identity.includes('delivery') || identity.includes('parcel')) return '/taxi/user/parcel/type';
   if (serviceType === 'rental' || identity.includes('rental')) return '/taxi/user/rental';
   if (serviceType === 'outstation' || identity.includes('outstation') || identity.includes('intercity')) return '/taxi/user/intercity';
-  if (serviceType === 'pooling' || identity.includes('pooling')) return '/taxi/user/pooling';
-  if (identity.includes('sharing') || identity.includes('shared')) return '/taxi/user/cab-sharing';
+  if (
+    serviceType === 'pooling' ||
+    serviceType === 'sharing' ||
+    identity.includes('pooling') ||
+    identity.includes('sharing') ||
+    identity.includes('shared') ||
+    identity.includes('carpool')
+  ) {
+    return '/taxi/user/pooling';
+  }
   if (serviceType === 'bus' || identity.includes('bus')) return '/taxi/user/bus';
   if (
     serviceType === 'spiritual' ||

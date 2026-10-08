@@ -161,16 +161,24 @@ const PoolingBookings = () => {
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
-                          <Clock size={12} />
-                          <span>{booking.scheduleId || 'Standard'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
-                          <User size={12} />
-                          <span>{booking.seatsBooked} Seats</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const schedule = booking.route?.schedules?.find((s) => s.id === booking.scheduleId);
+                        const timeText = schedule?.departureTime
+                          ? `${schedule.departureTime} (${schedule.label || 'Trip'})`
+                          : (booking.scheduleId || 'Standard');
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-900">
+                              <Clock size={12} className="text-indigo-600" />
+                              <span>{timeText}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
+                              <User size={12} className="text-slate-400" />
+                              <span>{booking.seatsBooked} {booking.seatsBooked === 1 ? 'Seat' : 'Seats'}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-1 font-black text-slate-900">

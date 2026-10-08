@@ -24,6 +24,11 @@ import { userService } from '../../services/userService';
 import { useSettings } from '../../../../shared/context/SettingsContext';
 import toast from 'react-hot-toast';
 import { schedulePoolingBookingReminders } from '../../utils/upcomingRideReminderService';
+import {
+  formatTime12Hour,
+  getJourneyDuration,
+  formatDateDisplay,
+} from '../../utils/poolingTimeUtils';
 
 // Asset Imports
 import taxiImg from '../../../../assets/3d images/AutoCab/taxi.png';
@@ -521,19 +526,27 @@ const PoolingConfirm = () => {
 
                   {/* Route Info */}
                   <div className="space-y-8 bg-white p-8">
-                    <div className="flex items-center justify-between">
+                    <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 shadow-inner">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm border border-slate-100">
                           <Clock size={18} />
                         </div>
                         <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Departure</p>
-                          <p className="text-sm font-black text-slate-900">{schedule?.departureTime || 'TBA'}</p>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Scheduled Departure</p>
+                          <p className="text-base font-black text-slate-900">{formatTime12Hour(schedule?.departureTime)}</p>
+                          {schedule?.arrivalTime && (
+                            <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                              Arrival: ~{formatTime12Hour(schedule.arrivalTime)} ({getJourneyDuration(schedule.departureTime, schedule.arrivalTime)})
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Date</p>
-                        <p className="text-sm font-black text-slate-900">{formatTravelDate(travelDate)}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Travel Date</p>
+                        <p className="text-sm font-black text-slate-900">{formatDateDisplay(travelDate)}</p>
+                        <span className="inline-block mt-0.5 text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                          {schedule?.label || 'Direct'}
+                        </span>
                       </div>
                     </div>
 
