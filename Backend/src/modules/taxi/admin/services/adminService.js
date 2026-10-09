@@ -1123,6 +1123,9 @@ const normalizePoolingPayload = (payload = {}, existing = {}) => ({
   routeCode: sanitizePoolingText(payload.routeCode, existing.routeCode || ''),
   originLabel: sanitizePoolingText(payload.originLabel, existing.originLabel || ''),
   destinationLabel: sanitizePoolingText(payload.destinationLabel, existing.destinationLabel || ''),
+  tripType: ['one_way', 'round_trip'].includes(payload.tripType)
+    ? payload.tripType
+    : existing.tripType || 'round_trip',
   description: sanitizePoolingText(payload.description, existing.description || ''),
   assignedVehicleTypeIds: Array.isArray(payload.assignedVehicleTypeIds)
     ? payload.assignedVehicleTypeIds
@@ -1288,6 +1291,7 @@ const serializePoolingRoute = (item = {}, vehicleMap = new Map()) => {
       ? item.schedules.map((schedule, index) => normalizePoolingSchedule(schedule, index))
       : [],
     farePerSeat: Number(item.farePerSeat || 0),
+    tripType: item.tripType || 'round_trip',
     maxSeatsPerBooking: Number(item.maxSeatsPerBooking || 1),
     maxAdvanceBookingHours: Number(item.maxAdvanceBookingHours || 24),
     boardingBufferMinutes: Number(item.boardingBufferMinutes || 15),

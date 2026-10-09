@@ -88,6 +88,25 @@ const AgentBusBooking = () => {
       if (toCity) {
         toSet.add(toCity);
       }
+
+      if (Array.isArray(item?.stopCities)) {
+        item.stopCities.forEach((c) => {
+          const city = String(c || '').trim();
+          if (city) {
+            fromSet.add(city);
+            toSet.add(city);
+          }
+        });
+      }
+
+      if (Array.isArray(item?.stops)) {
+        item.stops.forEach((s) => {
+          const city = String(s?.city || '').trim();
+          if (!city) return;
+          if (['pickup', 'both'].includes(s?.stopType)) fromSet.add(city);
+          if (['drop', 'both'].includes(s?.stopType)) toSet.add(city);
+        });
+      }
     });
 
     return {

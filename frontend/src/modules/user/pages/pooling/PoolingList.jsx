@@ -73,6 +73,26 @@ const PoolingList = () => {
         const cleanFrom = (from || '').trim().toLowerCase();
         const cleanTo = (to || '').trim().toLowerCase();
 
+        if (cleanFrom && cleanTo) {
+          data = data.filter((route) => {
+            const origin = (route.originLabel || '').trim().toLowerCase();
+            const destination = (route.destinationLabel || '').trim().toLowerCase();
+            const originMatch = origin.includes(cleanFrom) || (route.pickupPoints || []).some((p) => (p.name || '').toLowerCase().includes(cleanFrom));
+            const destMatch = destination.includes(cleanTo) || (route.dropPoints || []).some((d) => (d.name || '').toLowerCase().includes(cleanTo));
+            return originMatch && destMatch;
+          });
+        } else if (cleanFrom) {
+          data = data.filter((route) => {
+            const origin = (route.originLabel || '').trim().toLowerCase();
+            return origin.includes(cleanFrom) || (route.pickupPoints || []).some((p) => (p.name || '').toLowerCase().includes(cleanFrom));
+          });
+        } else if (cleanTo) {
+          data = data.filter((route) => {
+            const destination = (route.destinationLabel || '').trim().toLowerCase();
+            return destination.includes(cleanTo) || (route.dropPoints || []).some((d) => (d.name || '').toLowerCase().includes(cleanTo));
+          });
+        }
+
         const scoreRoute = (route) => {
           const origin = (route.originLabel || '').trim().toLowerCase();
           const destination = (route.destinationLabel || '').trim().toLowerCase();
@@ -104,13 +124,13 @@ const PoolingList = () => {
     }
   };
 
-  // Expand routes into scheduled trip instances so every departure time is an explicit option
+  // Group each route into a trip card with selectable departure times
   const trips = useMemo(() => {
     const list = [];
     routes.forEach((route) => {
       const vehicle = route.assignedVehicleTypeIds?.[0] || {};
       const activeSchedules = Array.isArray(route.schedules) && route.schedules.length > 0
-        ? route.schedules
+        ? route.schedules.filter((s) => !s.status || s.status === 'active')
         : [
             {
               id: 'standard-slot',
@@ -121,29 +141,36 @@ const PoolingList = () => {
             },
           ];
 
-      activeSchedules.forEach((schedule) => {
-        list.push({
-          tripId: `${route._id}-${schedule.id}`,
-          route,
-          schedule,
-          vehicle,
-          departureTime: schedule.departureTime || '08:00',
-          arrivalTime: schedule.arrivalTime || '11:00',
-          duration: getJourneyDuration(schedule.departureTime, schedule.arrivalTime),
-          timeCategory: getTimePeriodCategory(schedule.departureTime),
-          allSchedules: activeSchedules,
-        });
+      const selectedSchedule = selectedScheduleMap[route._id];
+      const matchingSchedule = selectedSchedule ||
+        (activeTimeFilter !== 'all'
+          ? activeSchedules.find((s) => getTimePeriodCategory(s.departureTime) === activeTimeFilter) || activeSchedules[0]
+          : activeSchedules[0]);
+
+      if (!matchingSchedule) return;
+
+      const hasScheduleInFilter = activeTimeFilter === 'all' || activeSchedules.some((s) => getTimePeriodCategory(s.departureTime) === activeTimeFilter);
+      if (!hasScheduleInFilter) return;
+
+      const scheduleToUse = (activeTimeFilter !== 'all' && getTimePeriodCategory(matchingSchedule.departureTime) !== activeTimeFilter)
+        ? (activeSchedules.find((s) => getTimePeriodCategory(s.departureTime) === activeTimeFilter) || matchingSchedule)
+        : matchingSchedule;
+
+      list.push({
+        tripId: `${route._id}`,
+        route,
+        schedule: scheduleToUse,
+        vehicle,
+        departureTime: scheduleToUse.departureTime || '08:00',
+        arrivalTime: scheduleToUse.arrivalTime || '11:00',
+        duration: getJourneyDuration(scheduleToUse.departureTime, scheduleToUse.arrivalTime),
+        timeCategory: getTimePeriodCategory(scheduleToUse.departureTime),
+        allSchedules: activeSchedules,
       });
     });
 
-    // Apply Time Filter
-    let filtered = list;
-    if (activeTimeFilter !== 'all') {
-      filtered = filtered.filter((t) => t.timeCategory === activeTimeFilter);
-    }
-
     // Apply Sorting
-    return [...filtered].sort((a, b) => {
+    return [...list].sort((a, b) => {
       if (sortBy === 'time_asc') {
         return parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime);
       }
@@ -155,7 +182,14 @@ const PoolingList = () => {
       }
       return 0;
     });
-  }, [routes, activeTimeFilter, sortBy]);
+  }, [routes, activeTimeFilter, sortBy, selectedScheduleMap]);
+
+  const handleSelectSchedule = (routeId, schedule) => {
+    setSelectedScheduleMap((prev) => ({
+      ...prev,
+      [routeId]: schedule,
+    }));
+  };
 
   // Handle user selecting a sharing car trip
   const handleSelectTrip = (trip) => {
@@ -328,8 +362,8 @@ const PoolingList = () => {
               const vehicleCapacity = Number(vehicle.capacity || 4);
               const bookedCount = Number(schedule.bookedSeatCount || 0);
               const remainingSeats = Math.max(1, vehicleCapacity - bookedCount);
-              const timeStatus = getTimeSlotStatus(schedule.departureTime, selectedDate);
               const serviceTaxPercentage = Number(vehicle.serviceTaxPercentage || 0);
+              const isRoundTrip = route.tripType !== 'one_way';
 
               const formattedDep = formatTime12Hour(schedule.departureTime);
               const formattedArr = formatTime12Hour(schedule.arrivalTime);
@@ -344,6 +378,22 @@ const PoolingList = () => {
                   onClick={() => handleSelectTrip(trip)}
                   className="group relative overflow-hidden rounded-[28px] border border-slate-200/90 bg-white p-5 shadow-sm hover:shadow-md transition-all hover:border-indigo-300 cursor-pointer"
                 >
+                  {/* Round Trip Banner / Trip Type Indicator */}
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        isRoundTrip
+                          ? 'border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-xs'
+                          : 'border border-slate-200 bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      {isRoundTrip ? '🔄 Round Trip (Return Included)' : 'One Way Trip →'}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400">
+                      {route.originLabel} {isRoundTrip ? '⇄' : '→'} {route.destinationLabel}
+                    </span>
+                  </div>
+
                   {/* Top: Departure & Arrival Time Header */}
                   <div className="bg-slate-50 rounded-2xl p-3.5 mb-3.5 border border-slate-100 flex items-center justify-between">
                     {/* Departure info */}
@@ -354,36 +404,40 @@ const PoolingList = () => {
                           {formattedDep}
                         </span>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-500 truncate max-w-[110px] mt-1">
+                      <p className="text-[10px] font-bold text-slate-600 truncate max-w-[110px] mt-1">
                         {route.originLabel}
                       </p>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600">Start</span>
                     </div>
 
                     {/* Journey arrow & duration */}
                     <div className="flex flex-col items-center px-2">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                        {trip.duration || 'Direct'}
+                      <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                        {trip.duration || 'Direct'} {isRoundTrip ? 'Total' : ''}
                       </span>
                       <div className="flex items-center gap-1 my-1">
-                        <div className="h-0.5 w-6 bg-slate-300" />
-                        <ArrowRight size={10} className="text-slate-400" />
-                        <div className="h-0.5 w-6 bg-slate-300" />
+                        <div className="h-0.5 w-5 bg-indigo-200" />
+                        <span className="text-xs font-black text-indigo-600">{isRoundTrip ? '⇄' : '→'}</span>
+                        <div className="h-0.5 w-5 bg-indigo-200" />
                       </div>
-                      <span className="text-[9px] font-semibold text-slate-400">
-                        {schedule.label || 'Daily Run'}
+                      <span className="text-[9px] font-bold text-slate-500 max-w-[120px] text-center truncate">
+                        {isRoundTrip ? `Visit ${route.destinationLabel}` : (schedule.label || 'Daily Run')}
                       </span>
                     </div>
 
-                    {/* Arrival info */}
+                    {/* Arrival / Return info */}
                     <div className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <span className="text-lg font-black tracking-tight text-slate-900 leading-none">
                           {formattedArr}
                         </span>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-500 truncate max-w-[110px] mt-1">
-                        {route.destinationLabel}
+                      <p className="text-[10px] font-bold text-slate-600 truncate max-w-[110px] mt-1">
+                        {isRoundTrip ? `${route.originLabel}` : route.destinationLabel}
                       </p>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600">
+                        {isRoundTrip ? 'Return Back' : 'Drop'}
+                      </span>
                     </div>
                   </div>
 
@@ -429,15 +483,9 @@ const PoolingList = () => {
                           / seat
                         </span>
                       </div>
-                      {serviceTaxPercentage > 0 ? (
-                        <p className="text-[9px] font-bold text-amber-600 mt-0.5">
-                          +{serviceTaxPercentage}% tax
-                        </p>
-                      ) : (
-                        <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                          All taxes incl.
-                        </p>
-                      )}
+                      <p className="text-[9px] font-bold text-indigo-600 mt-0.5">
+                        {isRoundTrip ? 'Round Trip Included' : (serviceTaxPercentage > 0 ? `+${serviceTaxPercentage}% tax` : 'All taxes incl.')}
+                      </p>
                     </div>
                   </div>
 
@@ -457,16 +505,11 @@ const PoolingList = () => {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleSelectTrip({
-                                    ...trip,
-                                    schedule: s,
-                                    departureTime: s.departureTime,
-                                    arrivalTime: s.arrivalTime,
-                                  });
+                                  handleSelectSchedule(route._id, s);
                                 }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black transition-all shrink-0 ${
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all shrink-0 ${
                                   isCurrent
-                                    ? 'bg-indigo-600 text-white'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                 }`}
                               >
@@ -496,7 +539,7 @@ const PoolingList = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-wider shadow-sm group-hover:bg-indigo-600 transition-all shrink-0">
-                      <span>Book {formattedDep}</span>
+                      <span>Book {formattedDep} {isRoundTrip ? 'Round Trip' : ''}</span>
                       <ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
                     </div>
                   </div>

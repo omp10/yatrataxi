@@ -137,6 +137,11 @@ const poolingRouteSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    tripType: {
+      type: String,
+      enum: ['round_trip', 'one_way'],
+      default: 'round_trip',
+    },
     maxSeatsPerBooking: {
       type: Number,
       default: 1,

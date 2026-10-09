@@ -8,9 +8,11 @@ import { hashPassword } from '../../services/passwordService.js';
 import { signAccessToken } from '../../services/tokenService.js';
 import { normalizePoint } from '../../../../utils/geo.js';
 import { Agent } from '../models/Agent.js';
+import { AgentWallet } from '../models/AgentWallet.js';
 import { AgentLoginSession } from '../models/AgentLoginSession.js';
 import { AgentNeededDocument } from '../../admin/models/AgentNeededDocument.js';
 import { AgentWithdrawalRequest } from '../models/AgentWithdrawalRequest.js';
+import { DEFAULT_AGENT_REFERRAL_SETTINGS } from '../../admin/services/adminService.js';
 import { BusService } from '../../admin/models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { BusBooking } from '../../user/models/BusBooking.js';
@@ -330,6 +332,64 @@ const findBusSchedule = (busService, scheduleId) =>
   (Array.isArray(busService?.schedules) ? busService.schedules : []).find(
     (item) => String(item?.id || '') === String(scheduleId || ''),
   );
+
+const getBusServicePickupAndDropStops = (busService = {}, schedule = {}) => {
+  const allStops = Array.isArray(busService.route?.stops) ? busService.route.stops : [];
+  const originCity = busService.route?.originCity || '';
+  const destinationCity = busService.route?.destinationCity || '';
+
+  const pickupStops = [];
+  const dropStops = [];
+
+  if (allStops.length > 0) {
+    allStops.forEach((s, idx) => {
+      const stopObj = {
+        id: String(s.id || `stop-${idx}`),
+        stopIndex: Number(s.stopIndex || idx),
+        city: String(s.city || '').trim(),
+        pointName: String(s.pointName || '').trim() || `${String(s.city || '').trim()} Stop`,
+        stopType: s.stopType || 'both',
+        time: s.departureTime || s.arrivalTime || (s.stopType === 'drop' ? schedule?.arrivalTime : schedule?.departureTime) || '',
+        departureTime: s.departureTime || '',
+        arrivalTime: s.arrivalTime || '',
+      };
+      if (['pickup', 'both'].includes(stopObj.stopType)) {
+        pickupStops.push(stopObj);
+      }
+      if (['drop', 'both'].includes(stopObj.stopType)) {
+        dropStops.push(stopObj);
+      }
+    });
+  }
+
+  if (!pickupStops.some((p) => p.city.toLowerCase() === originCity.toLowerCase())) {
+    pickupStops.unshift({
+      id: 'pickup-origin',
+      stopIndex: 0,
+      city: originCity,
+      pointName: originCity ? `${originCity} Main Boarding Point` : 'Main Boarding Point',
+      stopType: 'pickup',
+      time: schedule?.departureTime || '',
+      departureTime: schedule?.departureTime || '',
+      arrivalTime: '',
+    });
+  }
+
+  if (!dropStops.some((d) => d.city.toLowerCase() === destinationCity.toLowerCase())) {
+    dropStops.push({
+      id: 'drop-destination',
+      stopIndex: allStops.length || 1,
+      city: destinationCity,
+      pointName: destinationCity ? `${destinationCity} Main Dropping Point` : 'Main Dropping Point',
+      stopType: 'drop',
+      time: schedule?.arrivalTime || '',
+      departureTime: '',
+      arrivalTime: schedule?.arrivalTime || '',
+    });
+  }
+
+  return { pickupStops, dropStops, allStops };
+};
 
 const normalizeBusTravelDate = (value) => {
   const raw = toCleanString(value);
@@ -719,7 +779,7 @@ export const getAgentReferralSummary = async (req, res) => {
     console.warn('QR generation error in getAgentReferralSummary:', qrErr);
   }
 
-  const [referredUsers, referredAgents, settingDoc] = await Promise.all([
+  const [referredUsers, referredAgents, settingDoc, wallet] = await Promise.all([
     User.find({ referredByAgent: agent._id })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -731,9 +791,92 @@ export const getAgentReferralSummary = async (req, res) => {
       .select('name phone email kycStatus status createdAt referralRewardPaid metrics')
       .lean(),
     AdminBusinessSetting.findOne({ scope: 'default' }).lean(),
+    AgentWallet.findOne({ agentId: agent._id }).lean(),
   ]);
 
-  const agentReferralSettings = settingDoc?.referral?.agent || {};
+  const agentReferralSettings = {
+    ...DEFAULT_AGENT_REFERRAL_SETTINGS,
+    ...(settingDoc?.referral?.agent || {}),
+  };
+
+  const walletTxs = Array.isArray(wallet?.transactions) ? wallet.transactions : [];
+  const referralBonusAmount = roundMoney(
+    walletTxs
+      .filter((t) => t.kind === 'credit' && ['referral_agent', 'referral_welcome'].includes(t.source))
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+  );
+  const overrideCommissionAmount = roundMoney(
+    walletTxs
+      .filter((t) => t.kind === 'credit' && t.source === 'agent_override_commission')
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+  );
+
+  const subAgentEarnings = roundMoney(
+    referralBonusAmount + overrideCommissionAmount || Number(agent.metrics?.agentReferralEarnings || 0)
+  );
+
+  // Compute stats for each referred customer
+  const userIds = referredUsers.map((u) => u._id);
+  const [customerRides, customerBuses, customerPools] = await Promise.all([
+    userIds.length > 0
+      ? Ride.find({
+          $or: [{ 'agentMeta.customerId': { $in: userIds } }, { userId: { $in: userIds } }],
+          status: { $ne: 'cancelled' },
+        })
+          .select('userId agentMeta fare')
+          .lean()
+      : [],
+    userIds.length > 0
+      ? BusBooking.find({
+          $or: [{ 'agentMeta.customerId': { $in: userIds } }, { userId: { $in: userIds } }],
+          status: { $ne: 'cancelled' },
+          'agentMeta.commissionReversed': { $ne: true },
+        })
+          .select('userId agentMeta amount')
+          .lean()
+      : [],
+    userIds.length > 0
+      ? PoolingBooking.find({
+          $or: [{ 'agentMeta.customerId': { $in: userIds } }, { user: { $in: userIds } }],
+          bookingStatus: { $ne: 'cancelled' },
+          'agentMeta.commissionReversed': { $ne: true },
+        })
+          .select('user agentMeta fare')
+          .lean()
+      : [],
+  ]);
+
+  const customerBookingsByUser = new Map();
+  const customerCommissionByUser = new Map();
+
+  const registerUserBooking = (uId, comm) => {
+    const key = String(uId || '');
+    if (!key) return;
+    customerBookingsByUser.set(key, (customerBookingsByUser.get(key) || 0) + 1);
+    customerCommissionByUser.set(key, roundMoney((customerCommissionByUser.get(key) || 0) + Number(comm || 0)));
+  };
+
+  customerRides.forEach((r) => {
+    const uId = r.agentMeta?.customerId || r.userId;
+    registerUserBooking(uId, r.agentMeta?.commissionAmount);
+  });
+  customerBuses.forEach((b) => {
+    const uId = b.agentMeta?.customerId || b.userId;
+    registerUserBooking(uId, b.agentMeta?.commissionAmount);
+  });
+  customerPools.forEach((p) => {
+    const uId = p.agentMeta?.customerId || p.user;
+    registerUserBooking(uId, p.agentMeta?.commissionAmount);
+  });
+
+  const customerReferralCommission = roundMoney(
+    [...customerRides, ...customerBuses, ...customerPools].reduce(
+      (sum, item) => sum + Number(item.agentMeta?.commissionAmount || 0),
+      0
+    )
+  );
+  const totalCustomerBookings = customerRides.length + customerBuses.length + customerPools.length;
+  const totalReferralEarnings = roundMoney(customerReferralCommission + subAgentEarnings);
 
   res.json({
     success: true,
@@ -748,7 +891,14 @@ export const getAgentReferralSummary = async (req, res) => {
       referralLink: customerReferralLink,
       qrValue: customerReferralLink,
       qrDataUrl: customerQrDataUrl,
-      metrics: agent.metrics || {},
+      metrics: {
+        ...(agent.metrics || {}),
+        customerReferralCommission,
+        agentReferralEarnings: subAgentEarnings,
+        totalReferralEarnings,
+        totalCustomers: Math.max(referredUsers.length, Number(agent.metrics?.totalCustomers || 0)),
+        totalReferredBookings: totalCustomerBookings,
+      },
       settings: {
         agent_to_user_enabled: agentReferralSettings.agent_to_user_enabled !== false,
         agent_to_agent_enabled: agentReferralSettings.agent_to_agent_enabled !== false,
@@ -763,6 +913,8 @@ export const getAgentReferralSummary = async (req, res) => {
         phone: user.phone || '',
         email: user.email || '',
         createdAt: user.createdAt || null,
+        totalBookings: customerBookingsByUser.get(String(user._id)) || 0,
+        totalCommissionEarned: customerCommissionByUser.get(String(user._id)) || 0,
       })),
       referredAgents: referredAgents.map((subAgent) => ({
         id: String(subAgent._id),
@@ -780,26 +932,103 @@ export const getAgentReferralSummary = async (req, res) => {
   });
 };
 
-// Commission actually credited per channel, summed from the bookings themselves so
-// the dashboard cannot drift from what was paid into the wallet.
+// Commission actually credited per channel, summed from the bookings and wallet transactions
+// so the dashboard cannot drift from what was paid into the wallet.
 const summariseAgentCommission = async (agentId) => {
-  const baseMatch = { 'agentMeta.bookedByAgentId': new mongoose.Types.ObjectId(String(agentId)) };
+  const agentObjectId = new mongoose.Types.ObjectId(String(agentId));
+  const referredUsers = await User.find({ referredByAgent: agentObjectId }).select('_id').lean();
+  const referredUserIds = referredUsers.map((u) => u._id);
+
+  const baseMatch = {
+    $or: [
+      { 'agentMeta.bookedByAgentId': agentObjectId },
+      ...(referredUserIds.length > 0
+        ? [
+            { 'agentMeta.customerId': { $in: referredUserIds } },
+            { userId: { $in: referredUserIds } },
+          ]
+        : []),
+    ],
+  };
+
+  const poolBaseMatch = {
+    $or: [
+      { 'agentMeta.bookedByAgentId': agentObjectId },
+      ...(referredUserIds.length > 0
+        ? [
+            { 'agentMeta.customerId': { $in: referredUserIds } },
+            { user: { $in: referredUserIds } },
+          ]
+        : []),
+    ],
+  };
+
   const group = {
-    _id: '$agentMeta.commissionMode',
+    _id: {
+      $cond: [
+        { $eq: ['$agentMeta.commissionMode', 'referral'] },
+        'referral',
+        {
+          $cond: [
+            { $eq: ['$agentMeta.commissionMode', 'direct'] },
+            'direct',
+            {
+              $cond: [
+                { $in: ['$userId', referredUserIds] },
+                'referral',
+                'direct',
+              ],
+            },
+          ],
+        },
+      ],
+    },
     commission: { $sum: '$agentMeta.commissionAmount' },
     bookings: { $sum: 1 },
   };
 
-  const [rideRows, busRows, poolRows] = await Promise.all([
+  const poolGroup = {
+    _id: {
+      $cond: [
+        { $eq: ['$agentMeta.commissionMode', 'referral'] },
+        'referral',
+        {
+          $cond: [
+            { $eq: ['$agentMeta.commissionMode', 'direct'] },
+            'direct',
+            {
+              $cond: [
+                { $in: ['$user', referredUserIds] },
+                'referral',
+                'direct',
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    commission: { $sum: '$agentMeta.commissionAmount' },
+    bookings: { $sum: 1 },
+  };
+
+  const [rideRows, busRows, poolRows, wallet] = await Promise.all([
     Ride.aggregate([{ $match: { ...baseMatch, status: { $ne: 'cancelled' } } }, { $group: group }]),
     BusBooking.aggregate([{ $match: { ...baseMatch, status: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: group }]),
-    PoolingBooking.aggregate([{ $match: { ...baseMatch, bookingStatus: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: group }]),
+    PoolingBooking.aggregate([{ $match: { ...poolBaseMatch, bookingStatus: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: poolGroup }]),
+    AgentWallet.findOne({ agentId: agentObjectId }).lean(),
   ]);
 
   const pick = (rows, mode) => {
     const row = rows.find((item) => String(item._id || 'direct') === mode);
     return { commission: roundMoney(row?.commission || 0), bookings: Number(row?.bookings || 0) };
   };
+
+  const txs = Array.isArray(wallet?.transactions) ? wallet.transactions : [];
+  const referralBonusTxs = txs.filter((t) => t.kind === 'credit' && ['referral_agent', 'referral_welcome'].includes(t.source));
+  const overrideCommissionTxs = txs.filter((t) => t.kind === 'credit' && t.source === 'agent_override_commission');
+
+  const referralBonusAmount = roundMoney(referralBonusTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0));
+  const overrideCommissionAmount = roundMoney(overrideCommissionTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0));
 
   const channels = {
     directRides: pick(rideRows, 'direct'),
@@ -808,34 +1037,76 @@ const summariseAgentCommission = async (agentId) => {
     referralBuses: pick(busRows, 'referral'),
     directPooling: pick(poolRows, 'direct'),
     referralPooling: pick(poolRows, 'referral'),
+    referralBonuses: { commission: referralBonusAmount, bookings: referralBonusTxs.length },
+    overrideCommission: { commission: overrideCommissionAmount, bookings: overrideCommissionTxs.length },
   };
 
-  const all = Object.values(channels);
+  const customerReferralCommission = roundMoney(
+    channels.referralRides.commission + channels.referralBuses.commission + channels.referralPooling.commission
+  );
+  const totalReferralEarnings = roundMoney(
+    customerReferralCommission + referralBonusAmount + overrideCommissionAmount
+  );
+  const totalCommission = roundMoney(
+    channels.directRides.commission +
+    channels.directBuses.commission +
+    channels.directPooling.commission +
+    totalReferralEarnings
+  );
+  const totalBookings =
+    channels.directRides.bookings +
+    channels.referralRides.bookings +
+    channels.directBuses.bookings +
+    channels.referralBuses.bookings +
+    channels.directPooling.bookings +
+    channels.referralPooling.bookings;
+
   return {
     channels,
-    totalCommission: roundMoney(all.reduce((sum, item) => sum + item.commission, 0)),
-    totalBookings: all.reduce((sum, item) => sum + item.bookings, 0),
+    customerReferralCommission,
+    totalReferralEarnings,
+    totalCommission,
+    totalBookings,
   };
 };
 
 export const getAgentDashboard = async (req, res) => {
-  const [agent, wallet, rides, buses, commission] = await Promise.all([
+  const [agent, wallet, commission] = await Promise.all([
     Agent.findById(req.auth.sub).lean(),
     listAgentWalletTransactions(req.auth.sub),
-    Ride.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .lean(),
-    BusBooking.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .lean(),
     summariseAgentCommission(req.auth.sub),
   ]);
 
   if (!agent) {
     throw new ApiError(404, 'Agent not found');
   }
+
+  const agentObjectId = new mongoose.Types.ObjectId(String(req.auth.sub));
+  const referredUsers = await User.find({ referredByAgent: agentObjectId }).select('_id').lean();
+  const referredUserIds = referredUsers.map((u) => u._id);
+
+  const rideFilter = {
+    $or: [
+      { 'agentMeta.bookedByAgentId': agentObjectId },
+      ...(referredUserIds.length > 0
+        ? [
+            { 'agentMeta.customerId': { $in: referredUserIds } },
+            { userId: { $in: referredUserIds } },
+          ]
+        : []),
+    ],
+  };
+
+  const [rides, buses] = await Promise.all([
+    Ride.find(rideFilter)
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+    BusBooking.find(rideFilter)
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+  ]);
 
   res.json({
     success: true,
@@ -850,21 +1121,47 @@ export const getAgentDashboard = async (req, res) => {
         totalReferredRideBookings: Number(agent.metrics?.referredRideBookings || 0),
         totalDirectBusBookings: Number(agent.metrics?.directBusBookings || 0),
         totalReferredBusBookings: Number(agent.metrics?.referredBusBookings || 0),
-        totalCustomers: Number(agent.metrics?.totalCustomers || 0),
+        totalCustomers: Math.max(referredUsers.length, Number(agent.metrics?.totalCustomers || 0)),
+        totalReferralEarnings: commission.totalReferralEarnings || 0,
+        customerReferralCommission: commission.customerReferralCommission || 0,
       },
     },
   });
 };
 
 export const listAgentBookings = async (req, res) => {
+  const agentObjectId = new mongoose.Types.ObjectId(String(req.auth.sub));
+  const referredUsers = await User.find({ referredByAgent: agentObjectId }).select('_id').lean();
+  const referredUserIds = referredUsers.map((u) => u._id);
+
+  const rideFilter = {
+    $or: [
+      { 'agentMeta.bookedByAgentId': agentObjectId },
+      ...(referredUserIds.length > 0
+        ? [
+            { 'agentMeta.customerId': { $in: referredUserIds } },
+            { userId: { $in: referredUserIds } },
+          ]
+        : []),
+    ],
+  };
+
+  const poolFilter = {
+    $or: [
+      { 'agentMeta.bookedByAgentId': agentObjectId },
+      ...(referredUserIds.length > 0
+        ? [
+            { 'agentMeta.customerId': { $in: referredUserIds } },
+            { user: { $in: referredUserIds } },
+          ]
+        : []),
+    ],
+  };
+
   const [rides, buses, pooling] = await Promise.all([
-    Ride.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
-      .sort({ createdAt: -1 })
-      .lean(),
-    BusBooking.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
-      .sort({ createdAt: -1 })
-      .lean(),
-    PoolingBooking.find({ 'agentMeta.bookedByAgentId': req.auth.sub })
+    Ride.find(rideFilter).sort({ createdAt: -1 }).lean(),
+    BusBooking.find(rideFilter).sort({ createdAt: -1 }).lean(),
+    PoolingBooking.find(poolFilter)
       .sort({ createdAt: -1 })
       .populate('route', 'routeName originLabel destinationLabel')
       .populate('user', 'name phone')
@@ -1198,13 +1495,16 @@ export const createAgentPoolingBooking = async (req, res) => {
 
 export const listAgentBusRoutes = async (_req, res) => {
   const items = await BusService.find({ status: 'active' })
-    .select('route seatPrice variantPricing operatorName')
+    .select('route seatPrice variantPricing operatorName returnRoute returnRouteEnabled')
     .sort({ createdAt: -1 })
     .lean();
 
-  res.json({
-    success: true,
-    data: items.map((item) => ({
+  const results = [];
+  items.forEach((item) => {
+    const allStops = Array.isArray(item.route?.stops) ? item.route.stops : [];
+    const stopCities = [...new Set(allStops.map((s) => String(s.city || '').trim()).filter(Boolean))];
+
+    results.push({
       id: String(item._id),
       fromCity: item.route?.originCity || '',
       toCity: item.route?.destinationCity || '',
@@ -1212,48 +1512,92 @@ export const listAgentBusRoutes = async (_req, res) => {
       operatorName: item.operatorName || '',
       startingPrice: Number(item.seatPrice || 0),
       variantPricing: item.variantPricing || null,
-    })),
+      stopCities,
+      stops: allStops,
+    });
+
+    if (item.returnRouteEnabled && item.returnRoute) {
+      const returnStops = Array.isArray(item.returnRoute?.stops) ? item.returnRoute.stops : [];
+      const returnStopCities = [...new Set(returnStops.map((s) => String(s.city || '').trim()).filter(Boolean))];
+      results.push({
+        id: `${String(item._id)}-return`,
+        busServiceId: String(item._id),
+        fromCity: item.returnRoute?.originCity || item.route?.destinationCity || '',
+        toCity: item.returnRoute?.destinationCity || item.route?.originCity || '',
+        routeName: item.returnRoute?.routeName || '',
+        operatorName: item.operatorName || '',
+        startingPrice: Number(item.seatPrice || 0),
+        variantPricing: item.variantPricing || null,
+        stopCities: returnStopCities,
+        stops: returnStops,
+      });
+    }
+  });
+
+  res.json({
+    success: true,
+    data: results,
   });
 };
 
 export const searchAgentBuses = async (req, res) => {
-  const fromCity = toCleanString(req.query?.fromCity);
-  const toCity = toCleanString(req.query?.toCity);
+  const fromCity = toCleanString(req.query?.fromCity).toLowerCase();
+  const toCity = toCleanString(req.query?.toCity).toLowerCase();
   const travelDate = normalizeBusTravelDate(req.query?.date);
 
-  const buses = await BusService.find({
-    status: 'active',
-    ...(fromCity ? { 'route.originCity': new RegExp(`^${fromCity}$`, 'i') } : {}),
-    ...(toCity ? { 'route.destinationCity': new RegExp(`^${toCity}$`, 'i') } : {}),
-  }).lean();
+  const buses = await BusService.find({ status: 'active' }).lean();
 
-  const results = await Promise.all(
-    buses.flatMap((busService) =>
-      (Array.isArray(busService.schedules) ? busService.schedules : []).map(async (schedule) => {
-        const seats = await searchBusSeatAvailability({
-          busService,
-          scheduleId: schedule.id,
-          travelDate,
-        });
-        return {
-          id: `${String(busService._id)}:${String(schedule.id)}`,
-          busServiceId: String(busService._id),
-          scheduleId: String(schedule.id || ''),
-          travelDate,
-          fromCity: busService.route?.originCity || '',
-          toCity: busService.route?.destinationCity || '',
-          routeName: busService.route?.routeName || '',
-          busName: busService.busName || '',
-          operatorName: busService.operatorName || '',
-          departure: schedule.departureTime || '',
-          arrival: schedule.arrivalTime || '',
-          availableSeats: seats.filter((item) => item.status === 'available').length,
-          price: Number(busService.seatPrice || 0),
-          variantPricing: busService.variantPricing || null,
-        };
-      }),
-    ),
-  );
+  const results = [];
+
+  for (const busService of buses) {
+    const schedules = Array.isArray(busService.schedules) ? busService.schedules : [];
+    const origin = (busService.route?.originCity || '').toLowerCase();
+    const destination = (busService.route?.destinationCity || '').toLowerCase();
+    const allStops = Array.isArray(busService.route?.stops) ? busService.route.stops : [];
+
+    const pickupCities = new Set([origin]);
+    const dropCities = new Set([destination]);
+    allStops.forEach((s) => {
+      const c = String(s.city || '').trim().toLowerCase();
+      if (!c) return;
+      if (['pickup', 'both'].includes(s.stopType)) pickupCities.add(c);
+      if (['drop', 'both'].includes(s.stopType)) dropCities.add(c);
+    });
+
+    const matchFrom = !fromCity || pickupCities.has(fromCity) || origin.includes(fromCity) || [...pickupCities].some((c) => c.includes(fromCity));
+    const matchTo = !toCity || dropCities.has(toCity) || destination.includes(toCity) || [...dropCities].some((c) => c.includes(toCity));
+
+    if (!matchFrom || !matchTo) continue;
+
+    for (const schedule of schedules) {
+      const seats = await searchBusSeatAvailability({
+        busService,
+        scheduleId: schedule.id,
+        travelDate,
+      });
+
+      const { pickupStops, dropStops } = getBusServicePickupAndDropStops(busService, schedule);
+
+      results.push({
+        id: `${String(busService._id)}:${String(schedule.id)}`,
+        busServiceId: String(busService._id),
+        scheduleId: String(schedule.id || ''),
+        travelDate,
+        fromCity: busService.route?.originCity || '',
+        toCity: busService.route?.destinationCity || '',
+        routeName: busService.route?.routeName || '',
+        busName: busService.busName || '',
+        operatorName: busService.operatorName || '',
+        departure: schedule.departureTime || '',
+        arrival: schedule.arrivalTime || '',
+        availableSeats: seats.filter((item) => item.status === 'available').length,
+        price: Number(busService.seatPrice || 0),
+        variantPricing: busService.variantPricing || null,
+        pickupStops,
+        dropStops,
+      });
+    }
+  }
 
   res.json({
     success: true,
@@ -1301,6 +1645,8 @@ export const getAgentBusSeatLayout = async (req, res) => {
     upperDeck: normalizeDeck(busService.blueprint?.upperDeck || []),
   };
 
+  const { pickupStops, dropStops, allStops } = getBusServicePickupAndDropStops(busService, schedule);
+
   res.json({
     success: true,
     data: {
@@ -1325,9 +1671,15 @@ export const getAgentBusSeatLayout = async (req, res) => {
         price: Number(busService.seatPrice || 0),
         variantPricing: busService.variantPricing || null,
         fareCurrency: busService.fareCurrency || 'INR',
+        pickupStops,
+        dropStops,
+        stops: allStops,
       },
       blueprint,
       seats,
+      pickupStops,
+      dropStops,
+      stops: allStops,
     },
   });
 };
@@ -1390,6 +1742,39 @@ export const createAgentBusBooking = async (req, res) => {
     throw new ApiError(409, `Seat ${invalidSeat} is not available`);
   }
 
+  const { pickupStops, dropStops } = getBusServicePickupAndDropStops(busService, schedule);
+  const requestedPickupStop = req.body?.pickupStop || null;
+  const requestedDropStop = req.body?.dropStop || null;
+  const requestedPickupStopId = toCleanString(req.body?.pickupStopId || requestedPickupStop?.id);
+  const requestedDropStopId = toCleanString(req.body?.dropStopId || requestedDropStop?.id);
+
+  let selectedPickupStop = null;
+  if (requestedPickupStopId) {
+    selectedPickupStop = pickupStops.find((s) => String(s.id) === requestedPickupStopId);
+  }
+  if (!selectedPickupStop && requestedPickupStop && typeof requestedPickupStop === 'object') {
+    selectedPickupStop = requestedPickupStop;
+  }
+  if (!selectedPickupStop && pickupStops.length > 0) {
+    selectedPickupStop = pickupStops[0];
+  }
+
+  let selectedDropStop = null;
+  if (requestedDropStopId) {
+    selectedDropStop = dropStops.find((s) => String(s.id) === requestedDropStopId);
+  }
+  if (!selectedDropStop && requestedDropStop && typeof requestedDropStop === 'object') {
+    selectedDropStop = requestedDropStop;
+  }
+  if (!selectedDropStop && dropStops.length > 0) {
+    selectedDropStop = dropStops[dropStops.length - 1];
+  }
+
+  const originCity = busService.route?.originCity || '';
+  const destinationCity = busService.route?.destinationCity || '';
+  const fromCity = selectedPickupStop?.city || toCleanString(req.body?.fromCity) || originCity;
+  const toCity = selectedDropStop?.city || toCleanString(req.body?.toCity) || destinationCity;
+
   const amount = roundMoney(
     seatIds.reduce((sum, seatId) => sum + resolveBusSeatPrice(busService, availableSeatMap.get(seatId)), 0),
   );
@@ -1414,10 +1799,24 @@ export const createAgentBusBooking = async (req, res) => {
         currency: busService.fareCurrency || 'INR',
         status: 'confirmed',
         routeSnapshot: {
-          originCity: busService.route?.originCity || '',
-          destinationCity: busService.route?.destinationCity || '',
-          departureTime: schedule?.departureTime || '',
-          arrivalTime: schedule?.arrivalTime || '',
+          originCity,
+          destinationCity,
+          fromCity,
+          toCity,
+          pickupStop: {
+            id: String(selectedPickupStop?.id || ''),
+            city: selectedPickupStop?.city || fromCity,
+            pointName: selectedPickupStop?.pointName || selectedPickupStop?.name || 'Boarding Point',
+            time: selectedPickupStop?.time || selectedPickupStop?.departureTime || schedule?.departureTime || '',
+          },
+          dropStop: {
+            id: String(selectedDropStop?.id || ''),
+            city: selectedDropStop?.city || toCity,
+            pointName: selectedDropStop?.pointName || selectedDropStop?.name || 'Dropping Point',
+            time: selectedDropStop?.time || selectedDropStop?.arrivalTime || schedule?.arrivalTime || '',
+          },
+          departureTime: selectedPickupStop?.time || schedule?.departureTime || '',
+          arrivalTime: selectedDropStop?.time || schedule?.arrivalTime || '',
           durationHours: busService.route?.durationHours || '',
           busName: busService.busName || '',
           operatorName: busService.operatorName || '',
@@ -1440,6 +1839,7 @@ export const createAgentBusBooking = async (req, res) => {
           customerId: customer._id,
           customerName: customer.name || '',
           customerPhone: customer.phone || '',
+          commissionMode: 'direct',
         },
         notes: toCleanString(req.body?.notes),
       }],
@@ -1482,6 +1882,7 @@ export const createAgentBusBooking = async (req, res) => {
         ...(bookingDoc.agentMeta || {}),
         commissionAmount: commissionResult.transaction?.amount || 0,
         commissionCreditedAt: commissionResult.transaction?.createdAt || new Date(),
+        commissionMode: 'direct',
       };
       await bookingDoc.save({ session });
     }

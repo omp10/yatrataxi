@@ -158,6 +158,9 @@ const AgentBusSeats = () => {
     phone: '',
   });
 
+  const [selectedPickupStopId, setSelectedPickupStopId] = useState('');
+  const [selectedDropStopId, setSelectedDropStopId] = useState('');
+
   const passengerName = passenger.name.trim();
   const passengerPhone = passenger.phone.replace(/\D/g, '').slice(-10);
 
@@ -178,8 +181,20 @@ const AgentBusSeats = () => {
           date: travelDate,
         });
         if (!active) return;
-        setSeatLayout(unwrapApiData(response) || null);
+        const payload = unwrapApiData(response) || null;
+        setSeatLayout(payload);
         setSelectedSeats([]);
+
+        const pStops = payload?.pickupStops || payload?.bus?.pickupStops || [];
+        const dStops = payload?.dropStops || payload?.bus?.dropStops || [];
+        if (pStops.length > 0) {
+          const matchedPickup = pStops.find((p) => p.city?.toLowerCase() === fromCity.toLowerCase()) || pStops[0];
+          setSelectedPickupStopId(String(matchedPickup.id));
+        }
+        if (dStops.length > 0) {
+          const matchedDrop = dStops.find((d) => d.city?.toLowerCase() === toCity.toLowerCase()) || dStops[dStops.length - 1];
+          setSelectedDropStopId(String(matchedDrop.id));
+        }
       } catch (err) {
         if (!active) return;
         setError(err?.message || 'Unable to load seat layout');
@@ -195,7 +210,7 @@ const AgentBusSeats = () => {
     return () => {
       active = false;
     };
-  }, [busServiceId, navigate, scheduleId, travelDate]);
+  }, [busServiceId, fromCity, navigate, scheduleId, toCity, travelDate]);
 
   const bus = seatLayout?.bus || busFromState;
   const blueprint = seatLayout?.blueprint || {};
@@ -204,6 +219,16 @@ const AgentBusSeats = () => {
   const upperDeck = hasBlueprint ? blueprint.upperDeck || [] : [];
   const hasAnySeats = lowerDeck.length > 0 || upperDeck.length > 0;
   const totalFare = selectedSeats.reduce((sum, seat) => sum + Number(seat.price || 0), 0);
+
+  const pickupStops = useMemo(() => {
+    const list = seatLayout?.pickupStops || seatLayout?.bus?.pickupStops || [];
+    return Array.isArray(list) ? list : [];
+  }, [seatLayout]);
+
+  const dropStops = useMemo(() => {
+    const list = seatLayout?.dropStops || seatLayout?.bus?.dropStops || [];
+    return Array.isArray(list) ? list : [];
+  }, [seatLayout]);
 
   const toggleSeat = (seat) => {
     if (!seat || String(seat.status || 'available') !== 'available') {
@@ -243,6 +268,9 @@ const AgentBusSeats = () => {
       return;
     }
 
+    const chosenPickup = pickupStops.find((p) => String(p.id) === String(selectedPickupStopId)) || pickupStops[0] || null;
+    const chosenDrop = dropStops.find((d) => String(d.id) === String(selectedDropStopId)) || dropStops[dropStops.length - 1] || null;
+
     setReserving(true);
     setError('');
     try {
@@ -255,6 +283,12 @@ const AgentBusSeats = () => {
           name: passengerName,
           phone: passengerPhone,
         },
+        pickupStopId: chosenPickup?.id || '',
+        dropStopId: chosenDrop?.id || '',
+        pickupStop: chosenPickup,
+        dropStop: chosenDrop,
+        fromCity: chosenPickup?.city || fromCity,
+        toCity: chosenDrop?.city || toCity,
       });
       toast.success('Seats reserved successfully');
       navigate('/taxi/agent/bookings');
@@ -303,6 +337,19 @@ const AgentBusSeats = () => {
                 <span className="inline-flex items-center gap-1"><Bus size={14} /> {bus?.departure || '--'} to {bus?.arrival || '--'}</span>
                 <span className="inline-flex items-center gap-1"><MapPinned size={14} /> {bus?.coachType || bus?.busCategory || 'Bus'}</span>
               </div>
+              {(pickupStops.length > 0 || dropStops.length > 0) ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-[11px] font-bold text-slate-600">
+                  <span className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-emerald-700">
+                    <MapPinned size={12} className="text-emerald-600" />
+                    Pickup: {pickupStops.find((p) => String(p.id) === String(selectedPickupStopId))?.pointName || fromCity || 'Origin'}
+                  </span>
+                  <span className="text-slate-300">→</span>
+                  <span className="flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-rose-700">
+                    <MapPinned size={12} className="text-rose-600" />
+                    Drop: {dropStops.find((d) => String(d.id) === String(selectedDropStopId))?.pointName || toCity || 'Destination'}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div className="rounded-[22px] bg-[#eef8ff] px-4 py-3 text-right">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#0f6aa8]">Starts from</p>
@@ -371,6 +418,77 @@ const AgentBusSeats = () => {
             </div>
 
             <div className="mt-5 space-y-3">
+              {/* Boarding and Dropping Point selection */}
+              <div className="space-y-3 rounded-[22px] border border-slate-200 bg-slate-50/80 p-3.5">
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                      <MapPinned size={13} className="text-emerald-600" />
+                      Boarding Point
+                    </span>
+                    {pickupStops.find((p) => String(p.id) === String(selectedPickupStopId))?.time ? (
+                      <span className="text-[11px] font-bold text-emerald-700">
+                        {pickupStops.find((p) => String(p.id) === String(selectedPickupStopId))?.time}
+                      </span>
+                    ) : null}
+                  </div>
+                  {pickupStops.length > 0 ? (
+                    <select
+                      value={selectedPickupStopId}
+                      onChange={(e) => {
+                        setSelectedPickupStopId(e.target.value);
+                        setError('');
+                      }}
+                      className="w-full rounded-[16px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#143a5a]"
+                    >
+                      {pickupStops.map((stop) => (
+                        <option key={stop.id} value={stop.id}>
+                          {stop.pointName || stop.name || 'Boarding Point'}{stop.city ? ` (${stop.city})` : ''}{stop.time ? ` - ${stop.time}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-[16px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+                      {fromCity || bus?.fromCity || 'Main Boarding Point'}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-rose-700">
+                      <MapPinned size={13} className="text-rose-600" />
+                      Dropping Point
+                    </span>
+                    {dropStops.find((d) => String(d.id) === String(selectedDropStopId))?.time ? (
+                      <span className="text-[11px] font-bold text-rose-700">
+                        {dropStops.find((d) => String(d.id) === String(selectedDropStopId))?.time}
+                      </span>
+                    ) : null}
+                  </div>
+                  {dropStops.length > 0 ? (
+                    <select
+                      value={selectedDropStopId}
+                      onChange={(e) => {
+                        setSelectedDropStopId(e.target.value);
+                        setError('');
+                      }}
+                      className="w-full rounded-[16px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#143a5a]"
+                    >
+                      {dropStops.map((stop) => (
+                        <option key={stop.id} value={stop.id}>
+                          {stop.pointName || stop.name || 'Dropping Point'}{stop.city ? ` (${stop.city})` : ''}{stop.time ? ` - ${stop.time}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-[16px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+                      {toCity || bus?.toCity || 'Main Dropping Point'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <label className="block">
                 <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Name</span>
                 <div className="relative">
