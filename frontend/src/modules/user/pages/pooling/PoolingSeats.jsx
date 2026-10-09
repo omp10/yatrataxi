@@ -221,8 +221,9 @@ const PoolingSeats = () => {
                 Step 2/3
               </span>
             </div>
-            <p className="truncate text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 mt-0.5">
-              {route?.originLabel} <span className="mx-1 text-slate-300">→</span> {route?.destinationLabel}
+            <p className="truncate text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 mt-0.5">
+              {route?.originLabel} <span className="mx-1 font-black text-indigo-500">{route?.tripType !== 'one_way' ? '⇄' : '→'}</span> {route?.destinationLabel}
+              {route?.tripType !== 'one_way' ? <span className="ml-1 text-indigo-600 font-black">(Round Trip)</span> : ''}
             </p>
           </div>
         </div>

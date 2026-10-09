@@ -175,19 +175,35 @@ export const searchPoolingRoutes = asyncHandler(async (req, res) => {
     active: { $ne: false },
   };
 
-  if (from || to) {
-    const conditions = [];
-    if (from) {
-      conditions.push({ originLabel: { $regex: rawFrom, $options: 'i' } });
-      conditions.push({ 'pickupPoints.name': { $regex: rawFrom, $options: 'i' } });
-      conditions.push({ 'stops.name': { $regex: rawFrom, $options: 'i' } });
-    }
-    if (to) {
-      conditions.push({ destinationLabel: { $regex: rawTo, $options: 'i' } });
-      conditions.push({ 'dropPoints.name': { $regex: rawTo, $options: 'i' } });
-      conditions.push({ 'stops.name': { $regex: rawTo, $options: 'i' } });
-    }
-    query.$or = conditions;
+  if (from && to) {
+    query.$and = [
+      {
+        $or: [
+          { originLabel: { $regex: rawFrom, $options: 'i' } },
+          { 'pickupPoints.name': { $regex: rawFrom, $options: 'i' } },
+          { 'stops.name': { $regex: rawFrom, $options: 'i' } },
+        ],
+      },
+      {
+        $or: [
+          { destinationLabel: { $regex: rawTo, $options: 'i' } },
+          { 'dropPoints.name': { $regex: rawTo, $options: 'i' } },
+          { 'stops.name': { $regex: rawTo, $options: 'i' } },
+        ],
+      },
+    ];
+  } else if (from) {
+    query.$or = [
+      { originLabel: { $regex: rawFrom, $options: 'i' } },
+      { 'pickupPoints.name': { $regex: rawFrom, $options: 'i' } },
+      { 'stops.name': { $regex: rawFrom, $options: 'i' } },
+    ];
+  } else if (to) {
+    query.$or = [
+      { destinationLabel: { $regex: rawTo, $options: 'i' } },
+      { 'dropPoints.name': { $regex: rawTo, $options: 'i' } },
+      { 'stops.name': { $regex: rawTo, $options: 'i' } },
+    ];
   }
 
   let routes = await PoolingRoute.find(query).populate('assignedVehicleTypeIds').lean();
@@ -284,6 +300,10 @@ export const searchPoolingRoutes = asyncHandler(async (req, res) => {
       return 0;
     };
 
+    if (from && to) {
+      routes = routes.filter((r) => scoreRoute(r) > 0);
+    }
+
     routes.sort((a, b) => {
       const scoreDiff = scoreRoute(b) - scoreRoute(a);
       if (scoreDiff !== 0) return scoreDiff;
@@ -299,6 +319,10 @@ export const searchPoolingRoutes = asyncHandler(async (req, res) => {
       return aFirstTime.localeCompare(bFirstTime);
     });
   }
+
+  routes.forEach((r) => {
+    r.tripType = r.tripType || 'round_trip';
+  });
 
   return ok(res, routes, 'Routes fetched successfully');
 });
@@ -346,6 +370,7 @@ export const getPoolingRouteDetails = asyncHandler(async (req, res) => {
     res,
     {
       ...route.toObject(),
+      tripType: route.tripType || 'round_trip',
       seatAvailability,
     },
     'Route details fetched successfully',
@@ -465,22 +490,35 @@ const creditPoolingAgentCommission = async (booking) => {
     },
   });
 
-  if (commissionResult?.transaction) {
-    booking.agentMeta = {
-      bookedByAgentId: resolved.agentId,
-      customerId: booking.user,
-      commissionAmount: Number(commissionResult.transaction.amount || 0),
-      commissionCreditedAt: commissionResult.transaction.createdAt || new Date(),
-      commissionMode: resolved.commissionMode,
-    };
-    await booking.save();
-  }
+  booking.agentMeta = {
+    bookedByAgentId: resolved.agentId,
+    customerId: booking.user,
+    commissionAmount: Number(commissionResult?.transaction?.amount || 0),
+    commissionCreditedAt: commissionResult?.transaction?.createdAt || new Date(),
+    commissionMode: resolved.commissionMode,
+    commissionReversed: false,
+  };
+  await booking.save();
 };
 
 // Creates the booking plus its seat reservations. The reservations carry a unique
 // index, so a lost race rolls the booking back rather than double-selling a seat.
 const persistPoolingBooking = async ({ context, payment, paymentStatus }) => {
   const { userId, routeId, vehicleId, scheduleId, travelDate, selectedSeats, route, pickupStop, dropStop, fareBreakdown } = context;
+
+  let agentMeta = undefined;
+  try {
+    const bookingUser = await User.findById(userId).select('referredByAgent').lean();
+    if (bookingUser?.referredByAgent) {
+      agentMeta = {
+        bookedByAgentId: bookingUser.referredByAgent,
+        customerId: userId,
+        commissionMode: 'referral',
+      };
+    }
+  } catch (err) {
+    // Non-fatal
+  }
 
   const booking = await PoolingBooking.create({
     bookingId: createPoolingBookingCode(),
@@ -503,6 +541,7 @@ const persistPoolingBooking = async ({ context, payment, paymentStatus }) => {
     pickupLabel: pickupStop.name || pickupStop.address || route.originLabel || '',
     dropLabel: dropStop.name || dropStop.address || route.destinationLabel || '',
     payment,
+    ...(agentMeta ? { agentMeta } : {}),
   });
 
   try {

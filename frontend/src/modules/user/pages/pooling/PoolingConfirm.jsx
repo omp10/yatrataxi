@@ -370,7 +370,14 @@ const PoolingConfirm = () => {
 
                 <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Trip Details</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Trip Details</p>
+                      {route?.tripType !== 'one_way' ? (
+                        <span className="rounded-full bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-indigo-700">
+                          🔄 Round Trip (Return Included)
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="flex items-center gap-1 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
                       <MapPinned size={12} />
                       Track Route
@@ -384,15 +391,24 @@ const PoolingConfirm = () => {
                     </div>
                     <div className="flex-1 space-y-6">
                       <div className="relative">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                          {route?.tripType !== 'one_way' ? 'Boarding / Start' : 'Pickup'}
+                        </p>
                         <p className="mt-1 text-sm font-black leading-tight text-slate-900">
                           {confirmedBooking?.pickupLabel || pickupStop?.name || route.originLabel}
                         </p>
                       </div>
                       <div className="relative">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Drop</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                          {route?.tripType !== 'one_way' ? 'Destination & Return Leg' : 'Drop'}
+                        </p>
                         <p className="mt-1 text-sm font-black leading-tight text-slate-900">
                           {confirmedBooking?.dropLabel || dropStop?.name || route.destinationLabel}
+                          {route?.tripType !== 'one_way' ? (
+                            <span className="block text-xs font-semibold text-indigo-600 mt-0.5">
+                              ⇄ Returns back to {confirmedBooking?.pickupLabel || pickupStop?.name || route.originLabel}
+                            </span>
+                          ) : null}
                         </p>
                       </div>
                     </div>

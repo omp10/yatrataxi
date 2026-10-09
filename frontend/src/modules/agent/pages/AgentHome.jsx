@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Bus, CarFront, IndianRupee, UsersRound } from 'lucide-react';
+import { ArrowRight, Bus, CarFront, IndianRupee, Sparkles, UsersRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { agentService } from '../services/agentService';
 
@@ -36,6 +36,7 @@ const AgentHome = () => {
   // lifetimeEarned is the wallet's own running total; the per-channel sum is derived
   // from the bookings. They should agree -- prefer the wallet as the headline figure.
   const totalCommission = wallet.lifetimeEarned ?? commission.totalCommission ?? 0;
+  const totalReferralEarnings = commission.totalReferralEarnings ?? quickStats.totalReferralEarnings ?? 0;
 
   return (
     <div className="space-y-4">
@@ -86,6 +87,13 @@ const AgentHome = () => {
           <UsersRound size={18} className="text-[#0f6aa8]" />
           <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">Referred Users</p>
           <p className="mt-2 text-2xl font-black tracking-tight text-[#143a5a]">{quickStats.totalCustomers || 0}</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-400">Active network</p>
+        </div>
+        <div className={cardClass}>
+          <Sparkles size={18} className="text-amber-500" />
+          <p className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">Referral Earnings</p>
+          <p className="mt-2 text-2xl font-black tracking-tight text-amber-600">{formatMoney(totalReferralEarnings)}</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-400">Bonus & commissions</p>
         </div>
       </section>
 
@@ -98,19 +106,21 @@ const AgentHome = () => {
         </div>
         <div className="mt-5 grid gap-3">
           {[
-            { label: 'Rides booked by you', key: 'directRides' },
-            { label: 'Rides from your referrals', key: 'referralRides' },
-            { label: 'Bus seats booked by you', key: 'directBuses' },
-            { label: 'Bus seats from your referrals', key: 'referralBuses' },
-            { label: 'Pooling booked by you', key: 'directPooling' },
-            { label: 'Pooling from your referrals', key: 'referralPooling' },
+            { label: 'Rides booked by you', key: 'directRides', unit: 'booking(s)' },
+            { label: 'Rides from customer referrals', key: 'referralRides', unit: 'booking(s)' },
+            { label: 'Bus seats booked by you', key: 'directBuses', unit: 'booking(s)' },
+            { label: 'Bus seats from customer referrals', key: 'referralBuses', unit: 'booking(s)' },
+            { label: 'Pooling booked by you', key: 'directPooling', unit: 'booking(s)' },
+            { label: 'Pooling from customer referrals', key: 'referralPooling', unit: 'booking(s)' },
+            { label: 'Sub-agent recruitment bonuses', key: 'referralBonuses', unit: 'bonus reward(s)' },
+            { label: 'Sub-agent override commission', key: 'overrideCommission', unit: 'override reward(s)' },
           ].map((item) => {
             const row = channels[item.key] || { commission: 0, bookings: 0 };
             return (
               <div key={item.key} className="flex items-center justify-between rounded-[22px] bg-[#eef7ff] px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-[#143a5a]">{item.label}</p>
-                  <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{row.bookings} booking(s)</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-slate-500">{row.bookings} {item.unit || 'booking(s)'}</p>
                 </div>
                 <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-emerald-600">
                   {formatMoney(row.commission)}

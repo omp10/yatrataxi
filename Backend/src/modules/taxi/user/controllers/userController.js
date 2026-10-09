@@ -3487,19 +3487,17 @@ const creditBusReferralCommission = async (booking) => {
     },
   });
 
-  if (commissionResult?.transaction) {
-    booking.agentMeta = {
-      ...(booking.agentMeta || {}),
-      bookedByAgentId: user.referredByAgent,
-      customerId: booking.userId,
-      customerName: booking.passenger?.name || '',
-      customerPhone: booking.passenger?.phone || '',
-      commissionAmount: Number(commissionResult.transaction.amount || 0),
-      commissionCreditedAt: commissionResult.transaction.createdAt || new Date(),
-      commissionMode: 'referral',
-    };
-    await booking.save();
-  }
+  booking.agentMeta = {
+    ...(booking.agentMeta || {}),
+    bookedByAgentId: user.referredByAgent,
+    customerId: booking.userId,
+    customerName: booking.passenger?.name || '',
+    customerPhone: booking.passenger?.phone || '',
+    commissionAmount: Number(commissionResult?.transaction?.amount || 0),
+    commissionCreditedAt: commissionResult?.transaction?.createdAt || new Date(),
+    commissionMode: 'referral',
+  };
+  await booking.save();
 };
 
 export const createBusBookingOrder = async (req, res) => {
@@ -3630,6 +3628,7 @@ export const createBusBookingOrder = async (req, res) => {
       });
 
   const expiresAt = isCashBooking ? null : new Date(Date.now() + BUS_HOLD_MINUTES * 60 * 1000);
+  const bookingUser = await User.findById(userId).select('referredByAgent').lean();
   const booking = await BusBooking.create({
     userId,
     busServiceId,
@@ -3643,6 +3642,13 @@ export const createBusBookingOrder = async (req, res) => {
     currency: busService.fareCurrency || 'INR',
     status: isCashBooking ? 'confirmed' : 'pending',
     expiresAt,
+    agentMeta: {
+      bookedByAgentId: bookingUser?.referredByAgent || null,
+      customerId: userId,
+      customerName: passenger?.name || '',
+      customerPhone: passenger?.phone || '',
+      commissionMode: bookingUser?.referredByAgent ? 'referral' : '',
+    },
     routeSnapshot: {
       originCity: activeRoute?.originCity || busService.route?.originCity || '',
       destinationCity: activeRoute?.destinationCity || busService.route?.destinationCity || '',

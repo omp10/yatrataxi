@@ -153,6 +153,8 @@ const AgentBusResults = () => {
         scheduleId: selection.scheduleId,
         travelDate,
         seatIds: selection.seatIds,
+        fromCity: selectedBus?.fromCity || fromCity,
+        toCity: selectedBus?.toCity || toCity,
       });
       toast.success('Seats reserved successfully');
       navigate('/taxi/agent/bookings');

@@ -138,6 +138,23 @@ const AgentReferral = () => {
             When users scan your QR or sign up via your link, their accounts link to you. Every taxi,
             mini-bus, and tour booking they make deposits commission into your wallet.
           </p>
+
+          <div className="mt-4 grid grid-cols-3 gap-2 pt-3 border-t border-white/20">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Customers</p>
+              <p className="mt-0.5 text-xl font-black">{payload?.referredUsers?.length || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Bookings</p>
+              <p className="mt-0.5 text-xl font-black">{payload?.metrics?.totalReferredBookings || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Commission</p>
+              <p className="mt-0.5 text-xl font-black text-amber-300">
+                ₹{Number(payload?.metrics?.customerReferralCommission || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
         </section>
       ) : (
         <section
@@ -266,18 +283,23 @@ const AgentReferral = () => {
             {(payload?.referredUsers || []).map((user) => (
               <div
                 key={user.id}
-                className="rounded-[22px] border border-[#dfebf5] bg-white px-4 py-3 flex items-center justify-between"
+                className="rounded-[22px] border border-[#dfebf5] bg-white p-4 space-y-2"
               >
-                <div>
-                  <p className="text-sm font-black text-[#143a5a]">{user.name || 'Customer'}</p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                    {user.phone || '--'} · {user.email || 'No email'}
-                  </p>
-                </div>
-                <div className="text-right">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-black text-[#143a5a]">{user.name || 'Customer'}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                      {user.phone || '--'} · {user.email || 'No email'}
+                    </p>
+                  </div>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
                     <CheckCircle2 size={10} /> Active
                   </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] font-semibold text-slate-600">
+                  <span>Bookings: <strong className="text-slate-900">{user.totalBookings || 0}</strong></span>
+                  <span>Commission Earned: <strong className="text-emerald-600">₹{Number(user.totalCommissionEarned || 0).toFixed(2)}</strong></span>
                 </div>
               </div>
             ))}

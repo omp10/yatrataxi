@@ -1066,11 +1066,12 @@ export const createRideRecord = async ({
       transport_type: normalizedTransportType,
       pricingSnapshot,
       agentMeta: {
-        bookedByAgentId: agentMeta?.bookedByAgentId || null,
-        customerId: agentMeta?.customerId || null,
-        customerName: String(agentMeta?.customerName || '').trim(),
-        customerPhone: String(agentMeta?.customerPhone || '').trim(),
+        bookedByAgentId: agentMeta?.bookedByAgentId || user?.referredByAgent || null,
+        customerId: agentMeta?.customerId || (user?.referredByAgent ? userId : null),
+        customerName: String(agentMeta?.customerName || user?.name || '').trim(),
+        customerPhone: String(agentMeta?.customerPhone || user?.phone || '').trim(),
         referralCodeApplied: String(agentMeta?.referralCodeApplied || '').trim().toUpperCase(),
+        commissionMode: agentMeta?.bookedByAgentId ? 'direct' : (user?.referredByAgent ? 'referral' : ''),
       },
       parcel: normalizeParcelPayload(parcel),
       intercity: normalizeIntercityPayload(intercity),
@@ -1128,11 +1129,12 @@ export const createRideRecord = async ({
             transport_type: normalizedTransportType,
             pricingSnapshot,
             agentMeta: {
-              bookedByAgentId: agentMeta?.bookedByAgentId || null,
-              customerId: agentMeta?.customerId || null,
-              customerName: String(agentMeta?.customerName || '').trim(),
-              customerPhone: String(agentMeta?.customerPhone || '').trim(),
+              bookedByAgentId: agentMeta?.bookedByAgentId || user?.referredByAgent || null,
+              customerId: agentMeta?.customerId || (user?.referredByAgent ? userId : null),
+              customerName: String(agentMeta?.customerName || user?.name || '').trim(),
+              customerPhone: String(agentMeta?.customerPhone || user?.phone || '').trim(),
               referralCodeApplied: String(agentMeta?.referralCodeApplied || '').trim().toUpperCase(),
+              commissionMode: agentMeta?.bookedByAgentId ? 'direct' : (user?.referredByAgent ? 'referral' : ''),
             },
             parcel: normalizeParcelPayload(parcel),
             intercity: normalizeIntercityPayload(intercity),
@@ -1716,7 +1718,14 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
           bookedByAgentId: ride.agentMeta?.bookedByAgentId || user?.referredByAgent || null,
           commissionAmount: Number(agentCommission.transaction.amount || 0),
           commissionCreditedAt: agentCommission.transaction.createdAt || new Date(),
-          commissionMode,
+          commissionMode: commissionMode || ride.agentMeta?.commissionMode || 'referral',
+        };
+        await ride.save();
+      } else {
+        ride.agentMeta = {
+          ...(ride.agentMeta || {}),
+          bookedByAgentId: ride.agentMeta?.bookedByAgentId || user?.referredByAgent || null,
+          commissionMode: commissionMode || ride.agentMeta?.commissionMode || 'referral',
         };
         await ride.save();
       }

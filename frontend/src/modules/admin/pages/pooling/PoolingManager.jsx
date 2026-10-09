@@ -59,6 +59,7 @@ const buildDefaultForm = () => ({
   stops: [createStop('stop', 1)],
   schedules: [createSchedule()],
   farePerSeat: 0,
+  tripType: 'round_trip',
   maxSeatsPerBooking: 1,
   maxAdvanceBookingHours: 24,
   boardingBufferMinutes: 15,
@@ -687,17 +688,28 @@ const PoolingManager = ({ mode: propMode }) => {
                       {item.originLabel} to {item.destinationLabel}
                     </p>
                   </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                      item.status === 'active'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : item.status === 'paused'
-                          ? 'bg-amber-50 text-amber-700'
-                          : 'bg-slate-100 text-slate-500'
-                    }`}
-                  >
-                    {item.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                        item.tripType === 'one_way'
+                          ? 'border border-slate-200 bg-slate-50 text-slate-600'
+                          : 'border border-indigo-200 bg-indigo-50 text-indigo-700'
+                      }`}
+                    >
+                      {item.tripType === 'one_way' ? 'One Way →' : 'Round Trip ⇄'}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                        item.status === 'active'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : item.status === 'paused'
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -860,6 +872,21 @@ const PoolingManager = ({ mode: propMode }) => {
                 placeholder="Indore Airport"
               />
               {validationErrors.destinationLabel ? <p className="mt-2 text-xs font-semibold text-rose-600">{validationErrors.destinationLabel}</p> : null}
+            </div>
+
+            <div>
+              <label className={labelClass}>Trip Type *</label>
+              <select
+                value={formData.tripType || 'round_trip'}
+                onChange={(event) => updateForm('tripType', event.target.value)}
+                className={inputClass}
+              >
+                <option value="round_trip">Round Trip (Both Ways / Return Included)</option>
+                <option value="one_way">One Way</option>
+              </select>
+              <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                Sharing car routes like Shirdi-Shani Shingnapur are round trips with return included.
+              </p>
             </div>
 
             <div className="lg:col-span-2">
