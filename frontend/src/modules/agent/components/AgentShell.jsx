@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import AgentBottomNav from './AgentBottomNav';
-import { clearAgentSession } from '../services/agentService';
+import { logoutAgent } from '../services/agentService';
 
 const hiddenNavMatchers = ['/taxi/agent/book-ride', '/taxi/agent/book-bus'];
 
@@ -21,11 +21,8 @@ const AgentShell = () => {
           </div>
           <button
             type="button"
-            onClick={() => {
-              clearAgentSession();
-              navigate('/taxi/agent/login', { replace: true });
-            }}
-            className="inline-flex items-center gap-2 rounded-2xl border border-[#d8e5f1] bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#143a5a] shadow-sm"
+            onClick={logoutAgent}
+            className="inline-flex items-center gap-2 rounded-2xl border border-[#d8e5f1] bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#143a5a] shadow-sm hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition"
           >
             <LogOut size={14} />
             Logout

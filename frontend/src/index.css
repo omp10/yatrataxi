@@ -154,3 +154,17 @@ body {
     transform: translateX(100%);
   }
 }
+
+/* Suppress Google Maps API Warning/Billing Error Dialog & Watermark Popup */
+.gm-err-container,
+.gm-err-content,
+.gm-err-message,
+.gm-err-autocomplete,
+.dismissButton,
+div[style*="z-index: 10000000"],
+div[style*="z-index: 10000001"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}

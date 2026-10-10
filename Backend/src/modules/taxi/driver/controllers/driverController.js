@@ -8490,3 +8490,112 @@ export const claimDriverIncentiveReward = async (req, res) => {
     },
   });
 };
+
+export const getDriverReferralSummary = async (req, res) => {
+  const driverId = req.auth?.sub;
+  const driver = await Driver.findById(driverId);
+  if (!driver) {
+    throw new ApiError(404, "Driver not found");
+  }
+
+  if (!String(driver.referralCode || "").trim()) {
+    driver.referralCode = generateDriverReferralCode(driver);
+    await driver.save();
+  }
+
+  const referralCode = driver.referralCode;
+  let origin = req.get("origin") || "";
+  if (!origin && req.get("referer")) {
+    try {
+      origin = new URL(req.get("referer")).origin;
+    } catch {}
+  }
+  if (!origin) {
+    origin = env.FRONTEND_URL || "http://localhost:5173";
+  }
+
+  const referralLink = `${origin}/taxi/driver/reg-phone?ref=${encodeURIComponent(referralCode)}`;
+
+  let qrDataUrl = "";
+  try {
+    qrDataUrl = await QRCode.toDataURL(referralLink, {
+      width: 320,
+      margin: 2,
+      color: { dark: "#1830b8", light: "#ffffff" },
+    });
+  } catch (qrErr) {
+    console.warn("QR generation error for driver referral:", qrErr);
+  }
+
+  const [referredDrivers, settingDoc, walletTxs] = await Promise.all([
+    Driver.find({ referredBy: driver._id })
+      .sort({ createdAt: -1 })
+      .limit(60)
+      .select("name phone email status approve createdAt onboarding")
+      .lean(),
+    AdminBusinessSetting.findOne({ scope: "default" }).lean(),
+    WalletTransaction.find({
+      driver: driver._id,
+      kind: "credit",
+      $or: [
+        { "metadata.source": "driver_referral" },
+        { "metadata.category": "driver_referral" },
+        { description: /referral/i },
+      ],
+    }).lean(),
+  ]);
+
+  const driverReferralSettings = settingDoc?.referral?.driver || {};
+  const rewardPerDriver = Math.max(0, Number(driverReferralSettings.amount || 500));
+
+  const totalEarned = walletTxs.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  const activeCount = referredDrivers.filter(
+    (d) => d.status === "active" || d.approve === true
+  ).length;
+  const pendingCount = referredDrivers.length - activeCount;
+
+  const normalizedReferred = referredDrivers.map((item) => {
+    const rawPhone = String(item.phone || "");
+    const maskedPhone =
+      rawPhone.length > 5
+        ? `${rawPhone.slice(0, 3)}****${rawPhone.slice(-3)}`
+        : rawPhone;
+    const name = item.name || item.onboarding?.personal?.fullName || "Driver Partner";
+    const isActive = item.status === "active" || item.approve === true;
+
+    return {
+      id: item._id,
+      name,
+      phone: maskedPhone,
+      status: isActive ? "active" : "pending",
+      statusLabel: isActive ? "Active & Verified" : "Verification Pending",
+      createdAt: item.createdAt,
+      rewardEarned: isActive ? rewardPerDriver : 0,
+      rewardStatus: isActive ? "Credited" : "In Onboarding",
+    };
+  });
+
+  res.json({
+    success: true,
+    data: {
+      referralCode,
+      referralLink,
+      qrDataUrl,
+      stats: {
+        totalReferred: referredDrivers.length,
+        activeDrivers: activeCount,
+        pendingDrivers: pendingCount,
+        totalEarned,
+        rewardPerDriver,
+      },
+      referredDrivers: normalizedReferred,
+      settings: {
+        enabled: driverReferralSettings.enabled !== false,
+        amount: rewardPerDriver,
+        type: driverReferralSettings.type || "instant_referrer",
+        rideCount: Number(driverReferralSettings.ride_count || 0),
+      },
+    },
+  });
+};
+

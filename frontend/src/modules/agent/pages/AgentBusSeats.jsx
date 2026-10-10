@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Armchair, Bus, CalendarDays, ChevronRight, Loader2, MapPinned, Phone, RotateCcw, UserRound, X } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { agentService } from '../services/agentService';
+import { RedBusSeater, RedBusSleeper } from '../../../shared/components/bus/BusSeatIcons';
 import useBodyScrollLock from '../../../shared/hooks/useBodyScrollLock';
 
 const formatMoney = (value) => `Rs ${Number(value || 0).toFixed(0)}`;
@@ -92,39 +93,28 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
               const isBooked = String(seat.status || 'available') !== 'available';
               const isSelected = selectedSeatIds.includes(seat.id);
               const isSleeper = String(seat.variant || '').toLowerCase() === 'sleeper';
+              const status = isBooked ? 'booked' : isSelected ? 'selected' : 'available';
 
-              return (
-                <button
-                  key={seat.id}
-                  type="button"
-                  disabled={isBooked}
-                  onClick={() => onToggle(seat)}
-                  className={`relative flex w-full items-center justify-center border-2 transition active:scale-95 ${
-                    isBooked
-                      ? 'cursor-not-allowed border-slate-200 bg-slate-200 text-slate-400'
-                      : isSelected
-                        ? 'border-[#143a5a] bg-[#143a5a] text-white shadow-[0_10px_22px_rgba(20,58,90,0.22)]'
-                        : isSleeper
-                          ? 'border-[#8ecae6] bg-[#eef8ff] text-[#143a5a]'
-                          : 'border-slate-300 bg-white text-slate-700 hover:border-[#143a5a]'
-                  }`}
-                  style={{
-                    minHeight: isSleeper ? 58 : 46,
-                    borderRadius: isSleeper ? 18 : 12,
-                  }}
-                >
-                  {isSleeper ? (
-                    <>
-                      <span className={`absolute left-2 h-[72%] w-2 rounded-full ${isSelected ? 'bg-white/50' : 'bg-[#8ecae6]'}`} />
-                      <span className="pl-4 text-[10px] font-black">{seat.label || seat.id}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className={`absolute -top-1 h-2 w-4/5 rounded-t-md ${isSelected ? 'bg-white/40' : 'bg-slate-200'}`} />
-                      <span className="text-[10px] font-black">{seat.label || seat.id}</span>
-                    </>
-                  )}
-                </button>
+              return isSleeper ? (
+                <div key={seat.id} className="w-full flex justify-center">
+                  <RedBusSleeper
+                    label={seat.label || seat.id}
+                    status={status}
+                    disabled={isBooked}
+                    onClick={() => onToggle(seat)}
+                    title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Berth ${seat.label || seat.id}`}
+                  />
+                </div>
+              ) : (
+                <div key={seat.id} className="w-full flex justify-center">
+                  <RedBusSeater
+                    label={seat.label || seat.id}
+                    status={status}
+                    disabled={isBooked}
+                    onClick={() => onToggle(seat)}
+                    title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Seat ${seat.label || seat.id}`}
+                  />
+                </div>
               );
             })}
           </div>

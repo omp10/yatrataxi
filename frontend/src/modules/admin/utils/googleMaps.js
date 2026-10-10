@@ -12,6 +12,12 @@ export const DELHI_CENTER = { lat: 28.6139, lng: 77.209 };
 export const GOOGLE_MAPS_LOADER_ID = 'appzeto-google-maps';
 export const GOOGLE_MAPS_LIBRARIES = ['places'];
 
+if (typeof window !== 'undefined' && !window.gm_authFailure) {
+  window.gm_authFailure = () => {
+    console.warn('Google Maps authentication notice: Check Maps JavaScript API key billing and domain permissions in Google Cloud Console.');
+  };
+}
+
 export const getLatLng = (source, fallback = INDIA_CENTER) => {
   const lat = Number(source?.lat ?? source?.latitude);
   const lng = Number(source?.lng ?? source?.longitude ?? source?.lon);

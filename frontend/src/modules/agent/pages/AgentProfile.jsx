@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { agentService } from '../services/agentService';
+import { LogOut } from 'lucide-react';
+import { agentService, logoutAgent } from '../services/agentService';
 
 const cardClass = 'rounded-[30px] border border-white/70 bg-white/88 p-5 shadow-[0_18px_36px_rgba(20,58,90,0.08)] backdrop-blur-xl';
 const inputClass = 'w-full rounded-[22px] border border-[#d8e5f1] bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-[#143a5a]';
@@ -73,6 +74,15 @@ const AgentProfile = () => {
         className="w-full rounded-[24px] bg-[#143a5a] px-5 py-4 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_18px_36px_rgba(20,58,90,0.2)]"
       >
         Save Agent Profile
+      </button>
+
+      <button
+        type="button"
+        onClick={logoutAgent}
+        className="w-full rounded-[24px] border border-rose-200 bg-rose-50/80 px-5 py-3.5 text-xs font-black uppercase tracking-[0.2em] text-rose-600 shadow-sm hover:bg-rose-100 transition flex items-center justify-center gap-2"
+      >
+        <LogOut size={16} />
+        Log Out from Agent Desk
       </button>
     </div>
   );

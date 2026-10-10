@@ -24,6 +24,7 @@ import {
   Upload,
   XCircle,
 } from 'lucide-react';
+import { RedBusSeater, RedBusSleeper } from '../../../../shared/components/bus/BusSeatIcons';
 import toast from 'react-hot-toast';
 import {
   BUS_BLUEPRINT_TEMPLATES,
@@ -181,42 +182,31 @@ const fileToDataUrl = (file) =>
 
 const SeatCell = ({ cell, onToggle }) => {
   if (!cell || cell.kind !== 'seat') {
-    return <div className="h-11 rounded-2xl bg-transparent" />;
+    return <div className="h-12 rounded-2xl bg-transparent" />;
   }
 
   const isBlocked = cell.status === 'blocked';
   const isSleeper = cell.variant === 'sleeper';
+  const status = isBlocked ? 'blocked' : 'available';
+
+  if (isSleeper) {
+    return (
+      <RedBusSleeper
+        label={cell.label}
+        status={status}
+        onClick={onToggle}
+        title={isBlocked ? 'Seat blocked for sale (click to unblock)' : 'Seat available for sale (click to block)'}
+      />
+    );
+  }
+
   return (
-    <button
-      type="button"
+    <RedBusSeater
+      label={cell.label}
+      status={status}
       onClick={onToggle}
-      className={`relative flex items-center justify-center overflow-hidden border text-[10px] font-black tracking-wider transition ${
-        isBlocked
-          ? 'border-rose-200 bg-rose-50 text-rose-500'
-          : isSleeper
-            ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50 text-sky-700 hover:border-sky-300 hover:text-sky-800'
-            : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:text-indigo-600'
-      }`}
-      title={isBlocked ? 'Seat blocked for sale' : 'Seat available for sale'}
-      style={{
-        minHeight: isSleeper ? '58px' : '44px',
-        borderRadius: isSleeper ? '18px' : '14px',
-      }}
-    >
-      {isSleeper ? (
-        <>
-          <span className="absolute inset-y-1 left-1.5 w-2 rounded-full bg-sky-200" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-8 rounded-full bg-white/60" />
-          <span className="pl-4">{cell.label}</span>
-        </>
-      ) : (
-        <>
-          <span className="absolute inset-x-2 top-1.5 h-1.5 rounded-full bg-slate-200" />
-          <span className="absolute bottom-1 right-1.5 h-2.5 w-2.5 rounded-full bg-slate-100" />
-          <span>{cell.label}</span>
-        </>
-      )}
-    </button>
+      title={isBlocked ? 'Seat blocked for sale (click to unblock)' : 'Seat available for sale (click to block)'}
+    />
   );
 };
 

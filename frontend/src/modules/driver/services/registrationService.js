@@ -473,3 +473,7 @@ export const getDriverIncentives = () =>
 
 export const claimDriverIncentiveReward = (payload) =>
   api.post("/drivers/incentives/claim", payload, withDriverAuth());
+
+export const getDriverReferralSummary = () =>
+  api.get("/drivers/referral-summary", withDriverAuth());
+

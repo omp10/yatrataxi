@@ -40,6 +40,7 @@ import {
   getDriverApprovalStatus,
   getDriverDocumentTemplates,
   getDriverVehicleFieldTemplates,
+  getDriverReferralSummary,
   getDriverEmergencyContacts,
   getDriverIncentives,
   getDriverNotifications,
@@ -482,4 +483,9 @@ driverRouter.patch(
   "/offline",
   authenticate(["driver"]),
   asyncHandler(goOffline),
+);
+driverRouter.get(
+  "/referral-summary",
+  authenticate(["driver", "owner"]),
+  asyncHandler(getDriverReferralSummary),
 );

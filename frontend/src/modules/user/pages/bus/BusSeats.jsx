@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
 import userBusService from '../../services/busService';
+import { RedBusSeater, RedBusSleeper } from '../../../../shared/components/bus/BusSeatIcons';
 
 const getRoutePrefix = (pathname = '') => (pathname.startsWith('/taxi/user') ? '/taxi/user' : '');
 
@@ -49,56 +50,28 @@ const SeatDeck = ({ title, rows, selectedSeatIds, onToggle }) => {
               const isBooked = seat.status === 'booked';
               const isSelected = selectedSeatIds.includes(seat.id);
               const isSleeper = seat.variant === 'sleeper';
+              const status = isBooked ? 'booked' : isSelected ? 'selected' : 'available';
 
-              return (
-                <motion.button
-                  key={seat.id}
-                  type="button"
-                  disabled={isBooked}
-                  whileTap={!isBooked ? { scale: 0.85 } : {}}
-                  onClick={() => onToggle(seat)}
-                  className={`relative flex w-full items-center justify-center border-2 transition-all ${
-                    isBooked
-                      ? 'cursor-not-allowed border-slate-300 bg-slate-200'
-                      : isSelected
-                        ? 'border-slate-900 bg-slate-900 shadow-[0_6px_16px_rgba(2,6,23,0.22)]'
-                        : isSleeper
-                          ? 'border-blue-200 bg-blue-50 hover:border-blue-300'
-                          : 'border-slate-300 bg-white hover:border-orange-300'
-                  }`}
-                  style={{
-                    minHeight: isSleeper ? '52px' : '44px',
-                    borderRadius: isSleeper ? '18px' : '10px',
-                  }}
-                  aria-label={isBooked ? `Seat ${seat.label || seat.id} sold out` : `Seat ${seat.label || seat.id}`}
-                  title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Available: ${seat.label || seat.id}`}
-                >
-                  {isSleeper ? (
-                    <>
-                      <div
-                        className={`absolute left-1.5 top-1/2 h-[72%] w-2 -translate-y-1/2 rounded-full transition-colors ${
-                          isBooked ? 'bg-slate-400' : isSelected ? 'bg-orange-300' : 'bg-blue-200'
-                        }`}
-                      />
-                      <div className="flex w-full items-center justify-center px-3 pl-5">
-                        <span
-                          className={`text-[10px] font-black leading-none ${
-                            isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-700'
-                          }`}
-                        >
-                          {seat.label || seat.id}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className={`absolute -top-1 h-2 w-full rounded-t-sm transition-colors ${isBooked ? 'bg-slate-400' : isSelected ? 'bg-orange-400' : 'bg-slate-200'}`} />
-                      <span className={`text-[9px] font-black leading-none ${isSelected ? 'text-white' : isBooked ? 'text-slate-500' : 'text-slate-600'}`}>
-                        {seat.label || seat.id}
-                      </span>
-                    </>
-                  )}
-                </motion.button>
+              return isSleeper ? (
+                <div key={seat.id} className="w-full flex justify-center">
+                  <RedBusSleeper
+                    label={seat.label || seat.id}
+                    status={status}
+                    disabled={isBooked}
+                    onClick={() => onToggle(seat)}
+                    title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Berth ${seat.label || seat.id}`}
+                  />
+                </div>
+              ) : (
+                <div key={seat.id} className="w-full flex justify-center">
+                  <RedBusSeater
+                    label={seat.label || seat.id}
+                    status={status}
+                    disabled={isBooked}
+                    onClick={() => onToggle(seat)}
+                    title={isBooked ? `Sold out: ${seat.label || seat.id}` : `Seat ${seat.label || seat.id}`}
+                  />
+                </div>
               );
             })}
           </div>

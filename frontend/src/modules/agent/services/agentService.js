@@ -47,18 +47,42 @@ export const persistAgentSession = (payload = {}) => {
 };
 
 export const clearAgentSession = () => {
-  const storedAgentToken = localStorage.getItem(AGENT_TOKEN_KEY) || '';
-  const genericToken = localStorage.getItem('token') || '';
-
   localStorage.removeItem(AGENT_TOKEN_KEY);
   localStorage.removeItem('agentInfo');
+  localStorage.removeItem(AGENT_LOGIN_SESSION_KEY);
 
-  if (storedAgentToken && genericToken === storedAgentToken) {
+  try {
+    sessionStorage.removeItem(AGENT_TOKEN_KEY);
+    sessionStorage.removeItem('agentInfo');
+    sessionStorage.removeItem(AGENT_LOGIN_SESSION_KEY);
+  } catch {}
+
+  const genericToken = localStorage.getItem('token') || '';
+  if (!genericToken || getTokenPayload(genericToken)?.role === 'agent') {
     localStorage.removeItem('token');
   }
 
+  try {
+    const sessionToken = sessionStorage.getItem('token') || '';
+    if (!sessionToken || getTokenPayload(sessionToken)?.role === 'agent') {
+      sessionStorage.removeItem('token');
+    }
+  } catch {}
+
   if (String(localStorage.getItem('role') || '').toLowerCase() === 'agent') {
     localStorage.removeItem('role');
+  }
+  try {
+    if (String(sessionStorage.getItem('role') || '').toLowerCase() === 'agent') {
+      sessionStorage.removeItem('role');
+    }
+  } catch {}
+};
+
+export const logoutAgent = () => {
+  clearAgentSession();
+  if (typeof window !== 'undefined') {
+    window.location.replace('/taxi/agent/login');
   }
 };
 
