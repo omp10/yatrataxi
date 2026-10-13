@@ -8,11 +8,12 @@ import {
     ShieldCheck, 
     AlertCircle,
     ChevronRight,
-    UploadCloud
+    UploadCloud,
+    Calendar
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getTodayDateString, isPastDateString } from '../../../../shared/utils/dateHelpers';
+import { formatDateForInput, getTodayDateString, isPastDateString } from '../../../../shared/utils/dateHelpers';
 import {
   clearDriverRegistrationSession,
   completeDriverOnboarding,
@@ -48,7 +49,7 @@ const normalizeDocument = (doc) => {
     previewUrl: getDocumentPreviewUrl(doc),
     uploaded: doc.uploaded ?? Boolean(getDocumentPreviewUrl(doc)),
     identifyNumber: String(doc.identifyNumber || doc.identify_number || doc.documentNumber || doc.document_number || '').trim(),
-    expiryDate: String(doc.expiryDate || doc.expiry_date || doc.expiry || doc.expiresAt || '').trim(),
+    expiryDate: formatDateForInput(doc.expiryDate || doc.expiry_date || doc.expiry || doc.expiresAt || ''),
   };
 };
 
@@ -56,7 +57,7 @@ const getDocumentIdentifyValue = (doc) =>
   String(doc?.identifyNumber || doc?.identify_number || doc?.documentNumber || doc?.document_number || '').trim();
 
 const getDocumentExpiryValue = (doc) =>
-  String(doc?.expiryDate || doc?.expiry_date || doc?.expiry || doc?.expiresAt || '').trim();
+  formatDateForInput(doc?.expiryDate || doc?.expiry_date || doc?.expiry || doc?.expiresAt || '');
 
 const buildTemplateMetaState = (templates = [], documents = {}) =>
   Object.fromEntries(
@@ -149,7 +150,22 @@ const StepDocuments = () => {
     ...(location.state || {}),
   };
   const isHandlingHistoryNavigationRef = useRef(false);
+  const dateInputRefs = useRef({});
   const normalizedRole = normalizeSignupRole(session.role);
+
+  const handleOpenDatePicker = (templateId) => {
+    const el = dateInputRefs.current[templateId];
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === 'function') {
+        el.showPicker();
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    el.focus();
+  };
 
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -158,7 +174,18 @@ const StepDocuments = () => {
       Object.entries(session.documents || {}).map(([key, value]) => [key, normalizeDocument(value)]),
     ),
   );
-  const [documentMeta, setDocumentMeta] = useState({});
+  const [documentMeta, setDocumentMeta] = useState(() => {
+    const fromSession = session.documentMeta || {};
+    return Object.fromEntries(
+      Object.entries(fromSession).map(([tId, meta]) => [
+        tId,
+        {
+          identifyNumber: String(meta?.identifyNumber || '').trim(),
+          expiryDate: formatDateForInput(meta?.expiryDate || ''),
+        },
+      ]),
+    );
+  });
   const [uploading, setUploading] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -205,10 +232,17 @@ const StepDocuments = () => {
   );
 
   useEffect(() => {
-    setDocumentMeta((current) => ({
-      ...buildTemplateMetaState(documentTemplates, docs),
-      ...current,
-    }));
+    setDocumentMeta((current) => {
+      const templateState = buildTemplateMetaState(documentTemplates, docs);
+      const next = { ...templateState };
+      for (const [key, value] of Object.entries(current || {})) {
+        next[key] = {
+          identifyNumber: value?.identifyNumber || next[key]?.identifyNumber || '',
+          expiryDate: formatDateForInput(value?.expiryDate || next[key]?.expiryDate || ''),
+        };
+      }
+      return next;
+    });
   }, [documentTemplates, docs]);
 
   useEffect(() => {
@@ -283,13 +317,18 @@ const StepDocuments = () => {
   };
 
   const handleMetaChange = (templateId, fieldName, nextValue) => {
-    if (fieldName === 'expiryDate' && isPastDateString(nextValue)) {
-      setError('Expiry date cannot be in the past');
-      return;
+    let normalizedVal = nextValue;
+    if (fieldName === 'expiryDate') {
+      normalizedVal = formatDateForInput(nextValue);
+      if (normalizedVal && isPastDateString(normalizedVal)) {
+        setError('Expiry date cannot be in the past');
+        return;
+      }
+      setError('');
     }
     const nextMeta = {
       ...(documentMeta[templateId] || {}),
-      [fieldName]: nextValue,
+      [fieldName]: normalizedVal,
     };
 
     setDocumentMeta((current) => ({
@@ -676,23 +715,51 @@ const StepDocuments = () => {
                     ) : null}
 
                     {template.has_expiry_date ? (
-                      <div className="group rounded-[1.8rem] border-2 transition-all p-4 border-slate-50 bg-slate-50 focus-within:border-slate-900/10 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-900/5">
+                      <div 
+                        onClick={() => handleOpenDatePicker(template.id)}
+                        className="group rounded-[1.8rem] border-2 transition-all p-4 border-slate-50 bg-slate-50 hover:bg-slate-100/60 focus-within:border-slate-900/10 focus-within:bg-white focus-within:shadow-xl focus-within:shadow-slate-900/5 cursor-pointer"
+                      >
                         <div className="flex items-center gap-4">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">
-                                <AlertCircle size={20} strokeWidth={2.5} />
-                            </div>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenDatePicker(template.id);
+                                }}
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm group-focus-within:bg-slate-900 group-focus-within:text-white transition-all hover:bg-slate-900 hover:text-white active:scale-95"
+                                title="Pick Expiry Date"
+                            >
+                                <Calendar size={20} strokeWidth={2.5} />
+                            </button>
                             <div className="min-w-0 flex-1 space-y-0.5">
-                                <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 opacity-70">
+                                <label className="block text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 opacity-70 cursor-pointer">
                                     Expiry Date
                                 </label>
                                 <input
+                                    ref={(el) => { dateInputRefs.current[template.id] = el; }}
                                     type="date"
                                     min={getTodayDateString()}
-                                    value={documentMeta[template.id]?.expiryDate || ''}
+                                    value={formatDateForInput(documentMeta[template.id]?.expiryDate || '')}
                                     onChange={(event) => handleMetaChange(template.id, 'expiryDate', event.target.value)}
-                                    className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0"
+                                    onClick={(event) => {
+                                        try {
+                                            event.currentTarget.showPicker?.();
+                                        } catch {}
+                                    }}
+                                    className="w-full border-none bg-transparent p-0 text-lg font-black text-slate-900 outline-none focus:ring-0 cursor-pointer"
                                 />
                             </div>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenDatePicker(template.id);
+                                }}
+                                className="flex h-9 px-3 items-center justify-center gap-1.5 rounded-xl bg-slate-200/70 text-slate-700 text-xs font-bold hover:bg-slate-900 hover:text-white transition-all active:scale-95 shrink-0"
+                            >
+                                <Calendar size={14} strokeWidth={2.5} />
+                                <span>Select</span>
+                            </button>
                         </div>
                       </div>
                     ) : null}

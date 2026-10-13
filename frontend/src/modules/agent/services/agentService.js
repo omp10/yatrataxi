@@ -58,13 +58,17 @@ export const clearAgentSession = () => {
   } catch {}
 
   const genericToken = localStorage.getItem('token') || '';
-  if (!genericToken || getTokenPayload(genericToken)?.role === 'agent') {
+  const genericRole = String(localStorage.getItem('role') || '').toLowerCase();
+  const tokenRole = String(getTokenPayload(genericToken)?.role || '').toLowerCase();
+  if (!genericToken || genericRole === 'agent' || tokenRole === 'agent') {
     localStorage.removeItem('token');
   }
 
   try {
     const sessionToken = sessionStorage.getItem('token') || '';
-    if (!sessionToken || getTokenPayload(sessionToken)?.role === 'agent') {
+    const sessionRole = String(sessionStorage.getItem('role') || '').toLowerCase();
+    const sessionTokenRole = String(getTokenPayload(sessionToken)?.role || '').toLowerCase();
+    if (!sessionToken || sessionRole === 'agent' || sessionTokenRole === 'agent') {
       sessionStorage.removeItem('token');
     }
   } catch {}
@@ -77,11 +81,36 @@ export const clearAgentSession = () => {
       sessionStorage.removeItem('role');
     }
   } catch {}
+
+  if (String(localStorage.getItem('chatRole') || '').toLowerCase() === 'agent') {
+    localStorage.removeItem('chatRole');
+  }
+  try {
+    if (String(sessionStorage.getItem('chatRole') || '').toLowerCase() === 'agent') {
+      sessionStorage.removeItem('chatRole');
+    }
+  } catch {}
 };
 
-export const logoutAgent = () => {
+export const logoutAgent = (navigate) => {
   clearAgentSession();
+
+  if (typeof navigate === 'function') {
+    navigate('/taxi/agent/login', { replace: true });
+    return;
+  }
+
   if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('agent:logout'));
+
+    try {
+      if (window.history && typeof window.history.replaceState === 'function') {
+        window.history.replaceState(null, '', '/taxi/agent/login');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        return;
+      }
+    } catch {}
+
     window.location.replace('/taxi/agent/login');
   }
 };

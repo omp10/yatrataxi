@@ -15,7 +15,7 @@ import userBusService from './modules/user/services/busService';
 import { userService } from './modules/user/services/userService';
 import { syncUpcomingRideReminders } from './modules/user/utils/upcomingRideReminderService';
 import { getAuthenticatedDriverRole, getLocalDriverToken } from './modules/driver/services/registrationService';
-import { getLocalAgentToken } from './modules/agent/services/agentService';
+import { clearAgentSession, getLocalAgentToken } from './modules/agent/services/agentService';
 import './App.css';
 
 
@@ -684,6 +684,34 @@ const DriverEntryRedirect = () => {
   );
 };
 
+const AgentSessionListener = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleAgentLogout = () => {
+      clearAgentSession();
+      navigate('/taxi/agent/login', { replace: true });
+    };
+
+    const handleAuthStale = (event) => {
+      if (event.detail?.role === 'agent') {
+        clearAgentSession();
+        navigate('/taxi/agent/login', { replace: true });
+      }
+    };
+
+    window.addEventListener('agent:logout', handleAgentLogout);
+    window.addEventListener('app:auth-stale', handleAuthStale);
+
+    return () => {
+      window.removeEventListener('agent:logout', handleAgentLogout);
+      window.removeEventListener('app:auth-stale', handleAuthStale);
+    };
+  }, [navigate]);
+
+  return null;
+};
+
 const AgentProtectedRoute = () => {
   if (!getLocalAgentToken()) {
     return <Navigate to="/taxi/agent/login" replace />;
@@ -700,6 +728,7 @@ function App() {
         <AppAutoUpdater />
         <ScrollToTop />
         <UserAccountInvalidationListener />
+        <AgentSessionListener />
         <UserUpcomingRideReminderBootstrap />
         <MainLayout>
           <Suspense
