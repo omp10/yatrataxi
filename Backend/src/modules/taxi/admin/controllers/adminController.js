@@ -16,7 +16,7 @@ import { AgentWithdrawalRequest } from '../../agent/models/AgentWithdrawalReques
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { listAgentWalletTransactions, applyAgentWalletAdjustment } from '../../agent/services/agentWalletService.js';
-import { getDefaultAgentCommissionConfig, saveDefaultAgentCommissionConfig, handleBusBookingCommissionReversal } from '../../agent/services/agentCommissionService.js';
+import { getDefaultAgentCommissionConfig, saveDefaultAgentCommissionConfig, handleBusBookingCommissionReversal, processAgentApprovalReferralReward } from '../../agent/services/agentCommissionService.js';
 import { getPublicActivePaymentGateway } from '../../services/paymentGatewayService.js';
 
 const ok = (res, data, extra = {}) =>
@@ -771,30 +771,49 @@ export const createAgent = asyncHandler(async (req, res) => {
     await agent.save();
   }
 
+  if (agent.kycStatus === 'verified' && agent.referredByAgent) {
+    try {
+      await processAgentApprovalReferralReward(agent);
+    } catch (referralErr) {
+      console.error('Error crediting agent referral rewards on creation:', referralErr);
+    }
+  }
+
   ok(res, serializeAgentAdmin(agent.toObject(), null));
 });
 
 export const updateAgent = asyncHandler(async (req, res) => {
-  const normalizedKycStatus = ['pending', 'verified', 'rejected'].includes(String(req.body?.kycStatus || '').trim().toLowerCase())
-    ? String(req.body.kycStatus).trim().toLowerCase()
-    : 'pending';
-  const reviewNote = toCleanString(req.body?.reviewNote ?? req.body?.onboarding?.reviewNote);
-  const now = new Date();
-  const update = {
-    name: toCleanString(req.body?.name),
-    email: normalizeEmail(req.body?.email),
-    active: req.body?.active !== false,
-    status: String(req.body?.status || 'active').trim().toLowerCase() === 'inactive' ? 'inactive' : 'active',
-    kycStatus: normalizedKycStatus,
-    referralCode: normalizeReferralCode(req.body?.referralCode),
-    commissionConfig: req.body?.commissionConfig || undefined,
-    payout: req.body?.payout || undefined,
-    notes: toCleanString(req.body?.notes),
-  };
+  const existingAgent = await Agent.findById(req.params.id);
+  if (!existingAgent) {
+    throw new ApiError(404, 'Agent not found');
+  }
 
+  const update = {};
+  const now = new Date();
+
+  if (req.body?.name !== undefined) update.name = toCleanString(req.body.name);
+  if (req.body?.email !== undefined) update.email = normalizeEmail(req.body.email);
+  if (req.body?.active !== undefined) update.active = req.body.active !== false;
+  if (req.body?.status !== undefined) {
+    update.status = String(req.body.status || 'active').trim().toLowerCase() === 'inactive' ? 'inactive' : 'active';
+  }
+  if (req.body?.kycStatus !== undefined) {
+    const normalized = String(req.body.kycStatus).trim().toLowerCase();
+    if (['pending', 'verified', 'rejected'].includes(normalized)) {
+      update.kycStatus = normalized;
+    }
+  }
+  if (req.body?.referralCode !== undefined) update.referralCode = normalizeReferralCode(req.body.referralCode);
+  if (req.body?.commissionConfig !== undefined) update.commissionConfig = req.body.commissionConfig;
+  if (req.body?.payout !== undefined) update.payout = req.body.payout;
+  if (req.body?.notes !== undefined) update.notes = toCleanString(req.body.notes);
+
+  const reviewNote = toCleanString(req.body?.reviewNote ?? req.body?.onboarding?.reviewNote);
   if (req.body?.kycStatus !== undefined || req.body?.reviewNote !== undefined || req.body?.onboarding?.reviewNote !== undefined) {
     update['onboarding.reviewedAt'] = now;
-    update['onboarding.reviewNote'] = reviewNote;
+    if (reviewNote) {
+      update['onboarding.reviewNote'] = reviewNote;
+    }
   }
 
   if (req.body?.phone !== undefined) {
@@ -824,48 +843,9 @@ export const updateAgent = asyncHandler(async (req, res) => {
     await agent.save();
   }
 
-  if (normalizedKycStatus === 'verified' && agent.referredByAgent && !agent.referralRewardPaid) {
+  if (agent.kycStatus === 'verified' && agent.referredByAgent) {
     try {
-      const settingDoc = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
-      const agentReferral = settingDoc?.referral?.agent || {};
-      const agentToAgentEnabled = agentReferral.agent_to_agent_enabled !== false;
-      const trigger = String(agentReferral.reward_trigger || 'on_approval').trim().toLowerCase();
-
-      if (agentToAgentEnabled && trigger === 'on_approval') {
-        const bonusAmount = Number(agentReferral.agent_referral_bonus || 0);
-        const welcomeAmount = Number(agentReferral.welcome_bonus || 0);
-
-        if (bonusAmount > 0) {
-          await applyAgentWalletAdjustment({
-            agentId: agent.referredByAgent,
-            amount: bonusAmount,
-            kind: 'credit',
-            title: `Referral bonus for recruiting agent ${agent.name || agent.phone}`,
-            source: 'referral_agent',
-            referenceKey: `agent_ref_bonus_${agent._id}_referrer`,
-            metadata: { referredAgentId: String(agent._id) },
-          });
-          await Agent.updateOne(
-            { _id: agent.referredByAgent },
-            { $inc: { 'metrics.agentReferralEarnings': bonusAmount } },
-          );
-        }
-
-        if (welcomeAmount > 0) {
-          await applyAgentWalletAdjustment({
-            agentId: agent._id,
-            amount: welcomeAmount,
-            kind: 'credit',
-            title: 'Agent Welcome Bonus',
-            source: 'referral_welcome',
-            referenceKey: `agent_welcome_bonus_${agent._id}`,
-            metadata: { referredBy: String(agent.referredByAgent) },
-          });
-        }
-
-        agent.referralRewardPaid = true;
-        await agent.save();
-      }
+      await processAgentApprovalReferralReward(agent);
     } catch (referralErr) {
       console.error('Error crediting agent referral rewards on KYC verification:', referralErr);
     }

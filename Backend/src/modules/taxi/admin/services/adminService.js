@@ -5092,12 +5092,16 @@ export const getReferralSettings = async (type) => {
   const referral = {
     driver: { enabled: false, type: 'instant_referrer', amount: 0 },
     user: { enabled: false, type: 'instant_referrer', amount: 0 },
-    agent: DEFAULT_AGENT_REFERRAL_SETTINGS,
+    agent: {
+      ...DEFAULT_AGENT_REFERRAL_SETTINGS,
+      ...(setting?.referral?.agent || {}),
+    },
     ...(setting?.referral || {}),
   };
-  if (type === 'agent' && !referral.agent) {
-    referral.agent = DEFAULT_AGENT_REFERRAL_SETTINGS;
-  }
+  referral.agent = {
+    ...DEFAULT_AGENT_REFERRAL_SETTINGS,
+    ...(setting?.referral?.agent || {}),
+  };
   return type ? referral[type] : referral;
 };
 
@@ -5201,11 +5205,13 @@ export const getAgentReferralTrees = async () => {
             referralCode: parent.referralCode || '',
           }
         : null,
+      referredByName: parent?.name || '',
+      referredByCode: parent?.referralCode || '',
       createdAt: agent.createdAt,
     };
   });
 
-  return { results: list };
+  return { agents: list, results: list };
 };
 
 export const getReferralDashboard = async () => {

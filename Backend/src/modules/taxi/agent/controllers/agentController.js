@@ -26,7 +26,7 @@ import { Ride } from '../../user/models/Ride.js';
 import { getRideDetails, createRideRecord } from '../../services/rideService.js';
 import { startDispatchFlow } from '../../services/dispatchService.js';
 import { listAgentWalletTransactions, serializeAgentWallet, ensureAgentWallet, withMongoSession } from '../services/agentWalletService.js';
-import { creditAgentCommission, getDefaultAgentCommissionConfig, computeAgentCommissionAmount } from '../services/agentCommissionService.js';
+import { creditAgentCommission, getDefaultAgentCommissionConfig, computeAgentCommissionAmount, syncPendingSubAgentReferralRewards } from '../services/agentCommissionService.js';
 import { startAgentLoginOtp, verifyAgentLoginOtp } from '../services/agentLoginOtpService.js';
 import { assignPushTokenToEntity } from '../../services/pushTokenService.js';
 
@@ -681,6 +681,7 @@ export const updateAgentProfile = async (req, res) => {
 };
 
 export const getAgentWallet = async (req, res) => {
+  await syncPendingSubAgentReferralRewards(req.auth.sub);
   const wallet = await listAgentWalletTransactions(req.auth.sub);
   res.json({
     success: true,
@@ -753,6 +754,8 @@ export const createAgentWithdrawalRequest = async (req, res) => {
 };
 
 export const getAgentReferralSummary = async (req, res) => {
+  await syncPendingSubAgentReferralRewards(req.auth.sub);
+
   const agent = await Agent.findById(req.auth.sub).lean();
   if (!agent) {
     throw new ApiError(404, 'Agent not found');
@@ -1071,6 +1074,8 @@ const summariseAgentCommission = async (agentId) => {
 };
 
 export const getAgentDashboard = async (req, res) => {
+  await syncPendingSubAgentReferralRewards(req.auth.sub);
+
   const [agent, wallet, commission] = await Promise.all([
     Agent.findById(req.auth.sub).lean(),
     listAgentWalletTransactions(req.auth.sub),

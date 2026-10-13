@@ -1,6 +1,8 @@
 import { Agent } from '../models/Agent.js';
+import { AgentWallet } from '../models/AgentWallet.js';
 import { AdminBusinessSetting } from '../../admin/models/AdminBusinessSetting.js';
 import { applyAgentWalletAdjustment } from './agentWalletService.js';
+import { DEFAULT_AGENT_REFERRAL_SETTINGS } from '../../admin/services/adminService.js';
 
 const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 
@@ -158,13 +160,16 @@ export const creditAgentCommission = async ({
     if (agent.referredByAgent) {
       try {
         const settingDoc = await AdminBusinessSetting.findOne({ scope: 'default' }).session(session).lean();
-        const agentReferral = settingDoc?.referral?.agent || {};
+        const agentReferral = {
+          ...DEFAULT_AGENT_REFERRAL_SETTINGS,
+          ...(settingDoc?.referral?.agent || {}),
+        };
         const agentToAgentEnabled = agentReferral.agent_to_agent_enabled !== false;
 
         // 1. First booking reward trigger
         if (agentToAgentEnabled && !agent.referralRewardPaid && agentReferral.reward_trigger === 'first_booking') {
-          const bonusAmount = Number(agentReferral.agent_referral_bonus || 0);
-          const welcomeAmount = Number(agentReferral.welcome_bonus || 0);
+          const bonusAmount = Number(agentReferral.agent_referral_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.agent_referral_bonus);
+          const welcomeAmount = Number(agentReferral.welcome_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.welcome_bonus);
 
           if (bonusAmount > 0) {
             await applyAgentWalletAdjustment({
@@ -366,4 +371,185 @@ export const handleBusBookingCommissionReversal = async ({
   }
 
   return result;
+};
+
+export const processAgentApprovalReferralReward = async (agentDoc, session = null) => {
+  if (!agentDoc || !agentDoc.referredByAgent) {
+    return null;
+  }
+
+  const subAgentId = String(agentDoc._id);
+  const parentAgentId = String(agentDoc.referredByAgent);
+
+  const settingDoc = await AdminBusinessSetting.findOne({ scope: 'default' }).session(session).lean();
+  const agentReferral = {
+    ...DEFAULT_AGENT_REFERRAL_SETTINGS,
+    ...(settingDoc?.referral?.agent || {}),
+  };
+
+  const agentToAgentEnabled = agentReferral.agent_to_agent_enabled !== false;
+  const trigger = String(agentReferral.reward_trigger || 'on_approval').trim().toLowerCase();
+
+  if (!agentToAgentEnabled || trigger !== 'on_approval') {
+    return null;
+  }
+
+  const bonusAmount = Number(agentReferral.agent_referral_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.agent_referral_bonus);
+  const welcomeAmount = Number(agentReferral.welcome_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.welcome_bonus);
+
+  if (bonusAmount > 0) {
+    const refKey = `agent_ref_bonus_${subAgentId}_referrer`;
+    const res = await applyAgentWalletAdjustment({
+      agentId: parentAgentId,
+      amount: bonusAmount,
+      kind: 'credit',
+      title: `Referral bonus for recruiting agent ${agentDoc.name || agentDoc.phone}`,
+      source: 'referral_agent',
+      referenceKey: refKey,
+      metadata: { referredAgentId: subAgentId },
+      session,
+    });
+    if (res) {
+      await Agent.updateOne(
+        { _id: parentAgentId },
+        { $inc: { 'metrics.agentReferralEarnings': bonusAmount } },
+        { session },
+      );
+    }
+  }
+
+  if (welcomeAmount > 0) {
+    const welcomeRefKey = `agent_welcome_bonus_${subAgentId}`;
+    await applyAgentWalletAdjustment({
+      agentId: subAgentId,
+      amount: welcomeAmount,
+      kind: 'credit',
+      title: 'Agent Welcome Bonus',
+      source: 'referral_welcome',
+      referenceKey: welcomeRefKey,
+      metadata: { referredBy: parentAgentId },
+      session,
+    });
+  }
+
+  await Agent.updateOne(
+    { _id: subAgentId },
+    { $set: { referralRewardPaid: true } },
+    { session },
+  );
+
+  return true;
+};
+
+export const syncPendingSubAgentReferralRewards = async (agentId) => {
+  if (!agentId) return null;
+
+  try {
+    const agent = await Agent.findById(agentId);
+    if (!agent) return null;
+
+    const settingDoc = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
+    const agentReferral = {
+      ...DEFAULT_AGENT_REFERRAL_SETTINGS,
+      ...(settingDoc?.referral?.agent || {}),
+    };
+
+    const agentToAgentEnabled = agentReferral.agent_to_agent_enabled !== false;
+    const trigger = String(agentReferral.reward_trigger || 'on_approval').trim().toLowerCase();
+
+    // 1. If this agent itself was recruited and is verified, ensure welcome bonus is credited
+    if (
+      agentToAgentEnabled &&
+      agent.referredByAgent &&
+      String(agent.kycStatus || '').toLowerCase() === 'verified' &&
+      trigger === 'on_approval'
+    ) {
+      const welcomeAmount = Number(agentReferral.welcome_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.welcome_bonus);
+      if (welcomeAmount > 0) {
+        const welcomeRefKey = `agent_welcome_bonus_${String(agent._id)}`;
+        await applyAgentWalletAdjustment({
+          agentId: String(agent._id),
+          amount: welcomeAmount,
+          kind: 'credit',
+          title: 'Agent Welcome Bonus',
+          source: 'referral_welcome',
+          referenceKey: welcomeRefKey,
+          metadata: { referredBy: String(agent.referredByAgent) },
+        });
+      }
+    }
+
+    // 2. Check all sub-agents recruited by this agent
+    if (agentToAgentEnabled && trigger === 'on_approval') {
+      const bonusAmount = Number(agentReferral.agent_referral_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.agent_referral_bonus);
+      const welcomeAmount = Number(agentReferral.welcome_bonus ?? DEFAULT_AGENT_REFERRAL_SETTINGS.welcome_bonus);
+
+      const subAgents = await Agent.find({
+        referredByAgent: agent._id,
+        kycStatus: 'verified',
+      }).lean();
+
+      for (const sub of subAgents) {
+        const subId = String(sub._id);
+        const refKey = `agent_ref_bonus_${subId}_referrer`;
+
+        if (bonusAmount > 0) {
+          const res = await applyAgentWalletAdjustment({
+            agentId: String(agent._id),
+            amount: bonusAmount,
+            kind: 'credit',
+            title: `Referral bonus for recruiting agent ${sub.name || sub.phone}`,
+            source: 'referral_agent',
+            referenceKey: refKey,
+            metadata: { referredAgentId: subId },
+          });
+
+          if (res) {
+            await Agent.updateOne(
+              { _id: agent._id },
+              { $inc: { 'metrics.agentReferralEarnings': bonusAmount } },
+            );
+          }
+        }
+
+        if (welcomeAmount > 0) {
+          const welcomeRefKey = `agent_welcome_bonus_${subId}`;
+          await applyAgentWalletAdjustment({
+            agentId: subId,
+            amount: welcomeAmount,
+            kind: 'credit',
+            title: 'Agent Welcome Bonus',
+            source: 'referral_welcome',
+            referenceKey: welcomeRefKey,
+            metadata: { referredBy: String(agent._id) },
+          });
+        }
+
+        if (!sub.referralRewardPaid) {
+          await Agent.updateOne({ _id: sub._id }, { $set: { referralRewardPaid: true } });
+        }
+      }
+    }
+
+    // 3. Reconcile agent.metrics.agentReferralEarnings from wallet transactions
+    const wallet = await AgentWallet.findOne({ agentId: agent._id }).lean();
+    if (wallet && Array.isArray(wallet.transactions)) {
+      const affiliateTotal = roundMoney(
+        wallet.transactions
+          .filter(
+            (t) =>
+              t.kind === 'credit' &&
+              ['referral_agent', 'referral_welcome', 'agent_override_commission'].includes(t.source)
+          )
+          .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+      );
+
+      await Agent.updateOne(
+        { _id: agent._id },
+        { $set: { 'metrics.agentReferralEarnings': affiliateTotal } }
+      );
+    }
+  } catch (err) {
+    console.error('syncPendingSubAgentReferralRewards error for agent', agentId, err);
+  }
 };

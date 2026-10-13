@@ -72,7 +72,12 @@ const AgentReferralSettings = () => {
       setTreesLoading(true);
       const treeRes = await adminService.getAgentReferralTrees();
       const treePayload = unwrap(treeRes);
-      setAgentTrees(Array.isArray(treePayload?.agents) ? treePayload.agents : []);
+      const list = Array.isArray(treePayload?.agents)
+        ? treePayload.agents
+        : (Array.isArray(treePayload?.results)
+          ? treePayload.results
+          : (Array.isArray(treePayload) ? treePayload : []));
+      setAgentTrees(list);
     } catch (treeErr) {
       console.error('Fetch agent referral trees error:', treeErr);
     } finally {
@@ -122,7 +127,9 @@ const AgentReferralSettings = () => {
       item.name?.toLowerCase().includes(q) ||
       item.phone?.toLowerCase().includes(q) ||
       item.referralCode?.toLowerCase().includes(q) ||
-      item.referredByName?.toLowerCase().includes(q)
+      item.referredByName?.toLowerCase().includes(q) ||
+      item.referredBy?.name?.toLowerCase().includes(q) ||
+      item.referredBy?.referralCode?.toLowerCase().includes(q)
     );
   });
 
