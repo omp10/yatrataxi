@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { applyGatewayPaymentOnce } from "../../services/paymentCaptureService.js";
 import mongoose from "mongoose";
 import QRCode from "qrcode";
 import { Env, StandardCheckoutClient, StandardCheckoutPayRequest } from "@phonepe-pg/pg-sdk-node";
@@ -2547,54 +2548,6 @@ const serializeDriverScheduledRide = (ride = {}, currentDriverId = "") => ({
   createdAt: ride.createdAt || null,
   updatedAt: ride.updatedAt || null,
 });
-
-export const registerDriver = async (req, res) => {
-  const { name, phone, password, vehicleType, location } = req.body;
-
-  if (!name || !phone || !password || !vehicleType || !location) {
-    throw new ApiError(
-      400,
-      "name, phone, password, vehicleType and location are required",
-    );
-  }
-
-  const existingDriver = await Driver.findOne({ phone });
-
-  if (existingDriver) {
-    throw new ApiError(409, "Phone number is already registered");
-  }
-
-  const coordinates = normalizePoint(location, "location");
-  const zone = await findZoneByPickup(coordinates);
-
-  const driver = await Driver.create({
-    name,
-    phone,
-    password: await hashPassword(password),
-    vehicleType,
-    approve: true,
-    status: "approved",
-    zoneId: zone?._id || null,
-    location: toPoint(coordinates, "location"),
-  });
-
-  const token = signAccessToken({ sub: String(driver._id), role: "driver" });
-
-  res.status(201).json({
-    success: true,
-    data: {
-      token,
-      driver: {
-        id: driver._id,
-        name: driver.name,
-        phone: driver.phone,
-        vehicleType: driver.vehicleType,
-        rating: driver.rating,
-        status: driver.status,
-      },
-    },
-  });
-};
 
 export const loginDriver = async (req, res) => {
   const { phone, password } = req.body;
@@ -5507,35 +5460,6 @@ export const createDriverWithdrawalRequest = async (req, res) => {
   });
 };
 
-export const topUpMyWallet = async (req, res) => {
-  const amount = Number(req.body.amount);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new ApiError(400, "amount must be greater than zero");
-  }
-
-  const result = await topUpDriverWallet({
-    driverId: req.auth.sub,
-    amount,
-    metadata: {
-      source: req.body.source || "manual",
-      referenceId: req.body.referenceId || null,
-    },
-  });
-
-  const payload = {
-    wallet: result.wallet,
-    transaction: result.transaction,
-  };
-
-  emitToDriver(req.auth.sub, "driver:wallet:updated", payload);
-
-  res.json({
-    success: true,
-    data: payload,
-  });
-};
-
 export const createDriverPaymentQr = async (req, res) => {
   const amountInPaise = normalizePaymentAmount(req.body.amount);
   const rideId = String(req.body.rideId || "").trim();
@@ -6113,6 +6037,11 @@ export const verifyDriverWalletTopup = async (req, res) => {
   const amount = Math.round(amountPaise) / 100;
   const driverId = req.auth?.sub;
 
+  if (String(order?.notes?.driverId || "") !== String(driverId)) {
+    throw new ApiError(403, "This payment was not made for your wallet");
+  }
+
+  // Payments credited before the capture ledger existed are only recorded here.
   const alreadyCredited = await WalletTransaction.findOne({
     driverId,
     "metadata.providerPaymentId": paymentId,
@@ -6120,7 +6049,31 @@ export const verifyDriverWalletTopup = async (req, res) => {
     .select("_id")
     .lean();
 
-  if (alreadyCredited) {
+  const { claimed, result } = alreadyCredited
+    ? { claimed: false, result: null }
+    : await applyGatewayPaymentOnce(
+      {
+        provider: "razorpay",
+        paymentId,
+        orderId,
+        purpose: "driver_wallet_topup",
+        ownerType: "driver",
+        ownerId: driverId,
+        amount,
+      },
+      () => topUpDriverWallet({
+        driverId,
+        amount,
+        metadata: {
+          source: "razorpay",
+          provider: "razorpay",
+          providerOrderId: orderId,
+          providerPaymentId: paymentId,
+        },
+      }),
+    );
+
+  if (!claimed) {
     const driver = await Driver.findById(driverId);
     res.json({
       success: true,
@@ -6130,17 +6083,6 @@ export const verifyDriverWalletTopup = async (req, res) => {
     });
     return;
   }
-
-  const result = await topUpDriverWallet({
-    driverId,
-    amount,
-    metadata: {
-      source: "razorpay",
-      provider: "razorpay",
-      providerOrderId: orderId,
-      providerPaymentId: paymentId,
-    },
-  });
 
   const payload = {
     wallet: result.wallet,
@@ -6202,6 +6144,13 @@ export const verifyDriverPhonePeWalletTopup = async (req, res) => {
   });
 
   if (paymentState === "COMPLETED") {
+    // Driver wallet order ids are minted as DWAL<timestamp><last 8 of the driver id>.
+    const compactDriverId = String(driverId || "").replace(/[^a-zA-Z0-9]/g, "").slice(-8);
+    if (!merchantTransactionId.startsWith("DWAL") || !compactDriverId || !merchantTransactionId.endsWith(compactDriverId)) {
+      throw new ApiError(403, "This payment was not made for your wallet");
+    }
+
+    // Payments credited before the capture ledger existed are only recorded here.
     const alreadyCredited = await WalletTransaction.findOne({
       driverId,
       $or: [
@@ -6214,16 +6163,27 @@ export const verifyDriverPhonePeWalletTopup = async (req, res) => {
 
     let result = null;
     if (!alreadyCredited) {
-      result = await topUpDriverWallet({
-        driverId,
-        amount,
-        metadata: {
-          source: "phonepe",
+      ({ result } = await applyGatewayPaymentOnce(
+        {
           provider: "phonepe",
-          providerOrderId: merchantTransactionId,
-          providerPaymentId: paymentId,
+          paymentId: merchantTransactionId,
+          orderId: merchantTransactionId,
+          purpose: "driver_wallet_topup",
+          ownerType: "driver",
+          ownerId: driverId,
+          amount,
         },
-      });
+        () => topUpDriverWallet({
+          driverId,
+          amount,
+          metadata: {
+            source: "phonepe",
+            provider: "phonepe",
+            providerOrderId: merchantTransactionId,
+            providerPaymentId: paymentId,
+          },
+        }),
+      ));
     }
 
     const driver = await Driver.findById(driverId);

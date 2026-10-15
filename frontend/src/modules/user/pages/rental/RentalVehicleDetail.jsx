@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import {
@@ -450,7 +450,7 @@ const readStoredUserInfo = () => {
   }
 };
 
-const RentalVehicleDetail = () => {
+const RentalVehicleDetailContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { settings } = useSettings();
@@ -568,10 +568,6 @@ const RentalVehicleDetail = () => {
     }
   }, [duration, vehicle]);
 
-  if (!vehicle) {
-    navigate('/rental');
-    return null;
-  }
 
   const gallery = useMemo(
     () =>
@@ -1647,6 +1643,13 @@ const RentalVehicleDetail = () => {
       </div>
     </div>
   );
+};
+
+// Needs a vehicle from the list (or the copy kept in session storage); otherwise go back.
+const RentalVehicleDetail = () => {
+  const location = useLocation();
+  const hasVehicle = Boolean(location.state?.vehicle || readStoredRentalVehicleDetail()?.vehicle);
+  return hasVehicle ? <RentalVehicleDetailContent /> : <Navigate to="/rental" replace />;
 };
 
 export default RentalVehicleDetail;

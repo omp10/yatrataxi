@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Upload, CheckCircle2, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import { uploadService } from '../../../../shared/services/uploadService';
@@ -14,11 +14,10 @@ const fileToDataUrl = (file) =>
     reader.readAsDataURL(file);
   });
 
-const RentalKYC = () => {
+const RentalKYCContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state || {};
-  if (!state.vehicle) { navigate('/rental'); return null; }
 
   const existingKycDocuments = useMemo(() => state.rentalKyc?.documents || {}, [state.rentalKyc]);
 
@@ -260,6 +259,12 @@ const RentalKYC = () => {
       </div>
     </div>
   );
+};
+
+// The screen needs the vehicle chosen on the previous step; without it, go back.
+const RentalKYC = () => {
+  const location = useLocation();
+  return location.state?.vehicle ? <RentalKYCContent /> : <Navigate to="/rental" replace />;
 };
 
 export default RentalKYC;

@@ -196,6 +196,11 @@ const busBookingSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Set while a cancellation (and its gateway refund) is being processed.
+    cancellationLockedAt: {
+      type: Date,
+      default: null,
+    },
     cancellation: {
       allowed: { type: Boolean, default: false },
       appliedRuleId: { type: String, default: '' },

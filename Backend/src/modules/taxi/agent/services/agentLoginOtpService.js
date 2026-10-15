@@ -8,8 +8,6 @@ import { Agent } from '../models/Agent.js';
 import { AgentLoginSession } from '../models/AgentLoginSession.js';
 
 const LOGIN_OTP_TTL_MS = 10 * 60 * 1000;
-const TEST_LOGIN_OTP_PHONE = '6268423925';
-const TEST_LOGIN_OTP_CODE = '0000';
 
 const toCleanString = (value) => String(value || '').trim();
 const normalizePhone = (phone) => {
@@ -22,8 +20,8 @@ const getVisibleOtp = (otp) => (process.env.NODE_ENV !== 'production' ? String(o
 const isTruthy = (value) => ['1', 'true', 'yes', 'on'].includes(toCleanString(value).toLowerCase());
 
 const getStaticAgentOtpConfig = () => ({
-  phone: normalizePhone(env.sms?.staticOtpPhone || TEST_LOGIN_OTP_PHONE),
-  otp: toCleanString(env.sms?.staticOtpCode || TEST_LOGIN_OTP_CODE),
+  phone: normalizePhone(env.sms?.staticOtpPhone || ''),
+  otp: toCleanString(env.sms?.staticOtpCode || ''),
 });
 
 const resolveAgentLoginOtpForPhone = (phone) => {

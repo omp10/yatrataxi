@@ -7,27 +7,10 @@ import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from 
 import api from '../../../../shared/api/axiosInstance';
 import { getSavedLocation, getSavedLocationCoords, saveLocation } from '../../services/locationStore';
 
-const LOCATION_COORDS = {
-  'Pipaliyahana, Indore': [75.9048, 22.7039],
-  'Vijay Nagar': [75.8937, 22.7533],
-  'Vijay Nagar Square': [75.8947, 22.7518],
-  'Vijayawada': [80.6480, 16.5062],
-  'Vijay Nagar Police Station': [75.8934, 22.7506],
-  'Rajwada': [75.8553, 22.7187],
-  'Bhawarkua': [75.8586, 22.6926],
-  'MG Road': [75.8721, 22.7196],
-  'Palasia Square': [75.8863, 22.7242],
-  'LIG Colony': [75.8904, 22.7322],
-  'Scheme No 54': [75.8978, 22.7567],
-  'Bhangadh': [75.8438, 22.7552],
-  'AB Road': [75.8878, 22.7423],
-  'Geeta Bhawan': [75.8834, 22.7208],
-  'Sapna Sangeeta': [75.8587, 22.6984],
-  'Mahalaxmi Nagar': [75.9114, 22.7676],
-};
+// No built-in city presets: every location comes from search, the map pin or GPS.
+const LOCATION_COORDS = {};
 
-const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[title] || fallback;
-const DEFAULT_COORDS = [75.8577, 22.7196];
+const getCoords = (title, fallback = null) => LOCATION_COORDS[title] || fallback;
 const sanitizeLocationInput = (value) => String(value || '').replace(/^\s+/g, '').replace(/\s{2,}/g, ' ');
 
 const unwrapResults = (response) => {
@@ -151,9 +134,9 @@ const SelectLocation = () => {
   const savedLocation = getSavedLocation();
   const savedPickupLabel = String(savedLocation?.address || '').trim();
   const savedPickupCoords = getSavedLocationCoords();
-  const [pickup, setPickup] = useState(() => routeState.pickup || savedPickupLabel || 'Pipaliyahana, Indore');
+  const [pickup, setPickup] = useState(() => routeState.pickup || savedPickupLabel || '');
   const [drop, setDrop] = useState(() => routeState.drop || '');
-  const [pickupCoords, setPickupCoords] = useState(() => routeState.pickupCoords || savedPickupCoords || getCoords(routeState.pickup || savedPickupLabel || 'Pipaliyahana, Indore'));
+  const [pickupCoords, setPickupCoords] = useState(() => routeState.pickupCoords || savedPickupCoords || getCoords(routeState.pickup || savedPickupLabel || ''));
   const [dropCoords, setDropCoords] = useState(() => routeState.dropCoords || null);
   const [stops, setStops] = useState(() => routeState.stops || []);          // array of stop strings
   const [activeInput, setActiveInput] = useState('drop'); // 'pickup' | 'drop' | stopIdx
@@ -180,24 +163,7 @@ const SelectLocation = () => {
   const navigate = useNavigate();
   const routePrefix = window.location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
-  // All known locations â€” filtered live as user types
-  const allResults = [
-    { title: 'Vijay Nagar', address: 'Vijay Nagar, Indore, Madhya Pradesh' },
-    { title: 'Vijay Nagar Square', address: 'Vijay Nagar Square, Bhagyashree Colony, Indore' },
-    { title: 'Vijayawada', address: 'Vijayawada, Andhra Pradesh, India' },
-    { title: 'Vijay Nagar Police Station', address: 'Vijay Nagar Police Station, Sector D, Indore' },
-    { title: 'Rajwada', address: 'Rajwada, Old Palasia, Indore, MP' },
-    { title: 'Bhawarkua', address: 'Bhawarkua, Indore, Madhya Pradesh' },
-    { title: 'MG Road', address: 'MG Road, Indore, Madhya Pradesh' },
-    { title: 'Palasia Square', address: 'Palasia Square, AB Road, Indore' },
-    { title: 'LIG Colony', address: 'LIG Colony, Indore, Madhya Pradesh' },
-    { title: 'Scheme No 54', address: 'Scheme No 54, Vijay Nagar, Indore' },
-    { title: 'Bhangadh', address: 'Bhangadh, Indore, Madhya Pradesh' },
-    { title: 'AB Road', address: 'AB Road, Indore, Madhya Pradesh' },
-    { title: 'Geeta Bhawan', address: 'Geeta Bhawan, Indore, Madhya Pradesh' },
-    { title: 'Sapna Sangeeta', address: 'Sapna Sangeeta Road, Indore, MP' },
-    { title: 'Mahalaxmi Nagar', address: 'Mahalaxmi Nagar, Indore, Madhya Pradesh' },
-  ];
+  const allResults = [];
 
   const zoneBounds = useMemo(() => getBoundsFromPaths(zonePaths), [zonePaths]);
 
@@ -309,7 +275,7 @@ const SelectLocation = () => {
     return geocoderRef.current;
   };
 
-  const resolveCoords = async (label, fallback = DEFAULT_COORDS) => {
+  const resolveCoords = async (label, fallback = null) => {
     if (!label || !String(label).trim()) {
       return fallback;
     }
@@ -390,7 +356,7 @@ const SelectLocation = () => {
                 resolve({
                   title: result?.title || '',
                   address: result?.address || result?.title || '',
-                  coords: DEFAULT_COORDS,
+                  coords: null,
                 });
               });
               return;
@@ -399,7 +365,7 @@ const SelectLocation = () => {
             resolve({
               title: result?.title || '',
               address: result?.address || result?.title || '',
-              coords: DEFAULT_COORDS,
+              coords: null,
             });
           },
         );
@@ -617,12 +583,23 @@ const SelectLocation = () => {
 
   const handleConfirmNavigate = async (optionalDrop, optionalDropCoords = null) => {
     const finalDrop = optionalDrop || drop;
-    const finalPickup = pickup || 'Pipaliyahana, Indore';
-    
+    const finalPickup = String(pickup || '').trim();
+
     if (!finalDrop || finalDrop.trim().length === 0) return;
+
+    if (!finalPickup) {
+      setActiveInput('pickup');
+      window.alert('Please choose your pickup location first.');
+      return;
+    }
 
     const resolvedPickupCoords = pickupCoords || await resolveCoords(finalPickup);
     const resolvedDropCoords = optionalDropCoords || dropCoords || await resolveCoords(finalDrop);
+
+    if (!resolvedPickupCoords || !resolvedDropCoords) {
+      window.alert('We could not find that address on the map. Please pick it from the suggestions or pin it on the map.');
+      return;
+    }
 
     if (!validateZoneSelection(resolvedPickupCoords) || !validateZoneSelection(resolvedDropCoords)) {
       window.alert('Please choose pickup and drop locations inside the active service zone.');
@@ -739,6 +716,11 @@ const SelectLocation = () => {
     const resolvedSelection = await resolvePlaceSelection(normalizedResult);
     const finalTitle = resolvedSelection.title || resolvedSelection.address;
     const resolvedCoords = selectedCoords || resolvedSelection.coords;
+
+    if (!resolvedCoords) {
+      window.alert('We could not find that place on the map. Please try another suggestion or pin it on the map.');
+      return;
+    }
 
     if (!validateZoneSelection(resolvedCoords)) {
       window.alert('That location is outside your active service zone. Please choose a point inside the zone.');

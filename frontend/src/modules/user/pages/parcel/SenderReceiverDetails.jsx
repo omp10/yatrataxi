@@ -30,26 +30,13 @@ const DELIVERY_CATEGORY_SEARCH_TOKENS = {
   '2wheeler': ['bike', 'scooter', 'cycle', '2-wheeler'],
   movers: ['mover', 'packers'],
 };
-const LOCATION_COORDS = {
-  'Pipaliyahana, Indore': [75.9048, 22.7039],
-  'Vijay Nagar': [75.8937, 22.7533],
-  'Vijay Nagar Square': [75.8947, 22.7518],
-  Rajwada: [75.8553, 22.7187],
-  Bhawarkua: [75.8586, 22.6926],
-  'MG Road': [75.8721, 22.7196],
-  'Palasia Square': [75.8863, 22.7242],
-  'LIG Colony': [75.8904, 22.7322],
-  'Scheme No 54': [75.8978, 22.7567],
-  'AB Road': [75.8878, 22.7423],
-  'Geeta Bhawan': [75.8834, 22.7208],
-  'Sapna Sangeeta': [75.8587, 22.6984],
-  'Mahalaxmi Nagar': [75.9114, 22.7676],
-};
+// No built-in city presets: locations come from the user's search and are geocoded.
+const LOCATION_COORDS = {};
 const POPULAR_LOCATIONS = Object.keys(LOCATION_COORDS);
 const DEFAULT_COORDS = { lat: 22.7196, lng: 75.8577 };
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 
-const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[title] || fallback;
+const getCoords = (title, fallback = null) => LOCATION_COORDS[title] || fallback;
 
 const readStoredUserInfo = () => {
   if (typeof window === 'undefined') return {};
@@ -572,7 +559,7 @@ const SenderReceiverDetails = () => {
   const [receiverMobile, setReceiverMobile] = useState(() => parcelState.receiverMobile || '');
   const [pickup, setPickup] = useState(() => parcelState.pickup || '');
   const [drop, setDrop] = useState(() => parcelState.drop || '');
-  const [pickupCoords, setPickupCoords] = useState(() => parcelState.pickupCoords || getCoords(parcelState.pickup || '', [75.8577, 22.7196]));
+  const [pickupCoords, setPickupCoords] = useState(() => parcelState.pickupCoords || getCoords(parcelState.pickup || ''));
   const [dropCoords, setDropCoords] = useState(() => parcelState.dropCoords || (parcelState.drop ? getCoords(parcelState.drop || '') : null));
   const [activeMapPicker, setActiveMapPicker] = useState(null);
   const [isContactSheetOpen, setIsContactSheetOpen] = useState(false);

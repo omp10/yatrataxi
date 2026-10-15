@@ -236,7 +236,7 @@ const DriverIncentives = () => {
         <section className="bg-black rounded-3xl p-6 text-white overflow-hidden relative">
           <div className="relative z-10">
             <h3 className="text-lg font-bold mb-2">Invite a Friend</h3>
-            <p className="text-sm text-gray-400 mb-6">Earn {formatCurrency(data?.referralRewardAmount || 500)} for every new driver you refer.</p>
+            <p className="text-sm text-gray-400 mb-6">Earn {formatCurrency(Number(data?.referralRewardAmount) || 0)} for every new driver you refer.</p>
             <button 
               onClick={() => navigate('/taxi/driver/referral')}
               className="px-6 py-3 bg-white text-black rounded-2xl text-xs font-bold uppercase tracking-widest"

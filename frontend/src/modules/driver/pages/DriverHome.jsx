@@ -1080,8 +1080,9 @@ const DriverHome = () => {
 
         try {
             const queryRideId = targetRideId || new URLSearchParams(window.location.search).get('incomingRideId') || null;
-            const response = await api.get('/taxi/driver/active-ride-request', {
+            const response = await api.get('/drivers/active-ride-request', {
                 params: queryRideId ? { rideId: queryRideId } : {},
+                headers: { Authorization: `Bearer ${token}` },
             });
             const rideRequest = response?.data?.data?.rideRequest || response?.data?.rideRequest;
             if (rideRequest?.rideId) {

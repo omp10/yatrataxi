@@ -14,6 +14,7 @@ const createVehiclePriceRow = () => ({
   id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   vehicle_type: '',
   base_price: '',
+  round_trip_price: '',
   free_distance: '',
   distance_price: '',
   free_time: '',
@@ -110,6 +111,7 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
                   id: row.id || `row-${index}`,
                   vehicle_type: row.vehicle_type?._id || row.vehicle_type?.id || row.vehicle_type || '',
                   base_price: String(row.base_price ?? ''),
+                  round_trip_price: Number(row.round_trip_price || 0) > 0 ? String(row.round_trip_price) : '',
                   free_distance: String(row.free_distance ?? ''),
                   distance_price: String(row.distance_price ?? ''),
                   free_time: String(row.free_time ?? ''),
@@ -422,6 +424,11 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
                   <div>
                     <label className={labelClass}>Base Price Inclusive of tax <span className="text-rose-500">*</span></label>
                     <input type="number" value={row.base_price} onChange={(event) => updateRow(row.id, 'base_price', event.target.value)} className={inputClass} placeholder="Enter Base Price Inclusive of tax" required />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Round Trip Price Inclusive of tax</label>
+                    <input type="number" min="0" value={row.round_trip_price} onChange={(event) => updateRow(row.id, 'round_trip_price', event.target.value)} className={inputClass} placeholder="Leave empty if round trip is not offered" />
                   </div>
 
                   <div>

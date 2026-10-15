@@ -96,6 +96,7 @@ const normalizeVehicleEntry = (pkg, vehicle, index) => ({
   dispatchType: String(vehicle.dispatchType || 'normal').trim().toLowerCase(),
   supportsBidding: ['bidding', 'both'].includes(String(vehicle.dispatchType || 'normal').trim().toLowerCase()),
   baseFare: Number(vehicle.basePrice || 0),
+  roundTripFare: Number(vehicle.roundTripPrice || 0),
   freeDistance: Number(vehicle.freeDistance || 0),
   pricePerKm: Number(vehicle.distancePrice || 0),
   freeTime: Number(vehicle.freeTime || 0),
@@ -104,10 +105,10 @@ const normalizeVehicleEntry = (pkg, vehicle, index) => ({
   cancellationFee: Number(vehicle.cancellationFee || 0),
 });
 
-const calculateFare = (vehicle, tripType) => {
-  const baseFare = Number(vehicle.baseFare || 0);
-  return tripType === 'Round Trip' ? Math.round(baseFare * 1.8) : Math.round(baseFare);
-};
+// Both prices are set by the admin on the package; 0 means that trip type is not offered.
+const calculateFare = (vehicle, tripType) => Math.round(
+  Number(tripType === 'Round Trip' ? vehicle.roundTripFare : vehicle.baseFare) || 0,
+);
 
 const calculateDefaultBidCeiling = (fare, stepAmount = DEFAULT_BID_STEP_AMOUNT, headroomPercent = DEFAULT_BID_HEADROOM_PERCENT) => {
   const safeFare = Math.max(0, Number(fare || 0));
@@ -241,6 +242,11 @@ const IntercityVehicle = () => {
 
   const handleContinue = () => {
     if (!selectedVehicle) return;
+
+    if (finalFare <= 0) {
+      setScheduleError(`${tripType} is not offered for ${selectedVehicle.name} on this package.`);
+      return;
+    }
 
     if (rideMode === 'schedule') {
       const parsedSchedule = new Date(scheduledAt);
@@ -574,8 +580,14 @@ const IntercityVehicle = () => {
                           <p className="mt-1 text-sm text-slate-500">{vehicle.seats} seats · {vehicle.packageTypeName}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-semibold text-slate-900">Rs {vehicleFare.toLocaleString()}</p>
-                          <p className="text-xs text-slate-500">estimated</p>
+                          {vehicleFare > 0 ? (
+                            <>
+                              <p className="text-lg font-semibold text-slate-900">Rs {vehicleFare.toLocaleString()}</p>
+                              <p className="text-xs text-slate-500">package price</p>
+                            </>
+                          ) : (
+                            <p className="text-xs font-medium text-slate-500">Not offered for {tripType.toLowerCase()}</p>
+                          )}
                         </div>
                       </div>
                     </div>

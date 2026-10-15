@@ -22,7 +22,7 @@ const services = [
     title: 'Shared Taxi',
     sub: 'Split fare with co-passengers',
     img: imgShared,
-    path: '/cab/shared',
+    path: '/taxi/user/pooling',
     accent: 'bg-[linear-gradient(135deg,#F0FDF4_0%,#BBF7D0_100%)]',
     tag: '50% cheaper',
     tagColor: 'bg-emerald-50 text-emerald-600 border-emerald-100',
@@ -32,7 +32,7 @@ const services = [
     title: 'Airport Cab',
     sub: 'On-time airport transfers',
     img: imgAirport,
-    path: '/cab/airport',
+    path: '/ride/select-location',
     accent: 'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]',
     tag: 'Fixed fare',
     tagColor: 'bg-blue-50 text-blue-600 border-blue-100',
@@ -40,7 +40,7 @@ const services = [
   {
     id: 'spiritual',
     title: 'Spiritual Trips',
-    sub: 'Ujjain, Omkareshwar & more',
+    sub: 'Pilgrimage destinations',
     img: imgSpiritual,
     path: '/cab/spiritual',
     accent: 'bg-[linear-gradient(135deg,#FDF4FF_0%,#F3E8FF_100%)]',
@@ -109,7 +109,7 @@ const CabHome = () => {
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.06 + i * 0.07 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`${routePrefix}${s.path}`)}
+            onClick={() => navigate(s.path.startsWith('/taxi/') ? s.path : `${routePrefix}${s.path}`)}
             className="w-full flex items-center gap-4 rounded-[20px] border border-white/80 bg-white/90 shadow-[0_4px_14px_rgba(15,23,42,0.06)] px-4 py-4 text-left">
             <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 overflow-visible ${s.accent}`}>
               <img src={s.img} alt={s.title} className="w-14 h-14 object-contain drop-shadow-md" />

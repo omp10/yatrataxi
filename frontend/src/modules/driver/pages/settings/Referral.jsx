@@ -140,7 +140,7 @@ const DriverReferral = () => {
 
   const appName = settings.general?.app_name || 'Yatra Desk';
   const referralCode = summaryData?.referralCode || driverProfile.referralCode || '';
-  const rewardAmount = summaryData?.stats?.rewardPerDriver || 500;
+  const rewardAmount = Number(summaryData?.stats?.rewardPerDriver) || 0;
 
   const normalizedDriverReferral = Object.fromEntries(
     Object.entries(translation.driver_referral || {}).map(([key, value]) => [

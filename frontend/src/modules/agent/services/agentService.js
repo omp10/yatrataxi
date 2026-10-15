@@ -169,6 +169,7 @@ export const agentService = {
   getBookings: () => api.get('/agents/bookings', withAgentAuth()),
   resolveCustomer: (payload) => api.post('/agents/customers/resolve', payload, withAgentAuth()),
   createRideBooking: (payload) => api.post('/agents/bookings/rides', payload, withAgentAuth()),
+  getAirports: () => api.get('/agents/airports', withAgentAuth()),
   getBusRoutes: () => api.get('/agents/buses/routes', withAgentAuth()),
   searchBuses: (params) => api.get('/agents/buses/search', withAgentAuth({ params })),
   getBusSeatLayout: (busServiceId, params) => api.get(`/agents/buses/${busServiceId}/seats`, withAgentAuth({ params })),

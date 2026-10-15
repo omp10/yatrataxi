@@ -1,62 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/shared/api/axiosInstance';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
 import { isEligibleSpiritualVehicle } from '@/modules/user/utils/serviceModulePresentation';
+import { useAppGoogleMapsLoader } from '@/modules/admin/utils/googleMaps';
+import { geocodeAddress } from '@/shared/utils/geocoding';
+import { estimateAgentCommission, formatCommissionRule, useAgentCommissionRule } from '../hooks/useAgentCommission';
 
-const DEFAULT_VEHICLES = [
-  { id: 'sedan', name: 'Sedan (Dzire / Etios)', seats: '4 Seats', capacity: 4 },
-  { id: 'suv', name: 'SUV (Ertiga / Innova)', seats: '6 Seats', capacity: 6 },
-  { id: 'tempo', name: 'Mini Coach / Tempo', seats: '12 Seats', capacity: 12 },
-];
-
-const DEFAULT_SPIRITUAL_DESTINATIONS = [
-  {
-    id: 'ujjain-mahakal',
-    name: 'Ujjain Mahakaleshwar',
-    subtitle: 'Mahakaleshwar Jyotirlinga Darshan & Sacred Bhasma Aarti',
-    dist: '55 km',
-    baseFare: 999,
-    vehicleFares: { sedan: 999, suv: 1399, tempo: 2199 },
-    emoji: '🛕',
-    image: 'https://images.unsplash.com/photo-1609766857041-ed402ea8069a?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Mahakaleshwar Jyotirlinga, Jaisinghpura, Ujjain, Madhya Pradesh',
-  },
-  {
-    id: 'omkareshwar-jyotirlinga',
-    name: 'Omkareshwar Jyotirlinga',
-    subtitle: 'Sacred island Jyotirlinga shrine shaped like Om symbol',
-    dist: '78 km',
-    baseFare: 1499,
-    vehicleFares: { sedan: 1499, suv: 2099, tempo: 3299 },
-    emoji: '🕉️',
-    image: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Omkareshwar Mandir, Mandhata Island, Narmada River, Madhya Pradesh',
-  },
-  {
-    id: 'maheshwar-temples',
-    name: 'Maheshwar Ahilya Fort & Temples',
-    subtitle: 'Holkar royal ghats, sacred Narmada temples & craft heritage',
-    dist: '91 km',
-    baseFare: 1799,
-    vehicleFares: { sedan: 1799, suv: 2519, tempo: 3959 },
-    emoji: '🪔',
-    image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Ahilya Fort Ghats, Maheshwar, Khargone, Madhya Pradesh',
-  },
-];
+const unwrapList = (response) => (Array.isArray(response?.data) ? response.data : (response?.data?.results || response?.results || []));
 
 export const AgentSpiritualTripBooking = () => {
   const navigate = useNavigate();
-  const [destinations, setDestinations] = useState(DEFAULT_SPIRITUAL_DESTINATIONS);
+  const { isLoaded: isMapsLoaded } = useAppGoogleMapsLoader();
+  const commissionRule = useAgentCommissionRule('directRide');
+  const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDest, setSelectedDest] = useState(DEFAULT_SPIRITUAL_DESTINATIONS[0]);
-  const [vehicles, setVehicles] = useState(DEFAULT_VEHICLES);
-  const [selectedVehicle, setSelectedVehicle] = useState(DEFAULT_VEHICLES[0]);
+  const [loadError, setLoadError] = useState('');
+  const [selectedDest, setSelectedDest] = useState(null);
+  const [vehicleTypes, setVehicleTypes] = useState([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [pickupAddress, setPickupAddress] = useState('');
   const [travelDate, setTravelDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [travelTime, setTravelTime] = useState('06:00');
@@ -68,67 +34,38 @@ export const AgentSpiritualTripBooking = () => {
     let isMounted = true;
     const fetchDestinationsAndVehicles = async () => {
       try {
-        const origin = globalThis.__LEGACY_BACKEND_ORIGIN__ || '';
-        const [destRes, vTypesRes] = await Promise.allSettled([
-          fetch(`${origin}/api/v1/explore-destinations?category=spiritual`),
+        const [destRes, vTypesRes] = await Promise.all([
+          api.get('/users/explore-destinations', { params: { category: 'spiritual' } }),
           api.get('/users/vehicle-types'),
         ]);
+        const mappedDestinations = unwrapList(destRes)
+          .filter((dest) => Number(dest.baseFare) > 0)
+          .map((dest) => ({
+            id: String(dest._id || dest.id),
+            name: dest.title || dest.name,
+            dist: dest.distance || '',
+            baseFare: Number(dest.baseFare),
+            vehicleFares: dest.vehicleFares || {},
+            emoji: dest.emoji || '🛕',
+            image: dest.image || '',
+            dropLocation: dest.dropLocation || dest.drop || '',
+          }));
+        const mappedVehicles = unwrapList(vTypesRes)
+          .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0 && isEligibleSpiritualVehicle(v))
+          .map((v) => ({
+            id: String(v._id || v.id),
+            name: v.name,
+            seats: `${Number(v.capacity) || 1} Seats`,
+            iconType: v.icon_types || 'car',
+          }));
 
-        if (destRes.status === 'fulfilled' && destRes.value.ok) {
-          const data = await destRes.value.json();
-          const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || []);
-          if (isMounted && items.length > 0) {
-            const mapped = items.map((dest, idx) => {
-              const bFare = Number(dest.baseFare) || Number(dest.vehicleFares?.sedan) || 999;
-              return {
-                id: dest._id || dest.id || `dest-${idx}`,
-                name: dest.title || dest.name,
-                subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
-                dist: dest.distance || dest.dist || '55 km',
-                baseFare: bFare,
-                vehicleFares: {
-                  ...(dest.vehicleFares || {}),
-                  sedan: Number(dest.vehicleFares?.sedan) || bFare,
-                  suv: Number(dest.vehicleFares?.suv) || Math.round(bFare * 1.4),
-                  tempo: Number(dest.vehicleFares?.tempo) || Math.round(bFare * 2.2),
-                },
-                emoji: dest.emoji || '🛕',
-                image: dest.image || '',
-                dropLocation: dest.dropLocation || dest.drop,
-              };
-            });
-            setDestinations(mapped);
-            setSelectedDest(mapped[0]);
-          } else if (isMounted) {
-            setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
-            setSelectedDest(DEFAULT_SPIRITUAL_DESTINATIONS[0]);
-          }
-        }
-
-        if (vTypesRes.status === 'fulfilled') {
-          const rawVehicles = vTypesRes.value?.data?.results || vTypesRes.value?.data?.data?.results || vTypesRes.value?.data?.data || [];
-          if (Array.isArray(rawVehicles) && rawVehicles.length > 0) {
-            const mappedVehicles = rawVehicles
-              .filter((v) => {
-                if (v.active === false || Number(v.status ?? 1) === 0) return false;
-                return isEligibleSpiritualVehicle(v);
-              })
-              .map((v) => ({
-                id: String(v._id || v.id),
-                name: `${v.name} (${v.capacity || 4} Seats)`,
-                rawName: v.name,
-                seats: `${v.capacity || 4} Seats`,
-                capacity: Number(v.capacity) || 4,
-              }));
-
-            if (isMounted && mappedVehicles.length > 0) {
-              setVehicles(mappedVehicles);
-              setSelectedVehicle(mappedVehicles[0]);
-            }
-          }
+        if (isMounted) {
+          setDestinations(mappedDestinations);
+          setSelectedDest(mappedDestinations[0] || null);
+          setVehicleTypes(mappedVehicles);
         }
       } catch (err) {
-        console.error('Failed to load spiritual destinations or vehicles for agent:', err);
+        if (isMounted) setLoadError(err?.message || 'Could not load destinations');
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -137,26 +74,14 @@ export const AgentSpiritualTripBooking = () => {
     return () => { isMounted = false; };
   }, []);
 
-  const getVehicleFare = (dest, vehicle) => {
-    if (!dest) return 0;
-    const vId = typeof vehicle === 'object' ? (vehicle?.id || vehicle?.vehicleTypeId) : vehicle;
-    const directFare = Number(dest.vehicleFares?.[vId]);
-    if (directFare && directFare > 0) return directFare;
-
-    const vehName = String(vehicle?.name || vehicle || '').toLowerCase();
-    if (vehName.includes('sedan') && Number(dest.vehicleFares?.sedan) > 0) return Number(dest.vehicleFares.sedan);
-    if ((vehName.includes('suv') || vehName.includes('ertiga') || vehName.includes('innova')) && Number(dest.vehicleFares?.suv) > 0) return Number(dest.vehicleFares.suv);
-    if ((vehName.includes('tempo') || vehName.includes('traveller')) && Number(dest.vehicleFares?.tempo) > 0) return Number(dest.vehicleFares.tempo);
-
-    const base = Number(dest.baseFare) || Number(dest.vehicleFares?.sedan) || 0;
-    const cap = typeof vehicle === 'object' ? (vehicle?.capacity || 4) : (vehicle === 'suv' ? 6 : vehicle === 'tempo' ? 12 : 4);
-    if (cap <= 4) return base;
-    if (cap <= 7) return Number(dest.vehicleFares?.suv) || Math.round(base * 1.4);
-    return Number(dest.vehicleFares?.tempo) || Math.round(base * 2.2);
-  };
-
-  const totalFare = selectedDest ? getVehicleFare(selectedDest, selectedVehicle) : 0;
-  const estimatedCommission = Math.round(totalFare * 0.05 * 100) / 100; // 5% commission
+  // Only vehicles the admin priced for the selected destination are offered.
+  const vehicles = vehicleTypes
+    .map((v) => ({ ...v, fare: Number(selectedDest?.vehicleFares?.[v.id]) || 0 }))
+    .filter((v) => v.fare > 0);
+  const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || vehicles[0] || null;
+  const totalFare = selectedVehicle?.fare || 0;
+  const estimatedCommission = estimateAgentCommission(totalFare, commissionRule);
+  const commissionLabel = formatCommissionRule(commissionRule);
 
   const handleBooking = async () => {
     if (!customer.phone || customer.phone.length < 10) {
@@ -167,50 +92,50 @@ export const AgentSpiritualTripBooking = () => {
       toast.error('Enter customer pickup address');
       return;
     }
+    if (!selectedDest || !selectedVehicle) {
+      toast.error('Select a destination and vehicle');
+      return;
+    }
+    const scheduledAt = new Date(`${travelDate}T${travelTime}:00`);
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+      toast.error('Choose a travel date and time in the future');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      const payload = {
+      const [pickup, drop] = await Promise.all([
+        geocodeAddress(pickupAddress),
+        geocodeAddress(selectedDest.dropLocation),
+      ]);
+      const response = await agentService.createRideBooking({
         customer,
-        pickupAddress,
-        dropAddress: selectedDest?.dropLocation || `${selectedDest?.name || 'Spiritual Destination'} (${selectedDest?.subtitle || 'Pilgrimage'})`,
-        pickup: [75.8577, 22.7196],
-        drop: [75.7873, 23.1765],
+        pickupAddress: pickupAddress.trim(),
+        dropAddress: selectedDest.dropLocation,
+        pickup,
+        drop,
+        // The server prices pilgrimage bookings from the destination's admin fare.
         fare: totalFare,
-        vehicleTypeId: selectedVehicle?.id,
-        vehicleType: selectedVehicle?.rawName || selectedVehicle?.name,
+        fareContext: { type: 'spiritual', destinationId: selectedDest.id },
+        vehicleTypeId: selectedVehicle.id,
+        vehicleIconType: selectedVehicle.iconType,
         serviceType: 'spiritual',
         transport_type: 'taxi',
         paymentMethod: 'cash',
-        scheduledAt: `${travelDate}T${travelTime}:00`,
-        estimatedDistanceMeters: 55000,
-        estimatedDurationMinutes: 90,
-      };
-
-      const response = await agentService.createRideBooking(payload);
-      const data = response?.data?.data || response?.data || {};
-
-      toast.success('Spiritual tour booked successfully! Commission credited.');
-      setConfirmedBooking({
-        bookingId: data._id || `TOUR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-        destination: selectedDest?.name || 'Spiritual Tour',
-        pickup: pickupAddress,
-        vehicle: selectedVehicle?.name || 'Selected Vehicle',
-        fare: totalFare,
-        commission: estimatedCommission,
-        travelDate: `${travelDate} at ${travelTime}`,
+        scheduledAt: scheduledAt.toISOString(),
       });
-    } catch {
-      toast.success('Spiritual tour booked! Commission recorded.');
+      const data = response?.data || {};
+
+      toast.success('Spiritual tour booked');
       setConfirmedBooking({
-        bookingId: `TOUR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-        destination: selectedDest?.name || 'Spiritual Tour',
-        pickup: pickupAddress,
-        vehicle: selectedVehicle?.name || 'Selected Vehicle',
-        fare: totalFare,
-        commission: estimatedCommission,
-        travelDate: `${travelDate} at ${travelTime}`,
+        bookingId: data._id || data.id || '',
+        destination: selectedDest.name,
+        pickup: pickupAddress.trim(),
+        fare: Number(data.fare ?? totalFare),
+        commission: estimateAgentCommission(Number(data.fare ?? totalFare), commissionRule),
       });
+    } catch (error) {
+      toast.error(error?.message || 'Could not book this tour');
     } finally {
       setSubmitting(false);
     }
@@ -231,9 +156,11 @@ export const AgentSpiritualTripBooking = () => {
             <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">Agent Desk</p>
             <h1 className="text-[19px] font-black tracking-tight text-slate-900">Book Spiritual Trip</h1>
           </div>
-          <span className="rounded-full bg-purple-50 px-2.5 py-1 text-[10px] font-black text-purple-600 border border-purple-100">
-            Earn 5% Comm
-          </span>
+          {commissionLabel && (
+            <span className="rounded-full bg-purple-50 px-2.5 py-1 text-[10px] font-black text-purple-600 border border-purple-100">
+              {commissionLabel}
+            </span>
+          )}
         </div>
       </header>
 
@@ -254,7 +181,7 @@ export const AgentSpiritualTripBooking = () => {
             </div>
           ) : destinations.length === 0 ? (
             <div className="py-8 text-center text-slate-400">
-              <p className="text-xs font-medium">No destinations configured yet.</p>
+              <p className="text-xs font-medium">{loadError || 'No destinations configured yet.'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2.5">
@@ -287,9 +214,9 @@ export const AgentSpiritualTripBooking = () => {
                     )}
                     <div>
                       <h4 className="mt-1 text-xs font-black text-slate-900 leading-snug line-clamp-1">{dest.name}</h4>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{dest.dist}</p>
+                      {dest.dist && <p className="text-[10px] text-slate-500 mt-0.5">{dest.dist}</p>}
                     </div>
-                    <p className="mt-2 text-xs font-black text-purple-700">From ₹{dest.baseFare}</p>
+                    <p className="mt-2 text-xs font-black text-purple-700">From ₹{dest.baseFare.toLocaleString('en-IN')}</p>
                   </div>
                 );
               })}
@@ -300,13 +227,16 @@ export const AgentSpiritualTripBooking = () => {
         {/* Vehicle Class Selection */}
         <div className="rounded-[24px] border border-white/70 bg-white/90 p-4 shadow-[0_12px_28px_rgba(20,58,90,0.06)] space-y-2.5">
           <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#5b7a93]">2. Vehicle Option</p>
+          {vehicles.length === 0 && (
+            <p className="text-xs font-medium text-slate-400">No vehicle is priced for this destination yet.</p>
+          )}
           {vehicles.map((v) => {
             const isSelected = selectedVehicle?.id === v.id;
-            const fareOption = getVehicleFare(selectedDest, v);
+            const fareOption = v.fare;
             return (
               <div
                 key={v.id}
-                onClick={() => setSelectedVehicle(v)}
+                onClick={() => setSelectedVehicleId(v.id)}
                 className={`cursor-pointer rounded-[18px] border p-3 transition-all flex items-center justify-between ${
                   isSelected
                     ? 'border-[#143a5a] bg-[#eff7ff] shadow-sm'
@@ -377,7 +307,7 @@ export const AgentSpiritualTripBooking = () => {
             <div className="text-right">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-black text-emerald-300 ring-1 ring-emerald-400/40">
                 <Sparkles size={12} />
-                Your Commission
+                Est. Commission
               </span>
               <p className="mt-1 text-xl font-black text-emerald-300">+₹{estimatedCommission}</p>
             </div>
@@ -387,7 +317,7 @@ export const AgentSpiritualTripBooking = () => {
         {/* Submit */}
         <button
           type="button"
-          disabled={submitting}
+          disabled={submitting || !isMapsLoaded || !selectedVehicle}
           onClick={handleBooking}
           className="w-full rounded-[22px] bg-[#143a5a] py-4 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_12px_28px_rgba(20,58,90,0.22)] active:scale-95 transition-all disabled:opacity-50"
         >
@@ -412,7 +342,9 @@ export const AgentSpiritualTripBooking = () => {
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Booking Confirmed</p>
                 <h3 className="text-xl font-black text-slate-900 mt-1">Divine Journey Booked!</h3>
-                <p className="text-xs font-bold text-slate-500 mt-1">ID: <span className="font-mono text-slate-800">{String(confirmedBooking.bookingId).slice(-8)}</span></p>
+                {confirmedBooking.bookingId && (
+                  <p className="text-xs font-bold text-slate-500 mt-1">ID: <span className="font-mono text-slate-800">{String(confirmedBooking.bookingId).slice(-8)}</span></p>
+                )}
               </div>
 
               <div className="rounded-[20px] bg-slate-50 p-4 text-left text-xs font-semibold text-slate-700 space-y-2 border border-slate-100">
@@ -425,13 +357,14 @@ export const AgentSpiritualTripBooking = () => {
                   <span className="font-medium text-slate-800 truncate max-w-[170px]">{confirmedBooking.pickup}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-200 pt-2 font-black">
-                  <span className="text-slate-500">Collected Fare:</span>
+                  <span className="text-slate-500">Trip Fare:</span>
                   <span className="text-base text-slate-900">₹{confirmedBooking.fare}</span>
                 </div>
                 <div className="flex justify-between font-black text-emerald-600">
-                  <span>Commission Credited:</span>
+                  <span>Est. Commission:</span>
                   <span className="text-base">+₹{confirmedBooking.commission}</span>
                 </div>
+                <p className="text-[10px] font-semibold text-slate-400">Commission is credited to your wallet when the trip is completed.</p>
               </div>
 
               <button

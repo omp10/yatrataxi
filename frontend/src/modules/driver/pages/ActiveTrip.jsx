@@ -34,6 +34,9 @@ const MAP_CONTAINER_STYLE = {
 
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
 const DEFAULT_DRIVER_COORDS = [75.8577, 22.7196];
+// The route simulator publishes fake driver locations. It exists for local testing
+// only and is compiled out of production builds.
+const MAP_SIMULATION_ENABLED = import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_MAP_SIMULATION || '') === 'true';
 const ARRIVAL_RADIUS_METERS = 100;
 
 const mapStyles = [
@@ -597,8 +600,7 @@ const ActiveTrip = () => {
     const storedActiveTripSnapshot = useMemo(() => readStoredActiveTripSnapshot(), []);
     const [hydratedTripState, setHydratedTripState] = useState(() => storedActiveTripSnapshot);
     const routeRideId = routeState?.rideId || routeState?.request?.rideId || '';
-    const routeOtp = routeState?.request?.raw?.otp || routeState?.request?.otp || routeState?.otp || '';
-    const [isHydratingTrip, setIsHydratingTrip] = useState(!routeRideId || !routeOtp);
+    const [isHydratingTrip, setIsHydratingTrip] = useState(!routeRideId);
     const exitToDriverHome = React.useCallback((statusMessage = '') => {
         if (routeRideId) {
             clearStoredTripPhase(routeRideId);
@@ -614,7 +616,7 @@ const ActiveTrip = () => {
 
     useEffect(() => {
         let active = true;
-        const hasRestorableRouteState = Boolean(routeRideId && routeOtp);
+        const hasRestorableRouteState = Boolean(routeRideId);
 
         if (hasRestorableRouteState) {
             setIsHydratingTrip(false);
@@ -680,7 +682,7 @@ const ActiveTrip = () => {
         return () => {
             active = false;
         };
-    }, [exitToDriverHome, routeOtp, routeRideId]);
+    }, [exitToDriverHome, routeRideId]);
 
     const effectiveState = hydratedTripState || routeState;
 
@@ -780,6 +782,7 @@ const ActiveTrip = () => {
     });
     const [otp, setOtp] = useState(['', '', '', '']);
     const [otpError, setOtpError] = useState('');
+    const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
     const [resendOtpLoading, setResendOtpLoading] = useState(false);
     const [resendCooldown, setResendCooldown] = useState(0);
     const [resendFeedback, setResendFeedback] = useState(null);
@@ -1147,7 +1150,6 @@ const ActiveTrip = () => {
 
     const displayFare = liveRequest?.fare || tripData.fare;
     const fareAmount = parseFareAmount(displayFare);
-    const expectedOtp = String(liveRaw?.otp || liveRequest?.otp || effectiveState?.otp || '');
     const waitingPricing = liveRaw?.pricingSnapshot || liveRequest?.raw?.pricingSnapshot || effectiveState?.pricingSnapshot || {};
     const allowedPaymentModes = (() => {
         const rawItems = Array.isArray(waitingPricing?.allowed_payment_methods) ? waitingPricing.allowed_payment_methods : [];
@@ -1509,20 +1511,13 @@ const ActiveTrip = () => {
         setResendFeedback(null);
         try {
             const driverToken = getLocalDriverToken();
-            const res = await api.post(
+            await api.post(
                 `/rides/${rideId}/resend-otp`,
                 {},
                 withDriverAuthorization(driverToken),
             );
-            const data = res?.data?.data || res?.data;
             setResendCooldown(30);
             setResendFeedback({ type: 'success', message: 'OTP resent to passenger successfully!' });
-            if (data?.otp) {
-                setHydratedTripState((prev) => ({
-                    ...(prev || {}),
-                    otp: data.otp,
-                }));
-            }
         } catch (err) {
             setResendFeedback({
                 type: 'error',
@@ -1539,9 +1534,26 @@ const ActiveTrip = () => {
             return;
         }
 
-        if (String(enteredOtp) !== expectedOtp) {
-            setOtpError('Wrong PIN. Ask the passenger again.');
+        if (isVerifyingOtp) {
             return;
+        }
+
+        // The server checks the PIN; the trip only starts once it accepts it.
+        if (rideId) {
+            setIsVerifyingOtp(true);
+            try {
+                const driverToken = getLocalDriverToken();
+                await api.patch(
+                    `/rides/${rideId}/status`,
+                    { status: 'started', otp: String(enteredOtp) },
+                    withDriverAuthorization(driverToken),
+                );
+            } catch (error) {
+                setOtpError(error?.message || 'Could not verify the PIN. Please try again.');
+                return;
+            } finally {
+                setIsVerifyingOtp(false);
+            }
         }
 
         setOtpError('');
@@ -1564,19 +1576,6 @@ const ActiveTrip = () => {
         if (optimisticSnapshot) {
             writeStoredActiveTripSnapshot(optimisticSnapshot);
             setHydratedTripState(optimisticSnapshot);
-        }
-
-        try {
-            if (rideId) {
-                const driverToken = getLocalDriverToken();
-                await api.patch(
-                    `/rides/${rideId}/status`,
-                    { status: 'started' },
-                    withDriverAuthorization(driverToken),
-                );
-            }
-        } catch {
-            // Keep the optimistic local state; socket/live hydration will reconcile when available.
         }
 
         publishRideStatus('started');
@@ -1830,13 +1829,8 @@ const ActiveTrip = () => {
 
         const enteredOtp = nextOtp.join('');
 
-        if (enteredOtp.length === 4 && enteredOtp === expectedOtp) {
-            setTimeout(() => startTripAfterOtp(enteredOtp), 250);
-            return;
-        }
-
         if (enteredOtp.length === 4) {
-            setOtpError('Incorrect PIN. Please enter the PIN shown to the passenger.');
+            setTimeout(() => startTripAfterOtp(enteredOtp), 250);
         }
     };
 
@@ -2011,6 +2005,7 @@ const ActiveTrip = () => {
                     </div>
                 )}
 
+                {MAP_SIMULATION_ENABLED && (
                 <div className="absolute top-44 left-4 z-40 w-[190px] rounded-2xl border border-white/80 bg-white/94 px-3 py-3 shadow-lg backdrop-blur-md">
                     <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="min-w-0">
@@ -2052,6 +2047,7 @@ const ActiveTrip = () => {
                         Test mode emits live location events along this polyline.
                     </p>
                 </div>
+                )}
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 z-40">
@@ -2196,11 +2192,6 @@ const ActiveTrip = () => {
                                     <RefreshCw size={13} className={resendOtpLoading ? 'animate-spin' : ''} />
                                     {resendOtpLoading ? 'Resending...' : resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP to Passenger'}
                                 </button>
-                                {expectedOtp && (
-                                    <span className="text-[11px] font-bold text-slate-400">
-                                        PIN: <span className="font-mono text-slate-800 font-extrabold">{expectedOtp}</span>
-                                    </span>
-                                )}
                             </div>
                             {resendFeedback && (
                                 <p className={`-mt-2 mb-4 text-center text-[11px] font-bold ${resendFeedback.type === 'error' ? 'text-red-500' : 'text-emerald-600'}`}>

@@ -55,6 +55,12 @@ const setPriceSchema = new mongoose.Schema(
           type: Number,
           default: 0,
         },
+        // Round-trip price for this package and vehicle. 0 means round trip
+        // is not offered for it.
+        round_trip_price: {
+          type: Number,
+          default: 0,
+        },
         free_distance: {
           type: Number,
           default: 0,
@@ -145,10 +151,6 @@ const setPriceSchema = new mongoose.Schema(
       trim: true,
     },
     owner_commission: {
-      type: Number,
-      default: null,
-    },
-    service_tax: {
       type: Number,
       default: null,
     },

@@ -48,6 +48,7 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
+import { OwnerWalletTransaction } from '../models/OwnerWalletTransaction.js';
 import { SupportTicket } from '../../support/models/SupportTicket.js';
 import TaxiTransportType from '../models/TaxiTransportType.js';
 import { randomBytes } from 'crypto';
@@ -1882,6 +1883,7 @@ const serializeRentalPackageType = (item) => ({
 const normalizePackageVehiclePriceItem = (item = {}) => ({
   vehicle_type: toObjectId(item.vehicle_type?._id || item.vehicle_type?.id || item.vehicle_type || item.type_id),
   base_price: Number(item.base_price ?? 0),
+  round_trip_price: Math.max(0, Number(item.round_trip_price ?? 0)),
   free_distance: Number(item.free_distance ?? item.base_distance ?? 0),
   distance_price: Number(item.distance_price ?? item.price_per_distance ?? 0),
   free_time: Number(item.free_time ?? 0),
@@ -2481,7 +2483,6 @@ const normalizeServiceLocationPayload = (payload = {}, fallback = {}) => {
     currency_name: payload.currency_name ?? fallback.currency_name ?? currencyCode,
     currency_symbol: payload.currency_symbol ?? fallback.currency_symbol ?? '₹',
     currency_code: currencyCode,
-    currency_symbol: payload.currency_symbol ?? fallback.currency_symbol ?? '₹',
     timezone: payload.timezone ?? fallback.timezone ?? 'Asia/Kolkata',
     unit: payload.unit ?? fallback.unit ?? 'km',
     latitude,
@@ -4508,18 +4509,18 @@ export const adjustOwnerWallet = async (id, payload = {}) => {
     throw new ApiError(400, 'Operation must be credit or debit');
   }
 
-  const owner = await Owner.findById(id);
+  // Single atomic $inc so concurrent adjustments cannot overwrite each other.
+  const delta = operation === 'credit' ? amount : -amount;
+  const owner = await Owner.findByIdAndUpdate(
+    id,
+    { $inc: { 'wallet.balance': delta } },
+    { returnDocument: 'after' },
+  );
   if (!owner) {
     throw new ApiError(404, 'Owner not found');
   }
 
-  const currentBalance = Number(owner.wallet?.balance || 0);
-  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
-
-  owner.wallet = owner.wallet || {};
-  owner.wallet.balance = nextBalance;
-  owner.markModified('wallet');
-  await owner.save();
+  const nextBalance = Math.round(Number(owner.wallet?.balance || 0) * 100) / 100;
 
   await OwnerWalletTransaction.create({
     ownerId: id,
@@ -5381,28 +5382,6 @@ export const createServiceLocation = async (payload, currentAdmin = null) => {
   await ensureServiceLocationsSeeded();
   const persistedLocation = await ServiceLocation.create(normalizeServiceLocationPayload(payload));
   return persistedLocation.toObject();
-
-  const location = {
-    _id: nextId(),
-    name: payload.name.trim(),
-    service_location_name: payload.name.trim(),
-    address: payload.address || '',
-    country: payload.country || 'India',
-    currency_name: payload.currency_name || 'Indian Rupee',
-    currency_symbol: payload.currency_symbol || '₹',
-    currency_code: payload.currency_code || 'INR',
-    timezone: payload.timezone || 'Asia/Kolkata',
-    unit: payload.unit || 'km',
-    latitude: Number(payload.latitude || 22.7196),
-    longitude: Number(payload.longitude || 75.8577),
-    status: payload.status || 'active',
-    active: payload.status ? payload.status === 'active' : true,
-    createdAt: new Date(),
-  };
-
-  state.serviceLocations.unshift(location);
-  await state.save();
-  return location;
 };
 
 export const updateServiceLocation = async (id, payload, currentAdmin = null) => {
@@ -5418,25 +5397,6 @@ export const updateServiceLocation = async (id, payload, currentAdmin = null) =>
   Object.assign(persistedLocation, normalizeServiceLocationPayload(payload, persistedLocation.toObject()));
   await persistedLocation.save();
   return persistedLocation.toObject();
-
-  const state = await ensureAdminState();
-  const location = findById(state.serviceLocations, id);
-
-  if (!location) {
-    throw new ApiError(404, 'Service location not found');
-  }
-
-  Object.assign(location, payload, {
-    name: payload.name?.trim() || location.name,
-    service_location_name: payload.name?.trim() || location.service_location_name,
-    latitude: payload.latitude !== undefined ? Number(payload.latitude) : location.latitude,
-    longitude: payload.longitude !== undefined ? Number(payload.longitude) : location.longitude,
-    active: payload.status !== undefined ? payload.status === 'active' : location.active,
-    status: payload.status || location.status,
-  });
-
-  await state.save();
-  return location;
 };
 
 export const deleteServiceLocation = async (id, currentAdmin = null) => {
@@ -5449,11 +5409,6 @@ export const deleteServiceLocation = async (id, currentAdmin = null) => {
   if (!deleted) {
     throw new ApiError(404, 'Service location not found');
   }
-  return true;
-
-  const state = await ensureAdminState();
-  state.serviceLocations = removeById(state.serviceLocations, id);
-  await state.save();
   return true;
 };
 
@@ -6211,6 +6166,7 @@ export const listSetPrices = async (queryArgs = {}, currentAdmin = null) => {
             vehicle_type: price.vehicle_type?._id ? String(price.vehicle_type._id) : null,
             vehicle_type_name: price.vehicle_type?.name || '',
             base_price: Number(price.base_price ?? 0),
+            round_trip_price: Number(price.round_trip_price ?? 0),
             free_distance: Number(price.free_distance ?? 0),
             distance_price: Number(price.distance_price ?? 0),
             free_time: Number(price.free_time ?? 0),

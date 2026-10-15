@@ -1094,6 +1094,9 @@ export const getAgentWithdrawalRequests = asyncHandler(async (req, res) => {
 });
 
 export const approveAgentWithdrawalRequest = asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new ApiError(404, 'Agent withdrawal request not found');
+  }
   const request = await AgentWithdrawalRequest.findById(req.params.id);
   if (!request) {
     throw new ApiError(404, 'Agent withdrawal request not found');
@@ -1128,6 +1131,9 @@ export const approveAgentWithdrawalRequest = asyncHandler(async (req, res) => {
 });
 
 export const rejectAgentWithdrawalRequest = asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new ApiError(404, 'Agent withdrawal request not found');
+  }
   const request = await AgentWithdrawalRequest.findById(req.params.id);
   if (!request) {
     throw new ApiError(404, 'Agent withdrawal request not found');

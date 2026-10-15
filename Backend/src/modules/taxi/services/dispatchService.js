@@ -356,7 +356,6 @@ export const notifyRideOtpResent = (ride, otp) => {
     message: `Your ride start OTP is ${otp || ride.otp || ''}`,
   };
   emitToRoom(getUserRoom(ride.userId), 'ride:otp:updated', payload);
-  emitToRoom(getRideRoom(ride._id), 'ride:otp:updated', payload);
   emitToRoom(getUserRoom(ride.userId), SOCKET_EVENTS.RIDE_STATE, {
     rideId: String(ride._id),
     otp: String(otp || ride.otp || ''),
@@ -1386,7 +1385,6 @@ export const notifyRideAccepted = async (ride) => {
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     acceptedAt: populatedRide.acceptedAt,
-    otp: populatedRide.otp || '',
   });
 
   emitToRoom(getRideRoom(populatedRide._id), 'rideRequestClosed', {

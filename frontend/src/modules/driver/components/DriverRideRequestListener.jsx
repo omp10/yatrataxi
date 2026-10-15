@@ -301,7 +301,9 @@ const DriverRideRequestListener = () => {
 
         const checkActiveRequest = async () => {
             try {
-                const response = await api.get('/taxi/driver/active-ride-request', {
+                const driverToken = getLocalDriverToken();
+                if (!driverToken) return;
+                const response = await api.get('/drivers/active-ride-request', {
                     params: incomingRideId ? { rideId: incomingRideId } : {},
                     ...withDriverAuthorization(driverToken),
                 });

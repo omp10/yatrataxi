@@ -136,7 +136,6 @@ export const adminService = {
   getCountries: () => api.get('/countries'),
   getVehicleTypes: (transportType) => api.get(`/admin/types/vehicle-types/list${transportType ? `?transport_type=${transportType}` : ''}`),
   getRideModules: () => api.get('/common/ride_modules'),
-  getLocationVehicleTypes: (locationId, transportType) => api.get(`/types/${locationId}?transport_type=${transportType}`),
 
   /**
    * Owner Management
@@ -306,7 +305,6 @@ export const adminService = {
   updateRole: (id, roleData) => api.patch(`/admin/roles/${id}`, roleData),
   deleteRole: (id) => api.delete(`/admin/roles/${id}`),
   getRolePermissions: (id) => api.get(`/admin/roles/${id}/permissions`),
-  updateRolePermissions: (id, data) => api.put(`/roles/${id}/permissions`, data),
 
   getPermissions: (params) => api.get('/admin/permissions', { params }),
   createPermission: (data) => api.post('/admin/permissions', data),

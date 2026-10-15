@@ -442,19 +442,28 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
 
     const driver = await Driver.findById(ride.driverId).select('owner_id').session(session).lean();
     const ownerId = driver?.owner_id || null;
+    // ride.fare is what the rider pays. A promo discount is funded by the platform,
+    // so commission and driver earnings are worked out on the pre-discount fare and
+    // the discount is paid back to the driver out of the admin share.
     const fare = normalizeAmount(ride.fare || 0, 'fare');
+    const promoDiscount = Math.max(normalizeAmount(ride.promo?.discount_amount || 0, 'promo discount'), 0);
+    const grossFare = Math.round((fare + promoDiscount) * 100) / 100;
     const commissionConfig = ownerId
       ? await resolveOwnerCommissionConfigForRide(ride, session)
       : await resolveCommissionConfigForRide(ride, session);
     const commissionAmount = computeCommissionAmount({
-      fare,
+      fare: grossFare,
       type: commissionConfig.type,
       value: commissionConfig.value,
     });
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
-    const driverEarnings = Math.max(Math.round((fare - commissionAmount) * 100) / 100, 0);
-    const amount = paymentMethod === 'cash' ? -commissionAmount : driverEarnings;
-    const type = paymentMethod === 'cash' ? 'commission_deduction' : 'ride_earning';
+    const driverEarnings = Math.max(Math.round((grossFare - commissionAmount) * 100) / 100, 0);
+    // Cash: the driver already holds the discounted fare, so the wallet settles
+    // commission minus the platform-funded discount. Online: the full earning.
+    const amount = paymentMethod === 'cash'
+      ? Math.round((promoDiscount - commissionAmount) * 100) / 100
+      : driverEarnings;
+    const type = paymentMethod === 'cash' && amount < 0 ? 'commission_deduction' : 'ride_earning';
 
     ride.paymentMethod = paymentMethod;
     ride.commissionAmount = commissionAmount;
@@ -483,6 +492,8 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
       amount,
       metadata: {
         fare,
+        grossFare,
+        promoDiscount,
         commissionAmount,
         driverEarnings,
         paymentMethod,

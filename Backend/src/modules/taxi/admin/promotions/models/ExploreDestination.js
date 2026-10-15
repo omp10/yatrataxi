@@ -45,13 +45,15 @@ const exploreDestinationSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    // Lowest of the per-vehicle fares, shown as the "from" price.
     baseFare: {
       type: Number,
-      default: 999,
+      default: 0,
     },
+    // { [vehicleTypeId]: fare }; a vehicle without a positive fare is not offered.
     vehicleFares: {
       type: mongoose.Schema.Types.Mixed,
-      default: () => ({ sedan: 0, suv: 0, tempo: 0 }),
+      default: () => ({}),
     },
     distance: {
       type: String,

@@ -97,7 +97,8 @@ const resolveDropStop = (route, dropStopId) => {
 const getVehicleSeatIds = (vehicle = {}) => {
   const layout = Array.isArray(vehicle?.blueprint?.layout) ? vehicle.blueprint.layout : [];
   return layout
-    .filter((item) => item?.type === 'seat')
+    // Seats the admin marked as booked/blocked in the layout are never sellable.
+    .filter((item) => item?.type === 'seat' && !['booked', 'blocked'].includes(String(item?.status || '').toLowerCase()))
     .map((item) => `${item.r}-${item.c}`);
 };
 
@@ -380,17 +381,17 @@ export const getPoolingRouteDetails = asyncHandler(async (req, res) => {
 // Resolves and validates everything a pooling booking needs. Shared by the online
 // order, the online verification, and the cash booking paths so the three cannot
 // drift apart on which seats/fares/routes they consider valid.
-const resolvePoolingBookingContext = async (req) => {
-  const userId = getCurrentUserId(req);
-  const routeId = toCleanString(req.body?.routeId);
-  const vehicleId = toCleanString(req.body?.vehicleId);
-  const scheduleId = toCleanString(req.body?.scheduleId);
-  const travelDate = normalizeTravelDate(req.body?.travelDate || req.body?.date);
-  const selectedSeats = Array.isArray(req.body?.selectedSeats)
-    ? [...new Set(req.body.selectedSeats.map((item) => toCleanString(item)).filter(Boolean))]
+// Also used by the agent desk booking, which books on behalf of a customer.
+export const resolvePoolingBookingInput = async ({ userId, body = {} }) => {
+  const routeId = toCleanString(body?.routeId);
+  const vehicleId = toCleanString(body?.vehicleId);
+  const scheduleId = toCleanString(body?.scheduleId);
+  const travelDate = normalizeTravelDate(body?.travelDate || body?.date);
+  const selectedSeats = Array.isArray(body?.selectedSeats)
+    ? [...new Set(body.selectedSeats.map((item) => toCleanString(item)).filter(Boolean))]
     : [];
-  const pickupStopId = toCleanString(req.body?.pickupStopId);
-  const dropStopId = toCleanString(req.body?.dropStopId);
+  const pickupStopId = toCleanString(body?.pickupStopId);
+  const dropStopId = toCleanString(body?.dropStopId);
 
   if (!userId) {
     throw new ApiError(401, 'User authentication is required');
@@ -469,9 +470,15 @@ const resolvePoolingBookingContext = async (req) => {
   };
 };
 
+const resolvePoolingBookingContext = (req) =>
+  resolvePoolingBookingInput({ userId: getCurrentUserId(req), body: req.body });
+
 const creditPoolingAgentCommission = async (booking) => {
-  const user = await User.findById(booking.user).select('referredByAgent').lean();
-  const resolved = await resolveAgentForUserCommission({ user });
+  const directAgentId = booking.agentMeta?.commissionMode === 'direct' ? booking.agentMeta?.bookedByAgentId : null;
+  const user = directAgentId ? null : await User.findById(booking.user).select('referredByAgent').lean();
+  const resolved = directAgentId
+    ? { agentId: String(directAgentId), commissionMode: 'direct' }
+    : await resolveAgentForUserCommission({ user });
   if (!resolved) {
     return;
   }
@@ -491,6 +498,7 @@ const creditPoolingAgentCommission = async (booking) => {
   });
 
   booking.agentMeta = {
+    ...(booking.agentMeta?.toObject?.() || booking.agentMeta || {}),
     bookedByAgentId: resolved.agentId,
     customerId: booking.user,
     commissionAmount: Number(commissionResult?.transaction?.amount || 0),
@@ -503,11 +511,11 @@ const creditPoolingAgentCommission = async (booking) => {
 
 // Creates the booking plus its seat reservations. The reservations carry a unique
 // index, so a lost race rolls the booking back rather than double-selling a seat.
-const persistPoolingBooking = async ({ context, payment, paymentStatus }) => {
+export const persistPoolingBooking = async ({ context, payment, paymentStatus, directAgentMeta = null }) => {
   const { userId, routeId, vehicleId, scheduleId, travelDate, selectedSeats, route, pickupStop, dropStop, fareBreakdown } = context;
 
-  let agentMeta = undefined;
-  try {
+  let agentMeta = directAgentMeta ? { ...directAgentMeta, commissionMode: 'direct' } : undefined;
+  if (!agentMeta) {
     const bookingUser = await User.findById(userId).select('referredByAgent').lean();
     if (bookingUser?.referredByAgent) {
       agentMeta = {
@@ -516,8 +524,6 @@ const persistPoolingBooking = async ({ context, payment, paymentStatus }) => {
         commissionMode: 'referral',
       };
     }
-  } catch (err) {
-    // Non-fatal
   }
 
   const booking = await PoolingBooking.create({
@@ -628,7 +634,7 @@ export const verifyPoolingBookingPayment = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Payment verification fields are required');
   }
 
-  const { keySecret } = await resolveRazorpayCredentials();
+  const { keyId, keySecret } = await resolveRazorpayCredentials();
   const expectedSignature = crypto
     .createHmac('sha256', keySecret)
     .update(`${orderId}|${paymentId}`)
@@ -639,17 +645,43 @@ export const verifyPoolingBookingPayment = asyncHandler(async (req, res) => {
   }
 
   const existingBooking = await PoolingBooking.findOne({
-    user: userId,
     'payment.paymentId': paymentId,
   })
     .populate('route', 'routeName originLabel destinationLabel')
     .populate('vehicle', 'name vehicleNumber');
 
   if (existingBooking) {
+    if (String(existingBooking.user?._id || existingBooking.user) !== String(userId)) {
+      throw new ApiError(409, 'This payment is already linked to another booking');
+    }
     return ok(res, serializePoolingBooking(existingBooking), 'Pooling booking already confirmed');
   }
 
   const context = await resolvePoolingBookingContext(req);
+
+  // The signature only proves the order was paid; the order itself must be the one
+  // created for exactly this user, route, schedule, date and seat set, at this fare.
+  const order = await razorpayRequest({
+    method: 'GET',
+    path: `/orders/${encodeURIComponent(orderId)}`,
+    keyId,
+    keySecret,
+  });
+  const orderNotes = order?.notes || {};
+  const normalizeSeatList = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean).sort().join(',');
+  const expectedAmountPaise = Math.round(context.fareBreakdown.totalFare * 100);
+
+  if (
+    Number(order?.amount) !== expectedAmountPaise
+    || String(orderNotes.userId || '') !== String(userId)
+    || String(orderNotes.routeId || '') !== String(context.routeId)
+    || String(orderNotes.vehicleId || '') !== String(context.vehicleId)
+    || String(orderNotes.scheduleId || '') !== String(context.scheduleId)
+    || String(orderNotes.travelDate || '') !== String(context.travelDate)
+    || normalizeSeatList(orderNotes.seats) !== normalizeSeatList(context.selectedSeats.join(','))
+  ) {
+    throw new ApiError(400, 'Payment does not match this pooling booking');
+  }
 
   const duplicateUpcomingBooking = await PoolingBooking.findOne({
     user: userId,

@@ -11,6 +11,7 @@ import {
   getRideDetails,
   getRideRoom,
   listRideHistoryForIdentity,
+  rideOtpVisibleTo,
   serializeRideRealtime,
 } from '../../services/rideService.js';
 
@@ -142,7 +143,7 @@ export const getActiveDeliveryForIdentity = async ({ role, entityId }) => {
     return null;
   }
 
-  return serializeDeliveryRealtime(ride);
+  return rideOtpVisibleTo(serializeDeliveryRealtime(ride), role);
 };
 
 export const getDeliveryById = async ({ deliveryId, role, entityId }) => {
@@ -154,7 +155,7 @@ export const getDeliveryById = async ({ deliveryId, role, entityId }) => {
 
   await ensureRideParticipantAccess({ rideId: delivery.rideId, role, entityId });
   const ride = await getRideDetails(delivery.rideId);
-  return serializeDeliveryRealtime(ensureParcelRide(ride));
+  return rideOtpVisibleTo(serializeDeliveryRealtime(ensureParcelRide(ride)), role);
 };
 
 export const listDeliveriesForIdentity = async ({ role, entityId, limit }) => {

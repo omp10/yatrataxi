@@ -20,7 +20,6 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   getCurrentDriver,
   getDriverVehicleTypes,
-  deleteDriverVehicle,
   getOwnerFleetVehicles,
   updateOwnerFleetVehicle,
   deleteOwnerFleetVehicle,
@@ -426,11 +425,13 @@ const OwnerVehicleFleet = () => {
 
     try {
       // Use appropriate delete function based on vehicle type
-      if (vehicle.isFleetVehicle) {
-        await deleteOwnerFleetVehicle(vehicle._id);
-      } else {
-        await deleteDriverVehicle(vehicle._id);
+      if (!vehicle.isFleetVehicle) {
+        // The profile vehicle is part of the driver's approved registration.
+        setMessage("Your registered vehicle can't be deleted here. Update it from vehicle details instead.");
+        setMessageType("error");
+        return;
       }
+      await deleteOwnerFleetVehicle(vehicle._id);
       setVehicles((prev) => prev.filter((v) => v._id !== vehicle._id));
       setMessage("Vehicle deleted successfully.");
       setMessageType("success");

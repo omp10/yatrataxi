@@ -99,6 +99,7 @@ const IntercityConfirm = () => {
             passengers: state.passengers || 1,
             distance: Number(state.distance || 0),
             vehicleName: state.vehicle?.name || state.vehicle?.id || 'Intercity Cab',
+            packageId: state.vehicle?.packageId || state.intercity?.packageId || '',
           },
         });
         setStatus('scheduled');

@@ -75,11 +75,6 @@ const DeleteAccount = lazy(() => import('./modules/user/pages/profile/DeleteAcco
 
 // Phase 4 — Cab/Intercity/Bus flows
 const CabHome = lazy(() => import('./modules/user/pages/cab/CabHome'));
-const SharedTaxi = lazy(() => import('./modules/user/pages/cab/SharedTaxi'));
-const SharedTaxiSeats = lazy(() => import('./modules/user/pages/cab/SharedTaxiSeats'));
-const SharedTaxiConfirm = lazy(() => import('./modules/user/pages/cab/SharedTaxiConfirm'));
-const AirportCab = lazy(() => import('./modules/user/pages/cab/AirportCab'));
-const AirportCabConfirm = lazy(() => import('./modules/user/pages/cab/AirportCabConfirm'));
 const SpiritualTrip = lazy(() => import('./modules/user/pages/cab/SpiritualTrip'));
 const SpiritualTripVehicle = lazy(() => import('./modules/user/pages/cab/SpiritualTripVehicle'));
 const SpiritualTripConfirm = lazy(() => import('./modules/user/pages/cab/SpiritualTripConfirm'));
@@ -179,7 +174,6 @@ const AgentBookings = lazy(() => import('./modules/agent/pages/AgentBookings'));
 const AgentReferral = lazy(() => import('./modules/agent/pages/AgentReferral'));
 const AgentWalletView = lazy(() => import('./modules/agent/pages/AgentWallet'));
 const AgentProfile = lazy(() => import('./modules/agent/pages/AgentProfile'));
-const AgentRideBooking = lazy(() => import('./modules/agent/pages/AgentRideBooking'));
 const AgentBusBooking = lazy(() => import('./modules/agent/pages/AgentBusBooking'));
 const AgentBusResults = lazy(() => import('./modules/agent/pages/AgentBusResults'));
 const AgentBusSeats = lazy(() => import('./modules/agent/pages/AgentBusSeats'));
@@ -800,17 +794,9 @@ function App() {
               <Route path="/intercity/confirm" element={<IntercityConfirm />} />
               <Route path="/cab-sharing" element={<CabSharing />} />
               <Route path="/cab" element={<CabHome />} />
-              <Route path="/cab/shared" element={<SharedTaxi />} />
-              <Route path="/cab/shared/seats" element={<SharedTaxiSeats />} />
-              <Route
-                path="/cab/shared/confirm"
-                element={<SharedTaxiConfirm />}
-              />
-              <Route path="/cab/airport" element={<AirportCab />} />
-              <Route
-                path="/cab/airport-confirm"
-                element={<AirportCabConfirm />}
-              />
+              <Route path="/cab/shared/*" element={<Navigate to="/taxi/user/pooling" replace />} />
+              <Route path="/cab/airport" element={<Navigate to="/ride/select-location" replace />} />
+              <Route path="/cab/airport-confirm" element={<Navigate to="/ride/select-location" replace />} />
               <Route path="/cab/spiritual" element={<SpiritualTrip />} />
               <Route
                 path="/cab/spiritual-vehicle"
@@ -956,20 +942,9 @@ function App() {
               />
               <Route path="/taxi/user/cab-sharing" element={<CabSharing />} />
               <Route path="/taxi/user/cab" element={<CabHome />} />
-              <Route path="/taxi/user/cab/shared" element={<SharedTaxi />} />
-              <Route
-                path="/taxi/user/cab/shared/seats"
-                element={<SharedTaxiSeats />}
-              />
-              <Route
-                path="/taxi/user/cab/shared/confirm"
-                element={<SharedTaxiConfirm />}
-              />
-              <Route path="/taxi/user/cab/airport" element={<AirportCab />} />
-              <Route
-                path="/taxi/user/cab/airport-confirm"
-                element={<AirportCabConfirm />}
-              />
+              <Route path="/taxi/user/cab/shared/*" element={<Navigate to="/taxi/user/pooling" replace />} />
+              <Route path="/taxi/user/cab/airport" element={<Navigate to="/taxi/user/ride/select-location" replace />} />
+              <Route path="/taxi/user/cab/airport-confirm" element={<Navigate to="/taxi/user/ride/select-location" replace />} />
               <Route
                 path="/taxi/user/cab/spiritual"
                 element={<SpiritualTrip />}

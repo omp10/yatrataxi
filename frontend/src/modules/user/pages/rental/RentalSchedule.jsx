@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -206,15 +206,11 @@ const DateTimePickerCard = ({
   );
 };
 
-const RentalSchedule = () => {
+const RentalScheduleContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { vehicle, duration, selectedPackage, serviceLocation } = location.state || {};
 
-  if (!vehicle) {
-    navigate('/rental');
-    return null;
-  }
 
   const now = new Date();
   const roundedNow = new Date(now);
@@ -496,6 +492,12 @@ const RentalSchedule = () => {
       </div>
     </div>
   );
+};
+
+// The screen needs the vehicle chosen on the previous step; without it, go back.
+const RentalSchedule = () => {
+  const location = useLocation();
+  return location.state?.vehicle ? <RentalScheduleContent /> : <Navigate to="/rental" replace />;
 };
 
 export default RentalSchedule;

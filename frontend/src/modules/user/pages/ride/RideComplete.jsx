@@ -101,17 +101,19 @@ const RideComplete = () => {
 
   const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
   const rideId = state.rideId || '';
-  const fare = Number(state.fare || 22);
+  const [serverFare, setServerFare] = useState(null);
+  // The completed ride on the server is the bill; route state is only a first paint.
+  const fare = Number(serverFare ?? state.fare ?? 0);
   const paymentMethod = state.paymentMethod || 'Cash';
   const paymentMethodLabel = PAYMENT_OPTIONS.find((option) => option.id === selectedPaymentMethod)?.label || paymentMethod;
   const pickup = state.pickup || 'Pickup';
   const drop = state.drop || 'Drop';
   const serviceType = String(state.serviceType || state.type || 'ride').toLowerCase();
   const driver = state.driver || {
-    name: 'Captain',
-    rating: '4.9',
+    name: 'Driver',
+    rating: '',
     vehicle: serviceType === 'parcel' ? 'Delivery' : 'Taxi',
-    plate: 'Assigned',
+    plate: '',
     profileImage: '',
     vehicleImage: '',
   };
@@ -177,6 +179,9 @@ const RideComplete = () => {
         if (active) {
           setPaymentCollection(payload?.driverPaymentCollection || null);
           setRideLiveStatus(nextLiveStatus);
+          if (Number.isFinite(Number(payload?.fare))) {
+            setServerFare(Number(payload.fare));
+          }
         }
 
         // Only hydrate from the server once feedback was actually submitted; otherwise the 5s
@@ -534,7 +539,7 @@ const RideComplete = () => {
                 </p>
                 <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-black text-slate-800">
                   <Star size={10} className="fill-yellow-500 text-yellow-500" />
-                  {driver.rating || '4.9'}
+                  {driver.rating || 'New'}
                 </div>
               </div>
               <div className="h-14 w-16 shrink-0 overflow-hidden rounded-[12px] border border-slate-100 bg-white">

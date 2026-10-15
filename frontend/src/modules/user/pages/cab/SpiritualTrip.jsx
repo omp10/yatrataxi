@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ChevronRight, MapPin, Loader2, Sparkles } from 'lucide-react';
+import api from '@/shared/api/axiosInstance';
 
 const ACCENT_GRADIENTS = [
   'bg-[linear-gradient(135deg,#FDF4FF_0%,#F3E8FF_100%)]',
@@ -12,109 +13,38 @@ const ACCENT_GRADIENTS = [
   'bg-[linear-gradient(135deg,#F0FDF4_0%,#D1FAE5_100%)]',
 ];
 
-const DEFAULT_SPIRITUAL_DESTINATIONS = [
-  {
-    id: 'ujjain-mahakal',
-    name: 'Ujjain Mahakaleshwar',
-    subtitle: 'Mahakaleshwar Jyotirlinga Darshan & Sacred Bhasma Aarti',
-    dist: '55 km',
-    fare: '₹999–₹1,399',
-    baseFare: 999,
-    vehicleFares: { sedan: 999, suv: 1399, tempo: 2199 },
-    emoji: '🛕',
-    image: 'https://images.unsplash.com/photo-1609766857041-ed402ea8069a?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Mahakaleshwar Jyotirlinga, Jaisinghpura, Ujjain, Madhya Pradesh',
-    accent: ACCENT_GRADIENTS[0],
-  },
-  {
-    id: 'omkareshwar-jyotirlinga',
-    name: 'Omkareshwar Jyotirlinga',
-    subtitle: 'Sacred island Jyotirlinga shrine shaped like Om symbol',
-    dist: '78 km',
-    fare: '₹1,499–₹2,099',
-    baseFare: 1499,
-    vehicleFares: { sedan: 1499, suv: 2099, tempo: 3299 },
-    emoji: '🕉️',
-    image: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Omkareshwar Mandir, Mandhata Island, Narmada River, Madhya Pradesh',
-    accent: ACCENT_GRADIENTS[1],
-  },
-  {
-    id: 'maheshwar-temples',
-    name: 'Maheshwar Ahilya Fort & Temples',
-    subtitle: 'Holkar royal ghats, sacred Narmada temples & craft heritage',
-    dist: '91 km',
-    fare: '₹1,799–₹2,519',
-    baseFare: 1799,
-    vehicleFares: { sedan: 1799, suv: 2519, tempo: 3959 },
-    emoji: '🪔',
-    image: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Ahilya Fort Ghats, Maheshwar, Khargone, Madhya Pradesh',
-    accent: ACCENT_GRADIENTS[2],
-  },
-  {
-    id: 'shirdi-sai-darshan',
-    name: 'Shirdi Sai Baba Darshan',
-    subtitle: 'Divine Samadhi Mandir darshan & pilgrimage package',
-    dist: '410 km',
-    fare: '₹5,999–₹8,399',
-    baseFare: 5999,
-    vehicleFares: { sedan: 5999, suv: 8399, tempo: 13199 },
-    emoji: '🙏',
-    image: 'https://images.unsplash.com/photo-1590073844006-33379778ae09?auto=format&fit=crop&w=800&q=80',
-    dropLocation: 'Shree Saibaba Sansthan Temple, Shirdi, Maharashtra',
-    accent: ACCENT_GRADIENTS[3],
-  },
-];
-
 const SpiritualTrip = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [destinations, setDestinations] = useState(DEFAULT_SPIRITUAL_DESTINATIONS);
+  const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
     const fetchDestinations = async () => {
       try {
-        const origin = globalThis.__LEGACY_BACKEND_ORIGIN__ || '';
-        const res = await fetch(`${origin}/api/v1/explore-destinations?category=spiritual`);
-        if (res.ok) {
-          const data = await res.json();
-          const items = Array.isArray(data?.data) ? data.data : (data?.data?.results || []);
-          if (isMounted && items.length > 0) {
-            const mapped = items.map((dest, idx) => {
-              const bFare = Number(dest.baseFare) || Number(dest.vehicleFares?.sedan) || 999;
-              const suvFare = Number(dest.vehicleFares?.suv) || Math.round(bFare * 1.4);
-              const tempoFare = Number(dest.vehicleFares?.tempo) || Math.round(bFare * 2.2);
-              return {
-                id: dest._id || dest.id || `dest-${idx}`,
-                name: dest.title || dest.name,
-                subtitle: dest.description || dest.label || dest.subtitle || 'Sacred Pilgrimage',
-                dist: dest.distance || dest.dist || '55 km',
-                fare: `₹${bFare}–₹${suvFare}`,
-                baseFare: bFare,
-                vehicleFares: {
-                  sedan: Number(dest.vehicleFares?.sedan) || bFare,
-                  suv: suvFare,
-                  tempo: tempoFare,
-                },
-                emoji: dest.emoji || '🛕',
-                image: dest.image || '',
-                dropLocation: dest.dropLocation || dest.drop,
-                accent: ACCENT_GRADIENTS[idx % ACCENT_GRADIENTS.length],
-              };
-            });
-            setDestinations(mapped);
-          } else if (isMounted) {
-            setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
-          }
-        } else if (isMounted) {
-          setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
-        }
+        const res = await api.get('/users/explore-destinations', { params: { category: 'spiritual' } });
+        const items = Array.isArray(res?.data) ? res.data : (res?.data?.results || []);
+        // Only destinations the admin has priced for at least one vehicle are bookable.
+        const mapped = items
+          .filter((dest) => Number(dest.baseFare) > 0)
+          .map((dest, idx) => ({
+            id: String(dest._id || dest.id),
+            name: dest.title || dest.name,
+            subtitle: dest.description || dest.label || '',
+            dist: dest.distance || '',
+            fare: `From ₹${Number(dest.baseFare).toLocaleString('en-IN')}`,
+            baseFare: Number(dest.baseFare),
+            vehicleFares: dest.vehicleFares || {},
+            emoji: dest.emoji || '🛕',
+            image: dest.image || '',
+            dropLocation: dest.dropLocation || dest.drop || '',
+            accent: ACCENT_GRADIENTS[idx % ACCENT_GRADIENTS.length],
+          }));
+        if (isMounted) setDestinations(mapped);
       } catch (err) {
-        console.error('Failed to load spiritual destinations dynamically:', err);
-        if (isMounted) setDestinations(DEFAULT_SPIRITUAL_DESTINATIONS);
+        if (isMounted) setLoadError(err?.message || 'Could not load destinations');
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -179,7 +109,7 @@ const SpiritualTrip = () => {
           </div>
         ) : destinations.length === 0 ? (
           <div className="py-16 text-center text-slate-400">
-            <p className="text-sm font-semibold">No spiritual destinations available currently.</p>
+            <p className="text-sm font-semibold">{loadError || 'No spiritual destinations available currently.'}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
@@ -219,10 +149,12 @@ const SpiritualTrip = () => {
 
                 <div className="flex items-center justify-between mt-3 pt-1 border-t border-black/5">
                   <div>
-                    <div className="flex items-center gap-1">
-                      <MapPin size={9} className="text-slate-400" strokeWidth={2.5} />
-                      <span className="text-[9px] font-bold text-slate-400">{dest.dist}</span>
-                    </div>
+                    {dest.dist && (
+                      <div className="flex items-center gap-1">
+                        <MapPin size={9} className="text-slate-400" strokeWidth={2.5} />
+                        <span className="text-[9px] font-bold text-slate-400">{dest.dist}</span>
+                      </div>
+                    )}
                     <p className="text-[10px] font-black text-slate-800">{dest.fare}</p>
                   </div>
                   <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center shadow-xs">
@@ -237,7 +169,7 @@ const SpiritualTrip = () => {
         {/* Note */}
         <div className="rounded-[16px] border border-white/80 bg-white/90 px-4 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
           <p className="text-[11px] font-bold text-slate-400 leading-relaxed">
-            All fares are estimates managed directly by our travel desk. Final fare depends on vehicle choice and round trip duration.
+            Fares are fixed per vehicle for each destination and shown before you book.
           </p>
         </div>
       </div>

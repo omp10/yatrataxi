@@ -231,17 +231,7 @@ const CreateDriver = () => {
       try {
         let options = [];
 
-        try {
-          const locationResponse = await adminService.getLocationVehicleTypes(
-            formData.service_location_id,
-            formData.transport_type,
-          );
-          options = normalizeVehicleOptions(locationResponse);
-        } catch {
-          options = [];
-        }
-
-        if (options.length === 0) {
+        {
           const catalogResponse = await adminService.getVehicleTypes(
             formData.transport_type === 'both' ? undefined : formData.transport_type,
           );

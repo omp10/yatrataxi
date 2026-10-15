@@ -265,8 +265,6 @@ export const getDriverScheduledRides = (params = {}) =>
   api.get("/drivers/scheduled-rides", withDriverAuth({ params }));
 export const cancelDriverScheduledRide = (rideId) =>
   api.post(`/drivers/scheduled-rides/${rideId}/cancel`, {}, withDriverAuth());
-export const deleteDriverNotification = (id) =>
-  api.delete(`/drivers/notifications/${id}`, withDriverAuth());
 export const clearAllDriverNotifications = () =>
   api.delete("/drivers/notifications", withDriverAuth());
 export const getDriverEmergencyContacts = () =>
@@ -281,9 +279,6 @@ export const deleteDriverEmergencyContact = (contactId) =>
 
 export const updateDriverVehicle = (payload) =>
   api.patch("/drivers/vehicle", payload, withDriverAuth());
-
-export const deleteDriverVehicle = (vehicleId) =>
-  api.delete(`/drivers/vehicle/${vehicleId}`, withDriverAuth());
 
 export const getDriverVehicleTypes = async () => {
   const authConfig = withDriverAuth();

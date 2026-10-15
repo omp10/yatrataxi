@@ -28,14 +28,12 @@ import {
   listPublicServiceStores,
   listMyRentalBookings,
   loginUser,
-  registerUser,
   requestAccountDeletion,
   saveUserFcmToken,
   searchBuses,
   signupUser,
   startUserOtpRequest,
   submitMyBusBookingReview,
-  topupUserWallet,
   transferUserWalletToDriver,
   transferUserWallet,
   updateMyActiveRentalLocation,
@@ -92,7 +90,6 @@ userRouter.get('/rental-bookings', authenticateOrResolveUser(['user']), asyncHan
 userRouter.get('/rental-bookings/active', authenticateOrResolveUser(['user']), asyncHandler(getMyActiveRentalBooking));
 userRouter.post('/rental-bookings/:id/end', authenticateOrResolveUser(['user']), asyncHandler(endMyActiveRentalRide));
 userRouter.post('/rental-bookings/:id/location', authenticateOrResolveUser(['user']), asyncHandler(updateMyActiveRentalLocation));
-userRouter.post('/register', asyncHandler(registerUser));
 userRouter.post('/signup', asyncHandler(signupUser));
 userRouter.post('/login', asyncHandler(loginUser));
 userRouter.post('/profile-image', asyncHandler(uploadUserProfileImage));
@@ -108,6 +105,7 @@ userRouter.get('/subscriptions/me', authenticateOrResolveUser(['user']), asyncHa
 userRouter.post('/subscriptions/purchase', authenticateOrResolveUser(['user']), asyncHandler(buySubscription));
 userRouter.post('/me/delete-request', authenticateOrResolveUser(['user']), asyncHandler(requestAccountDeletion));
 userRouter.get('/notifications', authenticateOrResolveUser(['user']), asyncHandler(getUserNotifications));
+userRouter.delete('/notifications', authenticateOrResolveUser(['user']), asyncHandler(clearAllUserNotifications));
 userRouter.delete('/notifications/:id', authenticateOrResolveUser(['user']), asyncHandler(deleteUserNotification));
 userRouter.get('/emergency-contacts', authenticateOrResolveUser(['user']), asyncHandler(getUserEmergencyContacts));
 userRouter.post('/emergency-contacts', authenticateOrResolveUser(['user']), asyncHandler(addUserEmergencyContact));
@@ -117,7 +115,6 @@ userRouter.post('/saved-payment-methods', authenticateOrResolveUser(['user']), a
 userRouter.delete('/saved-payment-methods/:methodId', authenticateOrResolveUser(['user']), asyncHandler(deleteUserSavedPaymentMethod));
 userRouter.post('/sos', authenticateOrResolveUser(['user']), asyncHandler(triggerUserSosAlert));
 userRouter.get('/wallet', authenticateOrResolveUser(['user']), asyncHandler(getUserWallet));
-userRouter.post('/wallet/topup', authenticateOrResolveUser(['user']), asyncHandler(topupUserWallet));
 userRouter.post('/wallet/transfer', authenticateOrResolveUser(['user']), asyncHandler(transferUserWallet));
 userRouter.post('/wallet/transfer/driver', authenticateOrResolveUser(['user']), asyncHandler(transferUserWalletToDriver));
 userRouter.post('/wallet/razorpay/order', authenticateOrResolveUser(['user']), asyncHandler(createRazorpayWalletTopupOrder));

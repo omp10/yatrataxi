@@ -159,27 +159,27 @@ try {
   check(r.status === 404 || r.status === 403, "another user can't read this ticket", `HTTP ${r.status}`);
 
   r = await call('POST', `/users/bus-bookings/${bk?.id}/cancel`, { token: uT, body: { seatIds: ['L-A1'], travelDate: tDate } });
-  check([200,201,400,409].includes(r.status), 'cancel endpoint responds coherently', `HTTP ${r.status} ${JSON.stringify(r.payload).slice(0,160)}`);
+  check(r.status === 200, 'cash ticket: cancel 1 of 2 seats', `HTTP ${r.status} ${JSON.stringify(r.payload).slice(0,160)}`);
 
   // ─────────────────────────────────────────────────────────────── commission
   console.log('\n== agent commission + wallet + withdrawal ==');
   const w = await AgentWallet.findOne({ agentId: agent._id }).lean();
-  check(w && w.balance === 50, 'commission = 10% of Rs500', `balance=${w?.balance}`);
+  check(w && w.balance === 25, 'commission 10% of Rs500, half reversed for the cancelled seat', `balance=${w?.balance}`);
   r = await call('GET', '/agents/wallet', { token: aT });
-  check(r.status === 200 && r.data?.balance === 50, 'agent sees wallet balance', JSON.stringify(r).slice(0,200));
+  check(r.status === 200 && r.data?.balance === 25, 'agent sees wallet balance', JSON.stringify(r).slice(0,200));
   r = await call('GET', '/agents/dashboard', { token: aT });
   check(r.status === 200, 'GET /agents/dashboard', `HTTP ${r.status}`);
   r = await call('GET', '/agents/bookings', { token: aT });
   check(r.status === 200, 'GET /agents/bookings', `HTTP ${r.status}`);
   const ab = r.data || {};
   const busRow = (ab.buses || [])[0];
-  check(busRow && busRow.commissionAmount === 50, 'agent app: bus row shows Rs50 commission', JSON.stringify(busRow).slice(0,220));
+  check(busRow && busRow.commissionAmount === 25, 'agent app: bus row shows Rs25 commission after cancel', JSON.stringify(busRow).slice(0,220));
   check(busRow && busRow.amount === 500, 'agent app: bus row shows Rs500 booking value', JSON.stringify(busRow).slice(0,160));
   check(busRow && busRow.commissionMode === 'referral', 'agent app: bus row shows commission mode', String(busRow?.commissionMode));
-  check(ab.summary && ab.summary.totalCommission === 50, 'agent app: commission summary matches wallet', JSON.stringify(ab.summary));
+  check(ab.summary && ab.summary.totalCommission === 25, 'agent app: commission summary matches wallet', JSON.stringify(ab.summary));
   r = await call('GET', '/agents/referral', { token: aT });
   check(r.status === 200 && r.data?.qrValue, 'agent QR value generated', JSON.stringify(r).slice(0,200));
-  r = await call('POST', '/agents/wallet/withdrawals', { token: aT, body: { amount: 30 } });
+  r = await call('POST', '/agents/wallet/withdrawals', { token: aT, body: { amount: 20 } });
   check(r.status === 201, 'agent withdrawal created', JSON.stringify(r).slice(0,200));
   const wdId = r.data?.id;
   r = await call('GET', '/admin/wallet/agents/withdrawals', { token: adT });
@@ -187,7 +187,7 @@ try {
   r = await call('PATCH', `/admin/wallet/agents/withdrawals/${wdId}/approve`, { token: adT, body: {} });
   check(r.status === 200 && r.data?.status === 'approved', 'admin approves withdrawal', JSON.stringify(r).slice(0,200));
   const w2 = await AgentWallet.findOne({ agentId: agent._id }).lean();
-  check(w2 && Math.abs(w2.balance - 20) < 0.01, 'balance debited on approval', `balance=${w2?.balance}`);
+  check(w2 && Math.abs(w2.balance - 5) < 0.01, 'balance debited on approval', `balance=${w2?.balance}`);
 
   // ─────────────────────────────────────────────────────────────── pooling
   console.log('\n== pooling: route -> cash book -> commission ==');
@@ -214,15 +214,15 @@ try {
   check(r.status === 409, 'pooling seat cannot be double-booked', `HTTP ${r.status}`);
 
   const w3 = await AgentWallet.findOne({ agentId: agent._id }).lean();
-  check(w3 && Math.abs(w3.balance - 40) < 0.01, 'pooling commission credited (+Rs20)', `balance=${w3?.balance}`);
+  check(w3 && Math.abs(w3.balance - 25) < 0.01, 'pooling commission credited (+Rs20)', `balance=${w3?.balance}`);
 
   r = await call('GET', '/agents/bookings', { token: aT });
   const poolRow = (r.data?.pooling || [])[0];
   check(poolRow && poolRow.commissionAmount === 20, 'agent app: pooling row shows Rs20 commission', JSON.stringify(poolRow).slice(0,220));
   check(poolRow && poolRow.amount === 200, 'agent app: pooling row shows Rs200 booking value', JSON.stringify(poolRow).slice(0,160));
-  check(r.data?.summary?.totalCommission === 70, 'agent app: summary totals bus + pooling commission', JSON.stringify(r.data?.summary));
+  check(r.data?.summary?.totalCommission === 45, 'agent app: summary totals bus + pooling commission', JSON.stringify(r.data?.summary));
   const lifetime = (await AgentWallet.findOne({ agentId: agent._id }).lean())?.lifetimeEarned;
-  check(Math.abs(Number(lifetime) - 70) < 0.01, 'displayed commission equals wallet lifetimeEarned', `lifetimeEarned=${lifetime}`);
+  check(Math.abs(Number(lifetime) - 45) < 0.01, 'displayed commission equals wallet lifetimeEarned', `lifetimeEarned=${lifetime}`);
 
   // ─────────────────────────────────────────────────────────────── admin pages
   console.log('\n== admin panel endpoints ==');

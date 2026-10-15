@@ -67,10 +67,8 @@ import {
   saveOnboardingPersonal,
   saveOnboardingReferral,
   saveOnboardingVehicle,
-  registerDriver,
   requestDriverAccountDeletion,
     startOnboarding,
-    topUpMyWallet,
     createDriverWalletTopupOrder,
     createDriverPhonePeWalletTopupOrder,
     verifyDriverWalletTopup,
@@ -94,7 +92,6 @@ import { triggerDriverSosAlert } from '../../safety/controllers/safetyController
 
 export const driverRouter = Router();
 
-driverRouter.post("/register", asyncHandler(registerDriver));
 driverRouter.post("/login", asyncHandler(loginDriver));
 driverRouter.post("/auth/send-otp", asyncHandler(startDriverLoginOtpRequest));
 driverRouter.post(
@@ -236,11 +233,6 @@ driverRouter.post(
   "/incentives/claim",
   authenticate(["driver"]),
   asyncHandler(claimDriverIncentiveReward),
-);
-driverRouter.post(
-  "/wallet/top-up",
-  authenticate(["driver"]),
-  asyncHandler(topUpMyWallet),
 );
   driverRouter.post(
     "/wallet/top-up/razorpay/order",

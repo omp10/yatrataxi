@@ -46,6 +46,7 @@ const serializePackageForFlow = (pkg = {}) => ({
         dispatchType: String(vehicle.dispatchType || 'normal').trim().toLowerCase(),
         supportsBidding: ['bidding', 'both'].includes(String(vehicle.dispatchType || 'normal').trim().toLowerCase()),
         basePrice: Number(vehicle.basePrice || 0),
+        roundTripPrice: Number(vehicle.roundTripPrice || 0),
         freeDistance: Number(vehicle.freeDistance || 0),
         distancePrice: Number(vehicle.distancePrice || 0),
         freeTime: Number(vehicle.freeTime || 0),

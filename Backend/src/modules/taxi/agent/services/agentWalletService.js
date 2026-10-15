@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { Agent } from '../models/Agent.js';
 import { AgentWallet } from '../models/AgentWallet.js';
+import { claimGatewayPayment, releaseGatewayPayment } from '../../services/paymentCaptureService.js';
 
 const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 
@@ -68,18 +69,22 @@ export const applyAgentWalletAdjustment = async ({
   }
 
   const normalizedKind = String(kind || 'credit').trim().toLowerCase() === 'debit' ? 'debit' : 'credit';
+  const normalizedReferenceKey = String(referenceKey || '').trim();
 
-  const agent = await Agent.findById(agentId).session(session);
-  if (!agent) {
+  const agentExists = await Agent.exists({ _id: agentId }).session(session);
+  if (!agentExists) {
     throw new ApiError(404, 'Agent not found');
   }
 
   await ensureAgentWallet(agentId, session);
 
-  if (referenceKey) {
+  let claim = null;
+  if (normalizedReferenceKey) {
+    // Entries credited before the ledger existed are only visible in the wallet's
+    // (capped) transaction list.
     const existing = await AgentWallet.findOne({
       agentId,
-      'transactions.referenceKey': String(referenceKey).trim(),
+      'transactions.referenceKey': normalizedReferenceKey,
     })
       .select('_id')
       .session(session)
@@ -88,52 +93,99 @@ export const applyAgentWalletAdjustment = async ({
     if (existing) {
       return null;
     }
-  }
 
-  const wallet = await AgentWallet.findOne({ agentId }).session(session);
-  if (!wallet) {
-    throw new ApiError(404, 'Agent wallet not found');
-  }
-
-  if (normalizedKind === 'debit') {
-    if (isReversal) {
-      wallet.balance = Math.max(0, roundMoney(Number(wallet.balance || 0) - normalizedAmount));
-      wallet.lifetimeEarned = Math.max(0, roundMoney(Number(wallet.lifetimeEarned || 0) - normalizedAmount));
-      agent.metrics.totalEarnings = Math.max(0, roundMoney(Number(agent.metrics?.totalEarnings || 0) - normalizedAmount));
-    } else {
-      const nextBalance = roundMoney(Number(wallet.balance || 0) - normalizedAmount);
-      if (nextBalance < 0) {
-        throw new ApiError(400, 'Agent wallet balance cannot go negative');
-      }
-      wallet.balance = nextBalance;
-      wallet.lifetimePaidOut = roundMoney(Number(wallet.lifetimePaidOut || 0) + normalizedAmount);
+    // The ledger row survives the 100-entry cap on transactions, so a reward or
+    // commission keyed by referenceKey can never be paid twice.
+    claim = {
+      provider: 'agent_wallet',
+      paymentId: `${String(agentId)}:${normalizedReferenceKey}`,
+      purpose: 'agent_wallet_adjustment',
+      ownerType: 'agent',
+      ownerId: String(agentId),
+      amount: normalizedAmount,
+    };
+    if (!(await claimGatewayPayment(claim))) {
+      return null;
     }
-  } else {
-    wallet.balance = roundMoney(Number(wallet.balance || 0) + normalizedAmount);
-    wallet.lifetimeEarned = roundMoney(Number(wallet.lifetimeEarned || 0) + normalizedAmount);
-    agent.metrics.totalEarnings = roundMoney(Number(agent.metrics?.totalEarnings || 0) + normalizedAmount);
   }
 
-  wallet.transactions.push({
+  const transaction = {
     kind: normalizedKind,
     amount: normalizedAmount,
     title: String(title || '').trim(),
     source: String(source || '').trim(),
     bookingType: String(bookingType || '').trim(),
-    referenceKey: String(referenceKey || '').trim(),
+    referenceKey: normalizedReferenceKey,
     metadata,
-  });
-  wallet.transactions = wallet.transactions.slice(-100);
-
-  await Promise.all([
-    wallet.save({ session }),
-    agent.save({ session }),
-  ]);
-
-  return {
-    wallet: serializeAgentWallet(wallet),
-    transaction: wallet.transactions[wallet.transactions.length - 1],
   };
+  const pushTransaction = { transactions: { $each: [transaction], $slice: -100 } };
+  const options = { returnDocument: 'after', ...(session ? { session } : {}) };
+
+  try {
+    let wallet = null;
+    let earningsDelta = 0;
+
+    // Every balance change is a single conditional $inc so concurrent adjustments
+    // cannot overwrite each other.
+    if (normalizedKind === 'credit') {
+      wallet = await AgentWallet.findOneAndUpdate(
+        { agentId },
+        { $inc: { balance: normalizedAmount, lifetimeEarned: normalizedAmount }, $push: pushTransaction },
+        options,
+      );
+      earningsDelta = normalizedAmount;
+    } else if (isReversal) {
+      wallet = await AgentWallet.findOneAndUpdate(
+        { agentId, balance: { $gte: normalizedAmount } },
+        { $inc: { balance: -normalizedAmount, lifetimeEarned: -normalizedAmount }, $push: pushTransaction },
+        options,
+      ) || await AgentWallet.findOneAndUpdate(
+        // Already paid out: the reversal can only take the wallet down to zero.
+        { agentId, balance: { $lt: normalizedAmount } },
+        { $set: { balance: 0 }, $inc: { lifetimeEarned: -normalizedAmount }, $push: pushTransaction },
+        options,
+      );
+      earningsDelta = -normalizedAmount;
+    } else {
+      wallet = await AgentWallet.findOneAndUpdate(
+        { agentId, balance: { $gte: normalizedAmount } },
+        { $inc: { balance: -normalizedAmount, lifetimePaidOut: normalizedAmount }, $push: pushTransaction },
+        options,
+      );
+      if (!wallet) {
+        throw new ApiError(400, 'Agent wallet balance cannot go negative');
+      }
+    }
+
+    if (!wallet) {
+      throw new ApiError(404, 'Agent wallet not found');
+    }
+
+    if (wallet.lifetimeEarned < 0) {
+      wallet = await AgentWallet.findOneAndUpdate({ agentId }, { $set: { lifetimeEarned: 0 } }, options);
+    }
+
+    if (earningsDelta !== 0) {
+      await Agent.updateOne({ _id: agentId }, { $inc: { 'metrics.totalEarnings': earningsDelta } }, { session });
+      if (earningsDelta < 0) {
+        await Agent.updateOne(
+          { _id: agentId, 'metrics.totalEarnings': { $lt: 0 } },
+          { $set: { 'metrics.totalEarnings': 0 } },
+          { session },
+        );
+      }
+    }
+
+    return {
+      wallet: serializeAgentWallet(wallet),
+      transaction: wallet.transactions[wallet.transactions.length - 1],
+    };
+  } catch (error) {
+    if (claim) {
+      await releaseGatewayPayment(claim).catch(() => {});
+    }
+    throw error;
+  }
 };
 
 export const listAgentWalletTransactions = async (agentId) => {

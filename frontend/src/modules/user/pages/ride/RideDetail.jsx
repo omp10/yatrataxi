@@ -104,7 +104,7 @@ const RideDetail = () => {
       endTime: ride?.completedAt || timeSource,
       statusLabel: status.charAt(0).toUpperCase() + status.slice(1),
       driverName: driver.name || 'Captain',
-      rating: driver.rating || '4.9',
+      rating: driver.rating || 'New',
       plate: driver.vehicleNumber || 'Assigned',
       vehicle: driver.vehicleType || ride?.vehicleIconType || 'Taxi',
       paymentMethod: String(

@@ -40,13 +40,9 @@ const createInitialFormData = () => ({
   useUrl: false,
   description: '',
   category: 'spiritual',
-  baseFare: 999,
-  sedanFare: 999,
-  suvFare: 1399,
-  tempoFare: 2199,
   vehicleFares: {},
   disabledVehicles: {},
-  distance: '55 km',
+  distance: '',
   emoji: '🛕',
   order: 0,
   active: true,
@@ -95,7 +91,7 @@ const ExploreIndia = () => {
               id: String(v._id || v.id),
               name: v.name,
               icon,
-              desc: v.short_description || v.description || (cap <= 4 ? 'Dzire / Etios' : cap <= 7 ? 'Ertiga / Innova' : 'Mini Coach'),
+              desc: v.short_description || v.description || '',
               capacity: cap,
             };
           });
@@ -110,14 +106,8 @@ const ExploreIndia = () => {
     fetchVehicles();
   }, [fetchVehicles]);
 
-  const displayVehicles = useMemo(() => {
-    if (vehicleTypes.length > 0) return vehicleTypes;
-    return [
-      { id: 'sedan', name: 'Sedan', icon: '🚗', desc: 'Dzire / Etios', capacity: 4 },
-      { id: 'suv', name: 'SUV', icon: '🚙', desc: 'Ertiga / Innova', capacity: 6 },
-      { id: 'tempo', name: 'Tempo', icon: '🚐', desc: 'Mini Coach', capacity: 12 },
-    ];
-  }, [vehicleTypes]);
+  // Fares are stored per real vehicle type id; there are no placeholder vehicles.
+  const displayVehicles = vehicleTypes;
 
   const fetchDestinations = useCallback(async () => {
     setLoading(true);
@@ -172,14 +162,11 @@ const ExploreIndia = () => {
   // Open modal for Edit
   const handleOpenEditModal = (dest) => {
     setEditingDestination(dest);
-    const bFare = dest.baseFare ?? 999;
     const destFares = dest.vehicleFares || {};
     const disabledMap = {};
-    if (dest.vehicleFares) {
-      Object.entries(dest.vehicleFares).forEach(([k, v]) => {
-        if (v === 0 || v === '0') disabledMap[k] = true;
-      });
-    }
+    Object.entries(destFares).forEach(([k, v]) => {
+      if (v === 0 || v === '0') disabledMap[k] = true;
+    });
 
     setFormData({
       title: dest.title || '',
@@ -191,13 +178,9 @@ const ExploreIndia = () => {
       useUrl: Boolean(dest.image && !dest.image.startsWith('data:')),
       description: dest.description || '',
       category: dest.category || 'spiritual',
-      baseFare: bFare,
-      sedanFare: destFares.sedan ?? dest.sedanFare ?? bFare,
-      suvFare: destFares.suv ?? dest.suvFare ?? Math.round(bFare * 1.4),
-      tempoFare: destFares.tempo ?? dest.tempoFare ?? Math.round(bFare * 2.2),
       vehicleFares: { ...destFares },
       disabledVehicles: disabledMap,
-      distance: dest.distance || dest.dist || '55 km',
+      distance: dest.distance || '',
       emoji: dest.emoji || '🛕',
       order: dest.order ?? 0,
       active: dest.active !== false,
@@ -274,24 +257,20 @@ const ExploreIndia = () => {
 
     setSaving(true);
     try {
-      const base = Number(formData.baseFare) || 999;
-      const combinedFares = { ...(formData.vehicleFares || {}) };
-
-      // Standard fallback categories
-      combinedFares.sedan = Number(formData.sedanFare || base) || base;
-      combinedFares.suv = Number(formData.suvFare) || Math.round(base * 1.4);
-      combinedFares.tempo = Number(formData.tempoFare) || Math.round(base * 2.2);
-
-      // Apply any vehicle-specific active / disabled settings
+      // Each vehicle is priced explicitly; a blank or switched-off vehicle is not offered.
+      const combinedFares = {};
       displayVehicles.forEach((v) => {
-        if (formData.disabledVehicles?.[v.id]) {
-          combinedFares[v.id] = 0;
-        } else if (combinedFares[v.id] === undefined || combinedFares[v.id] === '') {
-          combinedFares[v.id] = v.capacity <= 4 ? combinedFares.sedan : v.capacity <= 7 ? combinedFares.suv : combinedFares.tempo;
-        } else {
-          combinedFares[v.id] = Number(combinedFares[v.id]);
-        }
+        const value = Number(formData.vehicleFares?.[v.id]);
+        combinedFares[v.id] = !formData.disabledVehicles?.[v.id] && Number.isFinite(value) && value > 0 ? value : 0;
       });
+
+      const offeredFares = Object.values(combinedFares).filter((fare) => fare > 0);
+      if (offeredFares.length === 0) {
+        toast.error('Enter a fare for at least one vehicle');
+        setSaving(false);
+        return;
+      }
+      const base = Math.min(...offeredFares);
 
       const payload = {
         title: formData.title.trim(),
@@ -303,9 +282,6 @@ const ExploreIndia = () => {
         category: formData.category || 'spiritual',
         baseFare: base,
         vehicleFares: combinedFares,
-        sedanFare: combinedFares.sedan,
-        suvFare: combinedFares.suv,
-        tempoFare: combinedFares.tempo,
         distance: formData.distance.trim(),
         emoji: formData.emoji.trim() || '🛕',
         order: Number(formData.order) || 0,
@@ -772,7 +748,7 @@ const ExploreIndia = () => {
                           {dest.emoji || '🛕'} {dest.category || 'spiritual'}
                         </span>
                         <span className="text-xs font-black text-slate-900">
-                          From ₹{dest.baseFare ?? 999}
+                          From ₹{Number(dest.baseFare || 0).toLocaleString('en-IN')}
                         </span>
                       </div>
 
@@ -896,7 +872,7 @@ const ExploreIndia = () => {
                       </td>
 
                       <td className="py-3.5 px-4 font-black text-slate-900">
-                        ₹{dest.baseFare ?? 999}
+                        ₹{Number(dest.baseFare || 0).toLocaleString('en-IN')}
                         {dest.distance && <span className="block text-[10px] font-medium text-slate-400">{dest.distance}</span>}
                       </td>
 
@@ -1043,31 +1019,7 @@ const ExploreIndia = () => {
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">
-                      Package Starting Fare (₹) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      required
-                      value={formData.baseFare}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const num = Number(val) || 0;
-                        setFormData((prev) => ({
-                          ...prev,
-                          baseFare: val,
-                          sedanFare: val,
-                          suvFare: num > 0 ? Math.round(num * 1.4) : '',
-                          tempoFare: num > 0 ? Math.round(num * 2.2) : '',
-                        }));
-                      }}
-                      placeholder="e.g. 999"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    />
-                    <p className="text-[10px] text-slate-400">Used as default base for vehicle calculations</p>
-                  </div>
+
                 </div>
 
                 {/* Individual Vehicle Fares */}
@@ -1086,17 +1038,17 @@ const ExploreIndia = () => {
                     </span>
                   </div>
 
+                  {displayVehicles.length === 0 && (
+                    <p className="text-xs font-semibold text-amber-700">
+                      No eligible passenger vehicle types found. Add active cab vehicle types first.
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {displayVehicles.map((veh) => {
                       const vId = veh.id;
                       const isDisabled = Boolean(formData.disabledVehicles?.[vId]);
-                      const defaultVal =
-                        veh.capacity <= 4
-                          ? formData.baseFare
-                          : veh.capacity <= 7
-                          ? Math.round((Number(formData.baseFare) || 999) * 1.4)
-                          : Math.round((Number(formData.baseFare) || 999) * 2.2);
-                      const currentVal = formData.vehicleFares?.[vId] ?? defaultVal;
+                      const storedVal = formData.vehicleFares?.[vId];
+                      const currentVal = storedVal === '' || Number(storedVal) > 0 ? storedVal : '';
 
                       return (
                         <div
@@ -1145,15 +1097,10 @@ const ExploreIndia = () => {
                             value={isDisabled ? '' : currentVal}
                             onChange={(e) => {
                               const val = e.target.value;
-                              setFormData((prev) => {
-                                const nextFares = { ...(prev.vehicleFares || {}), [vId]: val };
-                                const vehNameLower = String(veh.name || '').toLowerCase();
-                                const updates = { vehicleFares: nextFares };
-                                if (vehNameLower.includes('sedan') || veh.capacity <= 4) updates.sedanFare = val;
-                                if (vehNameLower.includes('suv') || (veh.capacity >= 6 && veh.capacity <= 8)) updates.suvFare = val;
-                                if (vehNameLower.includes('tempo') || veh.capacity > 8) updates.tempoFare = val;
-                                return { ...prev, ...updates };
-                              });
+                              setFormData((prev) => ({
+                                ...prev,
+                                vehicleFares: { ...(prev.vehicleFares || {}), [vId]: val },
+                              }));
                             }}
                             placeholder={isDisabled ? 'Disabled for tour' : 'Enter fare (₹)'}
                             className={`w-full px-3 py-2 border rounded-lg text-sm font-black focus:outline-none focus:ring-2 ${

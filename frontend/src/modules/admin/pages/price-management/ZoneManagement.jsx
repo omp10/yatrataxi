@@ -107,10 +107,8 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
         adminService.getDrivers(1, 200),
       ]);
 
-      if (zoneRes) {
-        const zoneData = zoneRes.success ? (zoneRes.data?.results || zoneRes.data) : zoneRes;
-        setZones(Array.isArray(zoneData) ? zoneData : []);
-      }
+      const zoneData = zoneRes ? (zoneRes.success ? (zoneRes.data?.results || zoneRes.data) : zoneRes) : [];
+      setZones(Array.isArray(zoneData) ? zoneData : []);
 
       if (slRes) {
         const locs = slRes.success ? (slRes.data?.results || slRes.data) : slRes;

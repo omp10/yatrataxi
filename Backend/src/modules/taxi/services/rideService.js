@@ -22,6 +22,8 @@ import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
 import { sendOtpSms } from './smsService.js';
 import { notifyRideOtpResent } from './dispatchService.js';
+import { claimGatewayPayment } from './paymentCaptureService.js';
+import { resolveBookableFare, resolveIntercityPackageRow } from './fareValidationService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -146,6 +148,20 @@ const creditUserWalletByReference = async ({ userId, amount, title, referenceKey
     return 'existing';
   }
 
+  // The wallet keeps only its last 50 transactions, so the ledger row is what
+  // guarantees a reward key is paid once.
+  const claimed = await claimGatewayPayment({
+    provider: 'user_wallet',
+    paymentId: `${String(userId)}:${normalizedReferenceKey}`,
+    purpose: 'user_wallet_reward',
+    ownerType: 'user',
+    ownerId: String(userId),
+    amount: normalizedAmount,
+  });
+  if (!claimed) {
+    return 'existing';
+  }
+
   await UserWallet.updateOne(
     { userId },
     {
@@ -185,6 +201,18 @@ const creditDriverWalletByReference = async ({ driverId, amount, title, referenc
     .lean();
 
   if (existingTransaction) {
+    return 'existing';
+  }
+
+  const claimed = await claimGatewayPayment({
+    provider: 'driver_wallet',
+    paymentId: `${String(driverId)}:${normalizedReferenceKey}`,
+    purpose: 'driver_wallet_reward',
+    ownerType: 'driver',
+    ownerId: String(driverId),
+    amount: normalizedAmount,
+  });
+  if (!claimed) {
     return 'existing';
   }
 
@@ -371,6 +399,7 @@ const normalizeParcelPayload = (parcel = {}) => ({
 
 const normalizeIntercityPayload = (intercity = {}) => ({
   bookingId: String(intercity.bookingId || '').trim(),
+  packageId: String(intercity.packageId || '').trim(),
   fromCity: String(intercity.fromCity || '').trim(),
   toCity: String(intercity.toCity || '').trim(),
   tripType: String(intercity.tripType || '').trim(),
@@ -858,6 +887,7 @@ export const createRideRecord = async ({
   userMaxBidFare,
   bidStepAmount,
   agentMeta,
+  fareContext,
 }) => {
   const user = await User.findById(userId);
 
@@ -867,11 +897,11 @@ export const createRideRecord = async ({
 
   await clearUserActiveRideIfPresent(user);
 
-  const safeFare = Number(fare);
+  const requestedFare = Number(fare);
   const safeEstimatedDistanceMeters = Math.max(0, Number(estimatedDistanceMeters || 0));
   const safeEstimatedDurationMinutes = Math.max(0, Number(estimatedDurationMinutes || 0));
 
-  if (!Number.isFinite(safeFare) || safeFare < 0) {
+  if (!Number.isFinite(requestedFare) || requestedFare < 0) {
     throw new ApiError(400, 'fare must be a positive number or zero');
   }
 
@@ -882,6 +912,22 @@ export const createRideRecord = async ({
   }
 
   const primaryVehicleTypeId = dispatchVehicleTypeIds[0] || null;
+  const rawServiceType = String(serviceType || '').trim().toLowerCase();
+  const fareContextType = String(
+    fareContext?.type || (['spiritual', 'airport'].includes(rawServiceType) ? rawServiceType : ''),
+  ).trim().toLowerCase();
+  const normalizedIntercity = normalizeIntercityPayload(intercity);
+  // Never trust the fare in the request on its own; see fareValidationService.
+  const safeFare = await resolveBookableFare({
+    fare: requestedFare,
+    serviceType: normalizeServiceType(serviceType),
+    fareContextType,
+    destinationId: fareContext?.destinationId || null,
+    vehicleTypeId: primaryVehicleTypeId,
+    pickupCoords,
+    dropCoords,
+    intercity: normalizedIntercity,
+  });
   const primaryVehicle = primaryVehicleTypeId
     ? await Vehicle.findById(primaryVehicleTypeId).select('icon map_icon image dispatch_type').lean()
     : null;
@@ -964,12 +1010,16 @@ export const createRideRecord = async ({
   const nextFareIncreaseAt = pricingNegotiationMode === 'user_increment_only'
     ? new Date(Date.now() + fareIncreaseWaitMinutes * 60 * 1000)
     : null;
+  const intercityPackage = normalizedServiceType === 'intercity' && normalizedIntercity.packageId
+    ? await resolveIntercityPackageRow({ packageId: normalizedIntercity.packageId, vehicleTypeId: primaryVehicleTypeId })
+    : null;
+  const commissionSource = intercityPackage?.row || pricingRule;
   const pricingSnapshot = {
-    setPriceId: pricingRule?._id || null,
-    admin_commission_type_from_driver: Number(pricingRule?.admin_commission_type_from_driver ?? 1),
-    admin_commission_from_driver: Number(pricingRule?.admin_commission_from_driver ?? 0),
-    admin_commission_type_for_owner: Number(pricingRule?.admin_commission_type_for_owner ?? 1),
-    admin_commission_for_owner: Number(pricingRule?.admin_commission_for_owner ?? 0),
+    setPriceId: intercityPackage?.packagePrice?._id || pricingRule?._id || null,
+    admin_commission_type_from_driver: Number(commissionSource?.admin_commission_type_from_driver ?? 1),
+    admin_commission_from_driver: Number(commissionSource?.admin_commission_from_driver ?? 0),
+    admin_commission_type_for_owner: Number(commissionSource?.admin_commission_type_for_owner ?? 1),
+    admin_commission_for_owner: Number(commissionSource?.admin_commission_for_owner ?? 0),
     waiting_charge: Number(pricingRule?.waiting_charge ?? 0),
     free_waiting_before: Number(pricingRule?.free_waiting_before ?? 0),
     free_waiting_after: Number(pricingRule?.free_waiting_after ?? 0),
@@ -1074,7 +1124,7 @@ export const createRideRecord = async ({
         commissionMode: agentMeta?.bookedByAgentId ? 'direct' : (user?.referredByAgent ? 'referral' : ''),
       },
       parcel: normalizeParcelPayload(parcel),
-      intercity: normalizeIntercityPayload(intercity),
+      intercity: normalizedIntercity,
       scheduledAt: normalizedScheduledAt,
       status: RIDE_STATUS.SEARCHING,
       liveStatus: RIDE_LIVE_STATUS.SEARCHING,
@@ -1137,7 +1187,7 @@ export const createRideRecord = async ({
               commissionMode: agentMeta?.bookedByAgentId ? 'direct' : (user?.referredByAgent ? 'referral' : ''),
             },
             parcel: normalizeParcelPayload(parcel),
-            intercity: normalizeIntercityPayload(intercity),
+            intercity: normalizedIntercity,
             scheduledAt: normalizedScheduledAt,
             status: RIDE_STATUS.SEARCHING,
             liveStatus: RIDE_LIVE_STATUS.SEARCHING,
@@ -1197,6 +1247,18 @@ export const getRideDetails = async (rideId) => {
 };
 
 export const getRideRoom = (rideId) => `ride_${rideId}`;
+
+// The start PIN belongs to the rider; the driver must get it from the passenger,
+// so anything sent to a driver carries an empty otp.
+export const withoutRideOtp = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+  const plain = typeof payload.toObject === 'function' ? payload.toObject() : payload;
+  return { ...plain, otp: '' };
+};
+
+export const rideOtpVisibleTo = (payload, role) => (role === 'user' ? payload : withoutRideOtp(payload));
 
 const activeRideStatuses = [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING];
 
@@ -1475,7 +1537,7 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50, p
     estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
     estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
     paymentMethod: ride.paymentMethod,
-    otp: ride.otp || '',
+    otp: role === 'user' ? (ride.otp || '') : '',
     parcel: ride.deliveryId?.parcel || ride.parcel || null,
     intercity: ride.intercity || null,
     pricingSnapshot: ride.pricingSnapshot || null,
@@ -1617,7 +1679,7 @@ const rideStatusConfig = {
   },
 };
 
-export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymentMethod }) => {
+export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymentMethod, otp }) => {
   const config = rideStatusConfig[nextStatus];
 
   if (!config) {
@@ -1640,6 +1702,19 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   if (!config.allowedCurrent.includes(ride.liveStatus)) {
     throw new ApiError(409, `Ride cannot move from ${ride.liveStatus} to ${nextStatus}`);
+  }
+
+  // The rider's PIN proves the passenger is in the car; it is checked here rather
+  // than trusting the driver app. A repeat "started" for an already-started ride
+  // is a no-op and needs no PIN.
+  if (nextStatus === RIDE_LIVE_STATUS.STARTED && !ride.startedAt && ride.otp) {
+    if (String(otp ?? '').trim() !== String(ride.otp).trim()) {
+      throw new ApiError(400, 'Invalid ride PIN. Ask the passenger for the 4 digit PIN.');
+    }
+  }
+
+  if (nextStatus === RIDE_LIVE_STATUS.COMPLETED && !ride.startedAt) {
+    throw new ApiError(409, 'Ride must be started with the passenger PIN before it can be completed');
   }
 
   ride.liveStatus = nextStatus;
@@ -1692,7 +1767,12 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
     const user = await User.findById(ride.userId).select('referredByAgent').lean();
     const resolvedAgentId = ride.agentMeta?.bookedByAgentId || user?.referredByAgent || null;
-    const commissionMode = ride.agentMeta?.bookedByAgentId ? 'direct' : (user?.referredByAgent ? 'referral' : '');
+    // agentMeta.bookedByAgentId is also filled for referred customers, so the mode
+    // recorded at booking time is the source of truth for which rate applies.
+    const storedCommissionMode = String(ride.agentMeta?.commissionMode || '').trim().toLowerCase();
+    const commissionMode = ['direct', 'referral'].includes(storedCommissionMode)
+      ? storedCommissionMode
+      : (user?.referredByAgent ? 'referral' : 'direct');
     const bookingType = String(ride.serviceType || '').trim().toLowerCase() === 'intercity' ? 'intercity' : 'ride';
 
     if (resolvedAgentId) {
@@ -1890,7 +1970,7 @@ export const submitRideBid = async ({ rideId, driverId, bidFare }) => {
   ).populate('driverId', 'name phone profileImage vehicleType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
 
   return {
-    ride: serializeRideRealtime(ride),
+    ride: withoutRideOtp(serializeRideRealtime(ride)),
     bid: serializeRideBid(bid),
   };
 };
@@ -2055,7 +2135,8 @@ export const acceptRideBidAssignment = async ({ rideId, bidId, userId }) => {
       await ensureDriverWalletCanAcceptRide(driver, { session });
 
       ride.driverId = driver._id;
-      ride.fare = Number(bid.bidFare || ride.fare || 0);
+      // An applied promo keeps its rupee discount on the accepted bid.
+      ride.fare = Math.max(0, Number(bid.bidFare || ride.fare || 0) - Number(ride.promo?.discount_amount || 0));
       ride.acceptedBidId = bid._id;
       ride.status = RIDE_STATUS.ACCEPTED;
       ride.liveStatus = RIDE_LIVE_STATUS.ACCEPTED;

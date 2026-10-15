@@ -80,6 +80,11 @@ const rideSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      packageId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
       fromCity: {
         type: String,
         default: '',

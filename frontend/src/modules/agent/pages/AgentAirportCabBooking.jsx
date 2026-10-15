@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plane, MapPin, Calendar, Clock, CheckCircle2, Sparkles, Car, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plane, MapPin, Sparkles, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/shared/api/axiosInstance';
 import { agentService } from '../services/agentService';
 import AgentCustomerForm from '../components/AgentCustomerForm';
+import { useAppGoogleMapsLoader } from '@/modules/admin/utils/googleMaps';
+import { geocodeAddress } from '@/shared/utils/geocoding';
+import { estimateAgentCommission, formatCommissionRule, useAgentCommissionRule } from '../hooks/useAgentCommission';
 
-const AIRPORTS = [
-  { id: 'IDR', name: 'Indore - Devi Ahilya Bai Holkar Airport (IDR)', city: 'Indore', coords: [75.8042, 22.7228] },
-  { id: 'BHO', name: 'Bhopal - Raja Bhoj International Airport (BHO)', city: 'Bhopal', coords: [77.3377, 23.2875] },
-  { id: 'GWL', name: 'Gwalior - Rajmata Vijaya Raje Scindia Airport (GWL)', city: 'Gwalior', coords: [78.2274, 26.2936] },
-];
+const unwrapList = (response) => (Array.isArray(response?.data) ? response.data : (response?.data?.results || response?.results || []));
+
+const isActiveRule = (rule) => Number(rule?.active ?? 1) === 1 && String(rule?.status || 'active').toLowerCase() !== 'inactive';
 
 export const AgentAirportCabBooking = () => {
   const navigate = useNavigate();
+  const { isLoaded: isMapsLoaded } = useAppGoogleMapsLoader();
+  const commissionRule = useAgentCommissionRule('directRide');
   const [tripDirection, setTripDirection] = useState('to_airport'); // 'to_airport' or 'from_airport'
-  const [selectedAirport, setSelectedAirport] = useState(AIRPORTS[0]);
-  const [terminal, setTerminal] = useState('T1');
+  const [airports, setAirports] = useState([]);
+  const [selectedAirportId, setSelectedAirportId] = useState('');
   const [cityAddress, setCityAddress] = useState('');
   const [travelDate, setTravelDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [travelTime, setTravelTime] = useState('10:00');
@@ -33,46 +36,29 @@ export const AgentAirportCabBooking = () => {
     const fetchVehicles = async () => {
       try {
         setLoadingVehicles(true);
-        const [vTypesRes, setPricesRes] = await Promise.allSettled([
+        const [vTypesRes, setPricesRes, airportsRes] = await Promise.all([
           api.get('/users/vehicle-types'),
           api.get('/users/set-prices'),
+          agentService.getAirports(),
         ]);
 
-        const rawVehicles = vTypesRes.status === 'fulfilled'
-          ? (vTypesRes.value?.data?.results || vTypesRes.value?.data?.data || [])
-          : [];
-        const rawSetPrices = setPricesRes.status === 'fulfilled'
-          ? (setPricesRes.value?.data?.results || setPricesRes.value?.data?.data || [])
-          : [];
+        // Airport transfers are fixed-fare: base price + airport surge + airport fee
+        // of an active, airport-enabled price rule (the server charges the same).
+        const airportFareByVehicle = {};
+        unwrapList(setPricesRes)
+          .filter((rule) => rule.enable_airport_ride && isActiveRule(rule))
+          .forEach((rule) => {
+            const vId = String(rule.vehicle_type?._id || rule.vehicle_type?.id || rule.vehicle_type || '');
+            const total = (Number(rule.base_price) || 0) + (Number(rule.airport_surge) || 0) + (Number(rule.support_airport_fee) || 0);
+            if (vId && total > 0) {
+              airportFareByVehicle[vId] = Math.round(Math.min(total, airportFareByVehicle[vId] ?? Infinity));
+            }
+          });
 
-        // Build price map per vehicle ID from SetPrices rules
-        const airportPriceMap = {};
-        const generalPriceMap = {};
-
-        rawSetPrices.forEach((rule) => {
-          const vId = String(rule.vehicle_type?._id || rule.vehicle_type?.id || rule.vehicle_type || rule.type_id || '');
-          if (!vId) return;
-
-          const baseP = Number(rule.base_price) || 0;
-          const surgeP = Number(rule.airport_surge) || 0;
-          const feeP = Number(rule.support_airport_fee) || 0;
-          const totalAirportFare = baseP + surgeP + feeP;
-
-          if (rule.enable_airport_ride) {
-            airportPriceMap[vId] = totalAirportFare > 0 ? totalAirportFare : (baseP || 599);
-          }
-          if (baseP > 0) {
-            generalPriceMap[vId] = baseP;
-          }
-        });
-
-        const mapped = rawVehicles
+        const mapped = unwrapList(vTypesRes)
           .filter((v) => v.active !== false && Number(v.status ?? 1) !== 0)
           .map((v) => {
             const vId = String(v._id || v.id);
-            const isAirportEnabled = Boolean(airportPriceMap[vId]);
-            const calculatedFare = airportPriceMap[vId] || generalPriceMap[vId] || (v.capacity > 4 ? 999 : 599);
-
             let icon = '🚗';
             if (v.icon_types === 'auto') icon = '🛺';
             else if (v.icon_types === 'bike') icon = '🏍️';
@@ -81,28 +67,24 @@ export const AgentAirportCabBooking = () => {
             return {
               id: vId,
               name: v.name,
-              seats: `${v.capacity || 4} Seats`,
-              desc: v.short_description || v.description || `${v.name} · ${v.capacity || 4} Seats`,
-              fare: calculatedFare,
+              desc: v.short_description || v.description || `${Number(v.capacity) || 1} Seats`,
+              fare: airportFareByVehicle[vId] || 0,
               icon,
               iconType: v.icon_types || 'car',
-              image: v.image || '',
-              isAirportEnabled,
             };
-          });
+          })
+          .filter((v) => v.fare > 0);
 
-        // If vehicles are explicitly enabled for airport ride in set-prices, show those
-        const airportOnly = mapped.filter((v) => v.isAirportEnabled);
-        const finalVehicles = airportOnly.length > 0 ? airportOnly : mapped;
+        const airportList = unwrapList(airportsRes);
 
         if (isMounted) {
-          setVehicles(finalVehicles);
-          if (finalVehicles.length > 0) {
-            setSelectedVehicle(finalVehicles[0]);
-          }
+          setVehicles(mapped);
+          setSelectedVehicle(mapped[0] || null);
+          setAirports(airportList);
+          setSelectedAirportId(airportList[0]?.id || '');
         }
       } catch (err) {
-        console.error('Failed to load airport vehicles:', err);
+        toast.error(err?.message || 'Could not load airport transfer options');
       } finally {
         if (isMounted) setLoadingVehicles(false);
       }
@@ -112,12 +94,18 @@ export const AgentAirportCabBooking = () => {
     return () => { isMounted = false; };
   }, []);
 
+  const selectedAirport = airports.find((airport) => airport.id === selectedAirportId) || null;
   const fare = selectedVehicle?.fare || 0;
-  const estimatedCommission = Math.round(fare * 0.05 * 100) / 100; // 5% direct commission
+  const estimatedCommission = estimateAgentCommission(fare, commissionRule);
+  const commissionLabel = formatCommissionRule(commissionRule);
 
   const handleBooking = async () => {
     if (!selectedVehicle) {
       toast.error('Please select a vehicle');
+      return;
+    }
+    if (!selectedAirport) {
+      toast.error('Please select an airport');
       return;
     }
     if (!customer.phone || customer.phone.length < 10) {
@@ -128,54 +116,48 @@ export const AgentAirportCabBooking = () => {
       toast.error('Enter customer city pickup/drop address');
       return;
     }
+    const scheduledAt = new Date(`${travelDate}T${travelTime}:00`);
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+      toast.error('Choose a travel date and time in the future');
+      return;
+    }
 
     setSubmitting(true);
     try {
       const isToAirport = tripDirection === 'to_airport';
-      const pickupAddress = isToAirport ? cityAddress : `${selectedAirport.name} (${terminal})`;
-      const dropAddress = isToAirport ? `${selectedAirport.name} (${terminal})` : cityAddress;
+      const airportLabel = [selectedAirport.name, selectedAirport.terminal].filter(Boolean).join(' - ');
+      const cityCoords = await geocodeAddress(cityAddress);
+      const pickupAddress = isToAirport ? cityAddress.trim() : airportLabel;
+      const dropAddress = isToAirport ? airportLabel : cityAddress.trim();
 
-      const payload = {
+      const response = await agentService.createRideBooking({
         customer,
         pickupAddress,
         dropAddress,
-        pickup: isToAirport ? [75.8577, 22.7196] : selectedAirport.coords,
-        drop: isToAirport ? selectedAirport.coords : [75.8577, 22.7196],
+        pickup: isToAirport ? cityCoords : selectedAirport.coords,
+        drop: isToAirport ? selectedAirport.coords : cityCoords,
         fare,
-        serviceType: 'ride',
+        fareContext: { type: 'airport' },
+        serviceType: 'airport',
         transport_type: 'taxi',
-        vehicleTypeId: selectedVehicle?.id,
-        vehicleIconType: selectedVehicle?.iconType || 'car',
+        vehicleTypeId: selectedVehicle.id,
+        vehicleIconType: selectedVehicle.iconType || 'car',
         paymentMethod: 'cash',
-        scheduledAt: `${travelDate}T${travelTime}:00`,
-        estimatedDistanceMeters: 18000,
-        estimatedDurationMinutes: 35,
-      };
+        scheduledAt: scheduledAt.toISOString(),
+      });
+      const data = response?.data || {};
+      const bookedFare = Number(data.fare ?? fare);
 
-      const response = await agentService.createRideBooking(payload);
-      const data = response?.data?.data || response?.data || {};
-
-      toast.success('Airport Cab booked successfully! Commission recorded.');
+      toast.success('Airport cab booked');
       setConfirmedBooking({
-        bookingId: data._id || `AIR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        bookingId: data._id || data.id || '',
         pickup: pickupAddress,
         drop: dropAddress,
-        vehicle: selectedVehicle.name,
-        fare,
-        commission: estimatedCommission,
-        travelDate: `${travelDate} at ${travelTime}`,
+        fare: bookedFare,
+        commission: estimateAgentCommission(bookedFare, commissionRule),
       });
-    } catch {
-      toast.success('Airport Cab booked! Commission recorded.');
-      setConfirmedBooking({
-        bookingId: `AIR-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-        pickup: tripDirection === 'to_airport' ? cityAddress : `${selectedAirport.name} (${terminal})`,
-        drop: tripDirection === 'to_airport' ? `${selectedAirport.name} (${terminal})` : cityAddress,
-        vehicle: selectedVehicle.name,
-        fare,
-        commission: estimatedCommission,
-        travelDate: `${travelDate} at ${travelTime}`,
-      });
+    } catch (error) {
+      toast.error(error?.message || 'Could not book this airport cab');
     } finally {
       setSubmitting(false);
     }
@@ -196,9 +178,11 @@ export const AgentAirportCabBooking = () => {
             <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">Agent Desk</p>
             <h1 className="text-[19px] font-black tracking-tight text-slate-900">Book Airport Cab</h1>
           </div>
-          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-600 border border-blue-100">
-            Earn 5% Comm
-          </span>
+          {commissionLabel && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black text-blue-600 border border-blue-100">
+              {commissionLabel}
+            </span>
+          )}
         </div>
       </header>
 
@@ -241,30 +225,22 @@ export const AgentAirportCabBooking = () => {
 
           <div>
             <label className="text-xs font-bold text-slate-600 block mb-1">Select Airport</label>
-            <select
-              value={selectedAirport.id}
-              onChange={(e) => setSelectedAirport(AIRPORTS.find((a) => a.id === e.target.value) || AIRPORTS[0])}
-              className="w-full rounded-[18px] border border-[#d8e5f1] bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-[#143a5a]"
-            >
-              {AIRPORTS.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">Terminal</label>
+            {airports.length === 0 ? (
+              <p className="text-xs font-semibold text-slate-400">No airports are configured by admin yet.</p>
+            ) : (
               <select
-                value={terminal}
-                onChange={(e) => setTerminal(e.target.value)}
+                value={selectedAirportId}
+                onChange={(e) => setSelectedAirportId(e.target.value)}
                 className="w-full rounded-[18px] border border-[#d8e5f1] bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-[#143a5a]"
               >
-                <option value="T1">Terminal 1 (Domestic)</option>
-                <option value="T2">Terminal 2 (International)</option>
-                <option value="T3">Terminal 3</option>
+                {airports.map((a) => (
+                  <option key={a.id} value={a.id}>{[a.name, a.code && `(${a.code})`, a.terminal].filter(Boolean).join(' ')}</option>
+                ))}
               </select>
-            </div>
+            )}
+          </div>
+
+          <div>
             <div>
               <label className="text-xs font-bold text-slate-600 block mb-1">Pickup/Drop Time</label>
               <input
@@ -358,7 +334,7 @@ export const AgentAirportCabBooking = () => {
             <div className="text-right">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-black text-emerald-300 ring-1 ring-emerald-400/40">
                 <Sparkles size={12} />
-                Your Commission
+                Est. Commission
               </span>
               <p className="mt-1 text-xl font-black text-emerald-300">+₹{estimatedCommission}</p>
             </div>
@@ -368,7 +344,7 @@ export const AgentAirportCabBooking = () => {
         {/* Submit */}
         <button
           type="button"
-          disabled={submitting}
+          disabled={submitting || !isMapsLoaded || !selectedVehicle || !selectedAirport}
           onClick={handleBooking}
           className="w-full rounded-[22px] bg-[#143a5a] py-4 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_12px_28px_rgba(20,58,90,0.22)] active:scale-95 transition-all disabled:opacity-50"
         >
@@ -393,7 +369,9 @@ export const AgentAirportCabBooking = () => {
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Booking Confirmed</p>
                 <h3 className="text-xl font-black text-slate-900 mt-1">Airport Cab Scheduled!</h3>
-                <p className="text-xs font-bold text-slate-500 mt-1">ID: <span className="font-mono text-slate-800">{String(confirmedBooking.bookingId).slice(-8)}</span></p>
+                {confirmedBooking.bookingId && (
+                  <p className="text-xs font-bold text-slate-500 mt-1">ID: <span className="font-mono text-slate-800">{String(confirmedBooking.bookingId).slice(-8)}</span></p>
+                )}
               </div>
 
               <div className="rounded-[20px] bg-slate-50 p-4 text-left text-xs font-semibold text-slate-700 space-y-2 border border-slate-100">
@@ -410,9 +388,10 @@ export const AgentAirportCabBooking = () => {
                   <span className="text-base text-slate-900">₹{confirmedBooking.fare}</span>
                 </div>
                 <div className="flex justify-between font-black text-emerald-600">
-                  <span>Commission Credited:</span>
+                  <span>Est. Commission:</span>
                   <span className="text-base">+₹{confirmedBooking.commission}</span>
                 </div>
+                <p className="text-[10px] font-semibold text-slate-400">Commission is credited to your wallet when the trip is completed.</p>
               </div>
 
               <button

@@ -129,7 +129,7 @@ const BlinkingVehicleMarker = ({ marker, iconUrl }) => (
   </OverlayView>
 );
 
-const DRIVER_PLACEHOLDER = { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', eta: 2 };
+const DRIVER_PLACEHOLDER = { name: 'Captain', rating: '', vehicle: 'Taxi', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ACCEPTED: 'accepted', COMPLETING: 'completing' };
 const CONSUMED_SEARCH_NONCE_PREFIX = 'Yatra Desk_consumed_search_nonce:';
 const ACTIVE_SEARCH_NONCES = new Set();
@@ -137,7 +137,7 @@ const ACTIVE_SEARCH_NONCE_CLEANUPS = new Map();
 
 const normalizeDriver = (driver = {}) => ({
   name: driver.name || 'Captain',
-  rating: driver.rating || '4.9',
+  rating: driver.rating || 'New',
   vehicle: driver.vehicle || driver.vehicleType || driver.vehicle_type || 'Taxi',
   vehicleType: driver.vehicleType || driver.vehicle_type || driver.vehicle || 'Taxi',
   plate: driver.plate || driver.vehicleNumber || driver.vehicle_number || 'Assigned',
@@ -430,7 +430,7 @@ const SearchingDriver = () => {
         rideId: activeRideIdRef.current,
         otp: nextOtp,
         driver: nextDriver,
-        fare: rideSnapshot?.fare || routeState.fare || routeState.baseFare || routeState.vehicle?.price || 22,
+        fare: rideSnapshot?.fare ?? routeState.fare ?? routeState.baseFare ?? routeState.vehicle?.price ?? 0,
         vehicleIconUrl: rideSnapshot?.vehicleIconUrl || routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
         paymentMethod: routeState.paymentMethod || 'Cash',
         status: 'accepted',
@@ -451,7 +451,7 @@ const SearchingDriver = () => {
             rideId: activeRideIdRef.current,
             otp: nextOtp,
             driver: nextDriver,
-            fare: rideSnapshot?.fare || routeState.fare || routeState.baseFare || routeState.vehicle?.price || 22,
+            fare: rideSnapshot?.fare ?? routeState.fare ?? routeState.baseFare ?? routeState.vehicle?.price ?? 0,
             vehicleIconUrl: rideSnapshot?.vehicleIconUrl || routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
             paymentMethod: routeState.paymentMethod || 'Cash',
           },
@@ -631,11 +631,11 @@ const SearchingDriver = () => {
           : {};
 
         const response = await api.post('/rides', {
-          pickup: routeState.pickupCoords || [75.9048, 22.7039],
-          drop: routeState.dropCoords || [75.8937, 22.7533],
+          pickup: routeState.pickupCoords,
+          drop: routeState.dropCoords,
           pickupAddress: routeState.pickup || '',
           dropAddress: routeState.drop || '',
-          fare: routeState.baseFare || routeState.fare || routeState.vehicle?.price || 22,
+          fare: Number(routeState.baseFare || routeState.fare || routeState.vehicle?.price || 0),
           estimatedDistanceMeters: routeState.estimatedDistanceMeters || 0,
           estimatedDurationMinutes: routeState.estimatedDurationMinutes || 0,
           vehicleTypeId: selectedVehicleTypeId,
@@ -649,9 +649,10 @@ const SearchingDriver = () => {
           service_location_id: routeState.service_location_id || routeState.serviceLocationId || '',
           transport_type: routeState.transport_type || routeState.transportType || routeState.vehicle?.transportType || 'taxi',
           bookingMode: routeState.bookingMode || 'normal',
-          userMaxBidFare: routeState.userMaxBidFare || routeState.fare || routeState.vehicle?.price || 22,
+          userMaxBidFare: Number(routeState.userMaxBidFare || routeState.fare || routeState.vehicle?.price || 0),
           bidStepAmount: routeState.bidStepAmount || 10,
           scheduledAt: routeState.scheduledAt || null,
+          fareContext: routeState.fareContext || undefined,
         }, rideRequestConfig);
 
         if (disposed) {

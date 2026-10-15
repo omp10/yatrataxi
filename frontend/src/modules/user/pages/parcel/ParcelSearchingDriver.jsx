@@ -46,7 +46,7 @@ const unwrapLoginPayload = (response) => {
 };
 
 const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
-const DRIVER_PLACEHOLDER = { name: 'Delivery Captain', rating: '4.9', vehicle: 'Bike', plate: 'Assigned', phone: '', eta: 2 };
+const DRIVER_PLACEHOLDER = { name: 'Delivery Captain', rating: '', vehicle: 'Bike', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ACCEPTED: 'accepted' };
 const ACTIVE_DELIVERY_POLL_MS = 1500;
 const SEARCH_TIMEOUT_MS = 20000;
@@ -187,7 +187,7 @@ const BlinkingVehicleMarker = ({ marker, iconUrl }) => (
 
 const normalizeDriver = (driver = {}) => ({
   name: driver.name || 'Delivery Captain',
-  rating: driver.rating || '4.9',
+  rating: driver.rating || 'New',
   vehicle: driver.vehicle || driver.vehicleType || driver.vehicle_type || 'Bike',
   vehicleType: driver.vehicleType || driver.vehicle_type || driver.vehicle || 'Bike',
   plate: driver.plate || driver.vehicleNumber || driver.vehicle_number || 'Assigned',
@@ -621,8 +621,8 @@ const ParcelSearchingDriver = () => {
 
         const socket = socketService.connect({ role: 'user', token: userToken });
         const response = await api.post('/deliveries', {
-          pickup: resolvedPickupCoords || [75.9048, 22.7039],
-          drop: resolvedDropCoords || [75.8937, 22.7533],
+          pickup: resolvedPickupCoords,
+          drop: resolvedDropCoords,
           pickupAddress: routeState.pickup || '',
           dropAddress: routeState.drop || '',
           fare: routeState.fare ?? routeState.estimatedFare?.min ?? null,

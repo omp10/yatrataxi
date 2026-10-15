@@ -22,7 +22,9 @@ import {
   listRideBidsForUser,
   listRideHistoryForIdentity,
   resendRideOtp,
+  rideOtpVisibleTo,
   serializeRideRealtime,
+  withoutRideOtp,
   submitRideFeedback,
   updateRideLifecycle,
 } from '../../services/rideService.js';
@@ -35,6 +37,7 @@ import {
   startDispatchFlow,
 } from '../../services/dispatchService.js';
 import { getTipSettings } from '../../services/appSettingsService.js';
+import { claimGatewayPayment, releaseGatewayPayment } from '../../services/paymentCaptureService.js';
 import { Ride } from '../models/Ride.js';
 import { UserWallet } from '../models/UserWallet.js';
 
@@ -298,7 +301,7 @@ const razorpayRequest = async ({ method, path, body, keyId, keySecret }) => {
 };
 
 export const createRide = async (req, res) => {
-  const { pickup, drop, pickupAddress, dropAddress, fare, estimatedDistanceMeters, estimatedDurationMinutes, vehicleTypeId, vehicleTypeIds, vehicleIconType, vehicleIconUrl, paymentMethod, serviceType, intercity, promo_code, service_location_id, transport_type, scheduledAt, bookingMode, userMaxBidFare, bidStepAmount } =
+  const { pickup, drop, pickupAddress, dropAddress, fare, estimatedDistanceMeters, estimatedDurationMinutes, vehicleTypeId, vehicleTypeIds, vehicleIconType, vehicleIconUrl, paymentMethod, serviceType, intercity, promo_code, service_location_id, transport_type, scheduledAt, bookingMode, userMaxBidFare, bidStepAmount, fareContext } =
     req.body;
 
   if (!pickup || !drop) {
@@ -328,6 +331,7 @@ export const createRide = async (req, res) => {
     bookingMode,
     userMaxBidFare,
     bidStepAmount,
+    fareContext,
   });
 
   await startDispatchFlow(ride);
@@ -355,7 +359,7 @@ export const getRideById = async (req, res) => {
 
   res.json({
     success: true,
-    data: ride,
+    data: rideOtpVisibleTo(ride, req.auth.role),
   });
 };
 
@@ -367,7 +371,7 @@ export const getMyActiveRide = async (req, res) => {
 
   res.json({
     success: true,
-    data: ride ? serializeRideRealtime(ride) : null,
+    data: ride ? rideOtpVisibleTo(serializeRideRealtime(ride), req.auth.role) : null,
   });
 };
 
@@ -406,11 +410,12 @@ export const updateRideStatus = async (req, res) => {
     driverId: req.auth.sub,
     nextStatus,
     paymentMethod: req.body.paymentMethod,
+    otp: req.body.otp,
   });
 
   res.json({
     success: true,
-    data: serializeRideRealtime(ride),
+    data: withoutRideOtp(serializeRideRealtime(ride)),
   });
 };
 
@@ -421,10 +426,12 @@ export const resendRideOtpController = async (req, res) => {
     requestedById: req.auth.sub,
   });
 
+  // Only the passenger may see the PIN; the driver has to ask for it.
+  const { otp, ...publicResult } = result;
   res.json({
     success: true,
     message: 'OTP resent to passenger successfully',
-    data: result,
+    data: req.auth.role === 'user' ? result : publicResult,
   });
 };
 
@@ -561,6 +568,14 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
     throw new ApiError(400, 'Verified payment amount does not match the payable ride total');
   }
 
+  if (
+    String(order?.notes?.rideId || '') !== rideId
+    || String(order?.notes?.userId || '') !== String(req.auth.sub)
+    || String(order?.notes?.source || '') !== 'ride_completion'
+  ) {
+    throw new ApiError(400, 'This payment was not made for this ride');
+  }
+
   const existingWalletCredit = await WalletTransaction.findOne({
     driverId: ride.driverId,
     'metadata.providerPaymentId': paymentId,
@@ -574,6 +589,22 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
     String(ride.feedback?.tipPaymentId || '') !== paymentId
   ) {
     throw new ApiError(409, 'This ride completion payment was already processed');
+  }
+
+  const paymentClaim = {
+    provider: 'razorpay',
+    paymentId,
+    orderId,
+    purpose: 'ride_completion',
+    ownerType: 'ride',
+    ownerId: rideId,
+    amount: verifiedTotalCharge,
+  };
+  if (!(await claimGatewayPayment(paymentClaim))) {
+    return res.json({
+      success: true,
+      data: await getRideDetails(rideId),
+    });
   }
 
   const session = await mongoose.startSession();
@@ -623,6 +654,7 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
     });
   } catch (error) {
     await session.abortTransaction();
+    await releaseGatewayPayment(paymentClaim).catch(() => {});
     throw error;
   } finally {
     session.endSession();
@@ -871,8 +903,34 @@ export const verifyRazorpayRideTip = async (req, res) => {
     throw new ApiError(400, 'Verified tip amount does not match selected tip');
   }
 
+  if (
+    String(order?.notes?.rideId || '') !== rideId
+    || String(order?.notes?.userId || '') !== String(req.auth.sub)
+    || String(order?.notes?.kind || '') !== 'ride_tip'
+  ) {
+    throw new ApiError(400, 'This payment was not made for this ride tip');
+  }
+
+  const tipClaim = {
+    provider: 'razorpay',
+    paymentId,
+    orderId,
+    purpose: 'ride_tip',
+    ownerType: 'ride',
+    ownerId: rideId,
+    amount: verifiedTipAmount,
+  };
+  if (!(await claimGatewayPayment(tipClaim))) {
+    res.json({
+      success: true,
+      data: await getRideDetails(rideId),
+    });
+    return;
+  }
+
   const driver = await Driver.findById(ride.driverId);
   if (!driver) {
+    await releaseGatewayPayment(tipClaim).catch(() => {});
     throw new ApiError(404, 'Driver not found');
   }
 
