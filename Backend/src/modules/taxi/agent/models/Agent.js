@@ -142,6 +142,10 @@ const agentSchema = new mongoose.Schema(
         type: commissionRuleSchema,
         default: () => ({ enabled: true, type: 'percentage', value: 4 }),
       },
+      entertainment: {
+        type: commissionRuleSchema,
+        default: () => ({ enabled: false, type: 'percentage', value: 0 }),
+      },
     },
     kycStatus: {
       type: String,

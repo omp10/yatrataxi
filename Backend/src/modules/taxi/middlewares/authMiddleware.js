@@ -8,6 +8,7 @@ import { Agent } from '../agent/models/Agent.js';
 import { Driver } from '../driver/models/Driver.js';
 import { BusDriver } from '../driver/models/BusDriver.js';
 import { User } from '../user/models/User.js';
+import { VenuePartner } from '../entertainment/models/VenuePartner.js';
 import { verifyAccessToken } from '../services/tokenService.js';
 import {
   normalizeAdminPermissions,
@@ -24,6 +25,7 @@ const roleModelMap = {
   service_center_staff: ServiceCenterStaff,
   agent: Agent,
   user: User,
+  venue_partner: VenuePartner,
 };
 
 const normalizeRole = (role = '') => {
@@ -140,6 +142,13 @@ export const authenticate = (allowedRoles = [], options = {}) => async (req, _re
       (entity.active === false || String(entity.status || '').toLowerCase() === 'inactive')
     ) {
       throw new ApiError(403, 'Service center staff account is inactive');
+    }
+
+    if (
+      normalizedRole === 'venue_partner' &&
+      (entity.active === false || String(entity.status || '').toLowerCase() === 'inactive')
+    ) {
+      throw new ApiError(403, 'Venue partner account is inactive');
     }
 
     if (

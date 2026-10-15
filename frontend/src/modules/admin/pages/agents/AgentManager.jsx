@@ -3,6 +3,7 @@ import { ChevronRight, Eye, Plus, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
+import { AGENT_COMMISSION_RULES } from './agentCommissionRules';
 
 const emptyForm = {
   id: '',
@@ -15,12 +16,19 @@ const emptyForm = {
   kycStatus: 'pending',
   referralCode: '',
   notes: '',
-  commissionConfig: {
-    directRide: { enabled: true, type: 'percentage', value: 5 },
-    referredRide: { enabled: true, type: 'percentage', value: 3 },
-    intercity: { enabled: true, type: 'percentage', value: 6 },
-    bus: { enabled: true, type: 'percentage', value: 4 },
-  },
+  // Filled from the admin's saved commission defaults when the composer opens.
+  commissionConfig: {},
+};
+
+const blankRule = { enabled: false, type: 'percentage', value: 0 };
+const completeCommissionConfig = (config = {}) => AGENT_COMMISSION_RULES.reduce(
+  (acc, rule) => ({ ...acc, [rule.key]: { ...blankRule, ...(config?.[rule.key] || {}) } }),
+  {},
+);
+
+const loadDefaultCommissionConfig = async () => {
+  const response = await adminService.getAgentCommissionDefaults();
+  return completeCommissionConfig(response?.data?.data || response?.data || {});
 };
 
 const cardClass = 'rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm';
@@ -71,9 +79,15 @@ const AgentManager = () => {
     await loadAgents(search);
   };
 
-  const startCreate = () => {
-    setForm(emptyForm);
+  const startCreate = async () => {
+    setForm({ ...emptyForm, commissionConfig: completeCommissionConfig() });
     setIsComposerOpen(true);
+    try {
+      const commissionConfig = await loadDefaultCommissionConfig();
+      setForm((current) => (current.id ? current : { ...current, commissionConfig }));
+    } catch {
+      toast.error('Could not load the default commission rates');
+    }
   };
 
   const startEdit = (agent) => {
@@ -88,7 +102,7 @@ const AgentManager = () => {
       kycStatus: agent.kycStatus || 'pending',
       referralCode: agent.referralCode || '',
       notes: agent.notes || '',
-      commissionConfig: agent.commissionConfig || emptyForm.commissionConfig,
+      commissionConfig: completeCommissionConfig(agent.commissionConfig),
     });
     setIsComposerOpen(true);
   };
@@ -211,9 +225,9 @@ const AgentManager = () => {
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {Object.entries(form.commissionConfig).map(([key, value]) => (
+          {AGENT_COMMISSION_RULES.map(({ key, label }) => [key, label, form.commissionConfig[key] || blankRule]).map(([key, label, value]) => (
             <div key={key} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{key}</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
               <div className="mt-3 flex items-center gap-3">
                 <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
                   <input type="checkbox" checked={value.enabled} onChange={(event) => updateCommission(key, 'enabled', event.target.checked)} />

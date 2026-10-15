@@ -43,6 +43,7 @@ import {
   Users,
   Wallet,
   Zap,
+  Ticket as TicketIcon,
 } from 'lucide-react';
 
 const ADMIN_MODE = 'admin';
@@ -879,6 +880,17 @@ const AdminLayout = () => {
               { label: 'Fleet Manager', path: '/admin/bus-service', permission: 'bus_service.view' },
               { label: 'Bus Commission', path: '/admin/bus-service/commission', permission: 'bus_service.view' },
               { label: 'Bus Bookings', path: '/admin/bus-service/bookings', permission: 'bus_service.view' },
+            ],
+          },
+          {
+            icon: TicketIcon,
+            label: 'Entertainment',
+            subItems: [
+              { label: 'Venue Partners', path: '/admin/entertainment/partners', permission: 'entertainment.view' },
+              { label: 'Venues', path: '/admin/entertainment/venues', permission: 'entertainment.view' },
+              { label: 'Ticket Bookings', path: '/admin/entertainment/bookings', permission: 'entertainment.view' },
+              { label: 'Partner Payouts', path: '/admin/entertainment/payouts', permission: 'entertainment.view' },
+              { label: 'Settings', path: '/admin/entertainment/settings', permission: 'entertainment.view' },
             ],
           },
           {

@@ -24,7 +24,7 @@ const isDriverApproved = (driver) => {
     }
 
     const role = String(driver?.onboarding?.role || getStoredDriverRole() || 'driver').toLowerCase();
-    if (role === 'service_center' || role === 'service_center_staff' || role === 'bus_driver') {
+    if (role === 'service_center' || role === 'service_center_staff' || role === 'bus_driver' || role === 'venue_partner') {
         return driver.status !== 'inactive';
     }
 
@@ -93,6 +93,8 @@ const getAuthenticatedDriverHome = (pathname = '') => (
             ? '/taxi/driver/service-center'
         : getAuthenticatedRole() === 'bus_driver'
             ? '/taxi/driver/bus-home'
+        : getAuthenticatedRole() === 'venue_partner'
+            ? '/taxi/driver/venue-partner'
             : '/taxi/driver/home'
 );
 
@@ -107,10 +109,19 @@ const getPendingDriverRoute = (pathname = '', role = '') => {
         return '/taxi/driver/service-center';
     }
 
+    if (normalizedRole === 'venue_partner') {
+        return '/taxi/driver/venue-partner';
+    }
+
     return `${getPortalPrefix(pathname, normalizedRole === 'owner' ? 'owner' : 'driver')}/registration-status`;
 };
 const isBusConsoleRoute = (pathname = '') => pathname.startsWith('/taxi/driver/bus-home');
 const isServiceCenterRoute = (pathname = '') => pathname.startsWith('/taxi/driver/service-center');
+const isVenuePartnerRoute = (pathname = '') => pathname.startsWith('/taxi/driver/venue-partner');
+// Venue partners only use their own console; every other driver screen is off limits.
+const isRoleRouteMismatch = (pathname, role) => (
+    isVenuePartnerRoute(pathname) ? role !== 'venue_partner' : role === 'venue_partner'
+);
 const isPendingAllowedRoute = (pathname = '') =>
     [
         '/taxi/driver/documents',
@@ -179,6 +190,12 @@ const DriverLayout = () => {
             return;
         }
 
+        if (isRoleRouteMismatch(currentPath, authenticatedRole)) {
+            setIsAllowed(false);
+            navigate(authenticatedHome, { replace: true });
+            return;
+        }
+
         if (verifiedTokenRef.current === token && verifiedApprovalRef.current && isAllowed) {
             setIsChecking(false);
             return;
@@ -235,6 +252,11 @@ const DriverLayout = () => {
                     return;
                 }
 
+                if (isRoleRouteMismatch(currentPath, effectiveRole)) {
+                    navigate(getAuthenticatedDriverHome(currentPath), { replace: true });
+                    return;
+                }
+
                 if (softEntryRoutes.has(currentPath)) {
                     navigate(authenticatedHome, { replace: true });
                     return;
@@ -287,9 +309,14 @@ const DriverLayout = () => {
         };
     }, [isAllowed, location.pathname, location.state, navigate]);
 
+    // Don't mount another role's screen even briefly; the effect above redirects.
+    const blockedByRole = Boolean(getLocalDriverToken())
+        && !onboardingRoutes.has(location.pathname)
+        && isRoleRouteMismatch(location.pathname, getAuthenticatedRole());
+
     return (
         <div className="driver-theme min-h-screen">
-            {isChecking && !onboardingRoutes.has(location.pathname) ? (
+            {(isChecking || blockedByRole) && !onboardingRoutes.has(location.pathname) ? (
                 <div className="min-h-screen flex items-center justify-center bg-white">
                     <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
                 </div>

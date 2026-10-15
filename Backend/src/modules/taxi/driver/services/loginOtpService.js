@@ -7,6 +7,7 @@ import { ServiceCenterStaff } from '../../admin/models/ServiceCenterStaff.js';
 import { Driver } from '../models/Driver.js';
 import { BusDriver } from '../models/BusDriver.js';
 import { DriverLoginSession } from '../models/DriverLoginSession.js';
+import { VenuePartner } from '../../entertainment/models/VenuePartner.js';
 import { signAccessToken } from './authService.js';
 import { sendOtpSms } from '../../services/smsService.js';
 
@@ -51,6 +52,9 @@ const normalizeRole = (role) => {
   }
   if (normalized === 'bus_driver' || normalized === 'bus-driver' || normalized === 'busdriver') {
     return 'bus_driver';
+  }
+  if (normalized === 'venue_partner' || normalized === 'venue-partner' || normalized === 'venue') {
+    return 'venue_partner';
   }
   return 'driver';
 };
@@ -171,6 +175,15 @@ const publicBusDriverPayload = (driver) => ({
   destinationCity: driver.destinationCity || '',
 });
 
+const publicVenuePartnerPayload = (partner) => ({
+  id: partner._id,
+  name: partner.name || '',
+  businessName: partner.businessName || '',
+  phone: partner.phone || '',
+  email: partner.email || '',
+  status: partner.status || 'active',
+});
+
 const isApprovedDriver = (driver) =>
   Boolean(driver) &&
   driver.approve !== false &&
@@ -217,6 +230,8 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
         ? await ServiceCenterStaff.findOne({ phone: { $in: phoneCandidates } })
       : normalizedRole === 'bus_driver'
         ? await BusDriver.findOne({ phone: { $in: phoneCandidates } })
+      : normalizedRole === 'venue_partner'
+        ? await VenuePartner.findOne({ phone: { $in: phoneCandidates } })
         : await Driver.findOne({ phone: { $in: phoneCandidates } });
 
   if (!account) {
@@ -231,9 +246,15 @@ export const startDriverLoginOtp = async ({ phone, role = 'driver' }) => {
             ? 'Service center staff'
           : normalizedRole === 'bus_driver'
             ? 'Bus driver'
+          : normalizedRole === 'venue_partner'
+            ? 'Venue partner'
             : 'Driver'
       } account not found`,
     );
+  }
+
+  if (normalizedRole === 'venue_partner' && (account.active === false || account.status === 'inactive')) {
+    throw new ApiError(403, 'Venue partner account is inactive. Please contact the administrator.');
   }
 
   // Allow login even if account is pending approval to show registration status
@@ -324,6 +345,8 @@ export const verifyDriverLoginOtp = async ({ phone, otp }) => {
         ? await ServiceCenterStaff.findById(session.driverId)
       : normalizedRole === 'bus_driver'
         ? await BusDriver.findById(session.driverId)
+      : normalizedRole === 'venue_partner'
+        ? await VenuePartner.findById(session.driverId)
         : await Driver.findById(session.driverId);
 
   if (!account) {
@@ -367,7 +390,7 @@ export const verifyDriverLoginOtp = async ({ phone, otp }) => {
   //     );
   //   }
 
-  if (normalizedRole === 'bus_driver') {
+  if (normalizedRole === 'bus_driver' || normalizedRole === 'venue_partner') {
     account.lastLoginAt = new Date();
     await account.save();
   }
@@ -389,6 +412,8 @@ export const verifyDriverLoginOtp = async ({ phone, otp }) => {
             ? publicServiceCenterStaffPayload(account)
         : normalizedRole === 'bus_driver'
           ? publicBusDriverPayload(account)
+        : normalizedRole === 'venue_partner'
+          ? publicVenuePartnerPayload(account)
           : publicDriverPayload(account),
   };
 };

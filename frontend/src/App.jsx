@@ -89,6 +89,10 @@ const BusSeats = lazy(() => import('./modules/user/pages/bus/BusSeats'));
 const BusPreview = lazy(() => import('./modules/user/pages/bus/BusPreview'));
 const BusDetails = lazy(() => import('./modules/user/pages/bus/BusDetails'));
 const BusConfirm = lazy(() => import('./modules/user/pages/bus/BusConfirm'));
+const EntertainmentHome = lazy(() => import('./modules/user/pages/entertainment/EntertainmentHome'));
+const EntertainmentVenue = lazy(() => import('./modules/user/pages/entertainment/EntertainmentVenue'));
+const EntertainmentBookings = lazy(() => import('./modules/user/pages/entertainment/EntertainmentBookings'));
+const EntertainmentTicket = lazy(() => import('./modules/user/pages/entertainment/EntertainmentTicket'));
 
 // Phase 5 — Onboarding
 const Onboarding = lazy(() => import('./modules/user/pages/auth/Onboarding'));
@@ -138,6 +142,8 @@ const ActiveTrip = lazy(() => import('./modules/driver/pages/ActiveTrip'));
 const DriverWallet = lazy(() => import('./modules/driver/pages/DriverWallet'));
 const DriverProfile = lazy(() => import('./modules/driver/pages/DriverProfile'));
 const ServiceCenterDashboard = lazy(() => import('./modules/driver/pages/ServiceCenterDashboard'));
+const VenuePartnerConsole = lazy(() => import('./modules/driver/pages/venue-partner/VenuePartnerConsole'));
+const PartnerVenueEditor = lazy(() => import('./modules/driver/pages/venue-partner/PartnerVenueEditor'));
 const ServiceCenterVehicleDetails = lazy(() => import('./modules/driver/pages/ServiceCenterVehicleDetails'));
 const RideRequests = lazy(() => import('./modules/driver/pages/RideRequests'));
 const DriverIncentives = lazy(() => import('./modules/driver/pages/DriverIncentives'));
@@ -177,6 +183,9 @@ const AgentProfile = lazy(() => import('./modules/agent/pages/AgentProfile'));
 const AgentBusBooking = lazy(() => import('./modules/agent/pages/AgentBusBooking'));
 const AgentBusResults = lazy(() => import('./modules/agent/pages/AgentBusResults'));
 const AgentBusSeats = lazy(() => import('./modules/agent/pages/AgentBusSeats'));
+const AgentEntertainmentVenues = lazy(() => import('./modules/agent/pages/AgentEntertainmentVenues'));
+const AgentEntertainmentBooking = lazy(() => import('./modules/agent/pages/AgentEntertainmentBooking'));
+const AgentEntertainmentTicket = lazy(() => import('./modules/agent/pages/AgentEntertainmentTicket'));
 const AgentChooseService = lazy(() => import('./modules/agent/pages/AgentChooseService'));
 const AgentSharedTaxiBooking = lazy(() => import('./modules/agent/pages/AgentSharedTaxiBooking'));
 const AgentAirportCabBooking = lazy(() => import('./modules/agent/pages/AgentAirportCabBooking'));
@@ -263,6 +272,13 @@ const AdminBusServiceManager = lazy(() => import('./modules/admin/pages/bus-serv
 const AdminBusServiceDetails = lazy(() => import('./modules/admin/pages/bus-service/BusServiceDetails'));
 const AdminBusBookingManager = lazy(() => import('./modules/admin/pages/bus-service/BusBookingManager'));
 const AdminBusCommissionManager = lazy(() => import('./modules/admin/pages/bus-service/BusCommissionManager'));
+const AdminEntertainmentPartners = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentPartners'));
+const AdminEntertainmentPartnerDetail = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentPartnerDetail'));
+const AdminEntertainmentVenues = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentVenues'));
+const AdminEntertainmentVenueEdit = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentVenueEdit'));
+const AdminEntertainmentBookings = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentBookingsAdmin'));
+const AdminEntertainmentPayouts = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentPayouts'));
+const AdminEntertainmentSettings = lazy(() => import('./modules/admin/pages/entertainment/EntertainmentSettings'));
 const AdminPricingPlaceholder = ({ title }) => (
   <div className="flex flex-col items-center justify-center min-h-[500px] text-gray-400 bg-white rounded-[32px] border border-gray-100 shadow-sm p-10">
     <MapPin size={60} strokeWidth={1} className="mb-6 opacity-20" />
@@ -671,6 +687,8 @@ const DriverEntryRedirect = () => {
               ? '/taxi/driver/service-center'
             : role === 'bus_driver'
               ? '/taxi/driver/bus-home'
+            : role === 'venue_partner'
+              ? '/taxi/driver/venue-partner'
               : '/taxi/driver/home'
       }
       replace
@@ -975,6 +993,10 @@ function App() {
               <Route path="/taxi/user/bus/details" element={<BusPreview />} />
               <Route path="/taxi/user/bus/checkout" element={<BusDetails />} />
               <Route path="/taxi/user/bus/confirm" element={<BusConfirm />} />
+              <Route path="/taxi/user/entertainment" element={<EntertainmentHome />} />
+              <Route path="/taxi/user/entertainment/venue/:venueId" element={<EntertainmentVenue />} />
+              <Route path="/taxi/user/entertainment/bookings" element={<EntertainmentBookings />} />
+              <Route path="/taxi/user/entertainment/bookings/:bookingId" element={<EntertainmentTicket />} />
               <Route path="/taxi/user/tours" element={<ComingSoon />} />
 
               <Route path="/taxi/user/activity" element={<Activity />} />
@@ -1064,6 +1086,9 @@ function App() {
                 <Route path="wallet" element={<DriverWallet />} />
                 <Route path="profile" element={<DriverProfile />} />
                 <Route path="service-center" element={<ServiceCenterDashboard />} />
+                <Route path="venue-partner" element={<VenuePartnerConsole />} />
+                <Route path="venue-partner/venues/new" element={<PartnerVenueEditor />} />
+                <Route path="venue-partner/venues/:venueId" element={<PartnerVenueEditor />} />
                 <Route path="service-center/vehicles/new" element={<ServiceCenterVehicleDetails />} />
                 <Route path="service-center/vehicles/:vehicleId" element={<ServiceCenterVehicleDetails />} />
                 <Route path="history" element={<RideRequests />} />
@@ -1117,6 +1142,9 @@ function App() {
                   <Route path="book-bus" element={<AgentBusBooking />} />
                   <Route path="book-bus/results" element={<AgentBusResults />} />
                   <Route path="book-bus/seats" element={<AgentBusSeats />} />
+                  <Route path="book-entertainment" element={<AgentEntertainmentVenues />} />
+                  <Route path="book-entertainment/:venueId" element={<AgentEntertainmentBooking />} />
+                  <Route path="entertainment-tickets/:bookingId" element={<AgentEntertainmentTicket />} />
                 </Route>
               </Route>
 
@@ -1194,6 +1222,14 @@ function App() {
                 <Route path="bus-service/edit/:id" element={<AdminBusServiceManager mode="edit" />} />
                 <Route path="bus-service/commission" element={<AdminBusCommissionManager />} />
                 <Route path="bus-service/bookings" element={<AdminBusBookingManager />} />
+                <Route path="entertainment" element={<Navigate to="/admin/entertainment/partners" replace />} />
+                <Route path="entertainment/partners" element={<AdminEntertainmentPartners />} />
+                <Route path="entertainment/partners/:partnerId" element={<AdminEntertainmentPartnerDetail />} />
+                <Route path="entertainment/venues" element={<AdminEntertainmentVenues />} />
+                <Route path="entertainment/venues/:venueId" element={<AdminEntertainmentVenueEdit />} />
+                <Route path="entertainment/bookings" element={<AdminEntertainmentBookings />} />
+                <Route path="entertainment/payouts" element={<AdminEntertainmentPayouts />} />
+                <Route path="entertainment/settings" element={<AdminEntertainmentSettings />} />
                 <Route path="bus-service/:id" element={<AdminBusServiceDetails />} />
                 <Route path="pooling" element={<Navigate to="/admin/pooling/routes" replace />} />
                 <Route path="pooling/routes" element={<AdminPoolingManager />} />

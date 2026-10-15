@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, FileText,
   MapPin, Package, Wrench, Gift, QrCode, Trash2, Check, BusFront, 
-  Settings, CreditCard, Heart, Map, MessageSquare, History, Phone
+  Settings, CreditCard, Heart, Map, MessageSquare, History, Phone, Ticket
 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
 import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../services/authService';
@@ -44,6 +44,7 @@ const menuSections = [
       { icon: Gift, title: 'Refer & Earn', sub: 'Invite friends & get rewards', path: '/taxi/user/referral', bg: 'bg-rose-50', color: 'text-rose-600' },
       { icon: QrCode, title: 'Scan Agent QR', sub: 'Link your bookings to a travel agent', path: '/taxi/user/scan-agent', bg: 'bg-sky-50', color: 'text-sky-600' },
       { icon: BusFront, title: 'Bus Tickets', sub: 'Manage bus bookings', path: '/taxi/user/profile/bus-bookings', bg: 'bg-orange-50', color: 'text-orange-600' },
+      { icon: Ticket, title: 'Entertainment Tickets', sub: 'Waterparks, theme parks & more', path: '/taxi/user/entertainment/bookings', bg: 'bg-indigo-50', color: 'text-indigo-600' },
     ]
   },
   {

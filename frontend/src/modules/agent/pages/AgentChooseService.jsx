@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, ShieldCheck, Sparkles, Percent } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShieldCheck, Sparkles, Percent, Ticket } from 'lucide-react';
+import { formatCommissionRule, useAgentCommissionConfig } from '../hooks/useAgentCommission';
 
 import imgShared from '@/assets/3d images/AutoCab/taxi.png';
 import imgAirport from '@/assets/3d images/AutoCab/airoplan.png';
@@ -19,7 +20,7 @@ const services = [
     accent: 'bg-[linear-gradient(135deg,#F0FDF4_0%,#BBF7D0_100%)]',
     tag: '50% cheaper',
     tagColor: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    commission: '4% Commission',
+    commissionKey: 'pooling',
   },
   {
     id: 'airport',
@@ -30,7 +31,7 @@ const services = [
     accent: 'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]',
     tag: 'Fixed fare',
     tagColor: 'bg-blue-50 text-blue-600 border-blue-100',
-    commission: '5% Commission',
+    commissionKey: 'directRide',
   },
   {
     id: 'spiritual',
@@ -41,7 +42,7 @@ const services = [
     accent: 'bg-[linear-gradient(135deg,#FDF4FF_0%,#F3E8FF_100%)]',
     tag: 'Guided tours',
     tagColor: 'bg-purple-50 text-purple-600 border-purple-100',
-    commission: '5% Commission',
+    commissionKey: 'directRide',
   },
   {
     id: 'oneway',
@@ -52,7 +53,7 @@ const services = [
     accent: 'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]',
     tag: 'No return charge',
     tagColor: 'bg-orange-50 text-orange-600 border-orange-100',
-    commission: '6% Commission',
+    commissionKey: 'intercity',
   },
   {
     id: 'bus',
@@ -63,12 +64,24 @@ const services = [
     accent: 'bg-[linear-gradient(135deg,#FFF1F2_0%,#FECDD3_100%)]',
     tag: 'Sleeper & Seater',
     tagColor: 'bg-rose-50 text-rose-600 border-rose-100',
-    commission: '4% Commission',
+    commissionKey: 'bus',
+  },
+  {
+    id: 'entertainment',
+    title: 'Entertainment Tickets',
+    sub: 'Waterparks, theme parks & more',
+    Icon: Ticket,
+    path: '/taxi/agent/book-entertainment',
+    accent: 'bg-[linear-gradient(135deg,#EEF2FF_0%,#C7D2FE_100%)]',
+    tag: 'QR e-tickets',
+    tagColor: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    commissionKey: 'entertainment',
   },
 ];
 
 export const AgentChooseService = () => {
   const navigate = useNavigate();
+  const commissionConfig = useAgentCommissionConfig();
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto font-sans pb-16 relative overflow-hidden">
@@ -118,7 +131,7 @@ export const AgentChooseService = () => {
       <div className="px-5 pt-5 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">5 Services Available</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">{services.length} Services Available</p>
             <h2 className="text-[17px] font-black tracking-tight text-slate-900">What do you need?</h2>
           </div>
         </div>
@@ -137,11 +150,15 @@ export const AgentChooseService = () => {
               <div className="flex items-center gap-4">
                 {/* 3D Image preview */}
                 <div className={`relative h-16 w-16 shrink-0 rounded-[18px] p-2 flex items-center justify-center ${service.accent} shadow-inner`}>
-                  <img
-                    src={service.img}
-                    alt={service.title}
-                    className="h-full w-full object-contain drop-shadow transition-transform group-hover:scale-110 duration-200"
-                  />
+                  {service.img ? (
+                    <img
+                      src={service.img}
+                      alt={service.title}
+                      className="h-full w-full object-contain drop-shadow transition-transform group-hover:scale-110 duration-200"
+                    />
+                  ) : (
+                    <service.Icon size={30} className="text-indigo-600" />
+                  )}
                 </div>
 
                 {/* Details */}
@@ -154,12 +171,14 @@ export const AgentChooseService = () => {
                   </div>
                   <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{service.sub}</p>
 
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
-                      <Percent size={10} strokeWidth={3} />
-                      {service.commission}
-                    </span>
-                  </div>
+                  {formatCommissionRule(commissionConfig?.[service.commissionKey]) && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
+                        <Percent size={10} strokeWidth={3} />
+                        {formatCommissionRule(commissionConfig[service.commissionKey])}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Arrow */}

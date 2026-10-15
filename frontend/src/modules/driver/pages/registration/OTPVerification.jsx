@@ -21,6 +21,7 @@ const normalizeDriverRole = (role) => {
     if (normalized === 'service_center' || normalized === 'service-center' || normalized === 'servicecenter') return 'service_center';
     if (normalized === 'service_center_staff' || normalized === 'service-center-staff' || normalized === 'servicecenterstaff') return 'service_center_staff';
     if (normalized === 'bus_driver' || normalized === 'bus-driver' || normalized === 'busdriver') return 'bus_driver';
+    if (normalized === 'venue_partner' || normalized === 'venue-partner' || normalized === 'venue') return 'venue_partner';
     return 'driver';
 };
 
@@ -40,6 +41,7 @@ const getPostLoginRoute = (role, driver, routePrefix) => {
     const normalizedRole = normalizeDriverRole(role);
     if (normalizedRole === 'service_center' || normalizedRole === 'service_center_staff') return '/taxi/driver/service-center';
     if (normalizedRole === 'bus_driver') return '/taxi/driver/bus-home';
+    if (normalizedRole === 'venue_partner') return '/taxi/driver/venue-partner';
     if (normalizedRole === 'owner' || normalizedRole === 'driver') {
         return isDriverApproved(driver)
             ? normalizedRole === 'owner' ? '/taxi/owner/home' : '/taxi/driver/home'

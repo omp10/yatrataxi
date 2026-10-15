@@ -112,6 +112,8 @@ const AgentHome = () => {
             { label: 'Bus seats from customer referrals', key: 'referralBuses', unit: 'booking(s)' },
             { label: 'Pooling booked by you', key: 'directPooling', unit: 'booking(s)' },
             { label: 'Pooling from customer referrals', key: 'referralPooling', unit: 'booking(s)' },
+            { label: 'Entertainment tickets sold by you', key: 'directEntertainment', unit: 'booking(s)' },
+            { label: 'Entertainment from customer referrals', key: 'referralEntertainment', unit: 'booking(s)' },
             { label: 'Sub-agent recruitment bonuses', key: 'referralBonuses', unit: 'bonus reward(s)' },
             { label: 'Sub-agent override commission', key: 'overrideCommission', unit: 'override reward(s)' },
           ].map((item) => {

@@ -17,6 +17,7 @@ import { BusService } from '../../admin/models/BusService.js';
 import { BusSeatHold } from '../../user/models/BusSeatHold.js';
 import { BusBooking } from '../../user/models/BusBooking.js';
 import { PoolingBooking } from '../../admin/models/PoolingBooking.js';
+import { EntertainmentBooking } from '../../entertainment/models/EntertainmentBooking.js';
 import { PoolingRoute } from '../../admin/models/PoolingRoute.js';
 import { Airport } from '../../admin/models/Airport.js';
 import { User } from '../../user/models/User.js';
@@ -160,7 +161,7 @@ const serializeCustomer = (user = {}) => ({
   referralCode: user.referralCode || '',
 });
 
-const resolveOrCreateCustomer = async ({ agent, customer = {}, session = null }) => {
+export const resolveOrCreateCustomer = async ({ agent, customer = {}, session = null }) => {
   const phone = normalizePhone(customer.phone);
   const name = toCleanString(customer.name) || 'Walk-in Customer';
   const email = normalizeEmail(customer.email);
@@ -1013,10 +1014,34 @@ const summariseAgentCommission = async (agentId) => {
     bookings: { $sum: 1 },
   };
 
-  const [rideRows, busRows, poolRows, wallet] = await Promise.all([
+  const [rideRows, busRows, poolRows, entertainmentRows, wallet] = await Promise.all([
     Ride.aggregate([{ $match: { ...baseMatch, status: { $ne: 'cancelled' } } }, { $group: group }]),
     BusBooking.aggregate([{ $match: { ...baseMatch, status: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: group }]),
     PoolingBooking.aggregate([{ $match: { ...poolBaseMatch, bookingStatus: { $ne: 'cancelled' }, 'agentMeta.commissionReversed': { $ne: true } } }, { $group: poolGroup }]),
+    // Entertainment commission always names the agent on the booking. A cancelled
+    // booking keeps the share of commission matching the part that was not refunded.
+    EntertainmentBooking.aggregate([
+      { $match: { 'agentMeta.bookedByAgentId': agentObjectId, status: { $in: ['confirmed', 'cancelled'] }, 'agentMeta.commissionAmount': { $gt: 0 } } },
+      {
+        $project: {
+          mode: { $cond: [{ $eq: ['$agentMeta.commissionMode', 'referral'] }, 'referral', 'direct'] },
+          confirmed: { $cond: [{ $eq: ['$status', 'confirmed'] }, 1, 0] },
+          netCommission: {
+            $cond: [
+              { $eq: ['$status', 'cancelled'] },
+              {
+                $multiply: [
+                  '$agentMeta.commissionAmount',
+                  { $max: [0, { $subtract: [1, { $divide: ['$cancellation.refundAmount', { $max: ['$amount', 1] }] }] }] },
+                ],
+              },
+              '$agentMeta.commissionAmount',
+            ],
+          },
+        },
+      },
+      { $group: { _id: '$mode', commission: { $sum: '$netCommission' }, bookings: { $sum: '$confirmed' } } },
+    ]),
     AgentWallet.findOne({ agentId: agentObjectId }).lean(),
   ]);
 
@@ -1039,12 +1064,15 @@ const summariseAgentCommission = async (agentId) => {
     referralBuses: pick(busRows, 'referral'),
     directPooling: pick(poolRows, 'direct'),
     referralPooling: pick(poolRows, 'referral'),
+    directEntertainment: pick(entertainmentRows, 'direct'),
+    referralEntertainment: pick(entertainmentRows, 'referral'),
     referralBonuses: { commission: referralBonusAmount, bookings: referralBonusTxs.length },
     overrideCommission: { commission: overrideCommissionAmount, bookings: overrideCommissionTxs.length },
   };
 
   const customerReferralCommission = roundMoney(
     channels.referralRides.commission + channels.referralBuses.commission + channels.referralPooling.commission
+    + channels.referralEntertainment.commission
   );
   const totalReferralEarnings = roundMoney(
     customerReferralCommission + referralBonusAmount + overrideCommissionAmount
@@ -1053,6 +1081,7 @@ const summariseAgentCommission = async (agentId) => {
     channels.directRides.commission +
     channels.directBuses.commission +
     channels.directPooling.commission +
+    channels.directEntertainment.commission +
     totalReferralEarnings
   );
   const totalBookings =
@@ -1061,7 +1090,9 @@ const summariseAgentCommission = async (agentId) => {
     channels.directBuses.bookings +
     channels.referralBuses.bookings +
     channels.directPooling.bookings +
-    channels.referralPooling.bookings;
+    channels.referralPooling.bookings +
+    channels.directEntertainment.bookings +
+    channels.referralEntertainment.bookings;
 
   return {
     channels,

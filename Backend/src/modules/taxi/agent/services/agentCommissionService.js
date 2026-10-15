@@ -6,7 +6,7 @@ import { DEFAULT_AGENT_REFERRAL_SETTINGS } from '../../admin/services/adminServi
 
 const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 
-export const AGENT_COMMISSION_KEYS = ['directRide', 'referredRide', 'intercity', 'bus', 'pooling'];
+export const AGENT_COMMISSION_KEYS = ['directRide', 'referredRide', 'intercity', 'bus', 'pooling', 'entertainment'];
 
 const FALLBACK_AGENT_COMMISSION = {
   directRide: { enabled: true, type: 'percentage', value: 5 },
@@ -14,6 +14,8 @@ const FALLBACK_AGENT_COMMISSION = {
   intercity: { enabled: true, type: 'percentage', value: 6 },
   bus: { enabled: true, type: 'percentage', value: 4 },
   pooling: { enabled: true, type: 'percentage', value: 4 },
+  // Off until the admin sets a rate for entertainment ticket sales.
+  entertainment: { enabled: false, type: 'percentage', value: 0 },
 };
 
 const normalizeCommissionRule = (rule = {}) => ({
@@ -108,6 +110,8 @@ export const creditAgentCommission = async ({
   const commissionKey =
     normalizedBookingType === 'bus'
       ? 'bus'
+      : normalizedBookingType === 'entertainment'
+        ? 'entertainment'
       : normalizedBookingType === 'pooling'
         ? 'pooling'
         : normalizedBookingType === 'intercity'
@@ -145,7 +149,7 @@ export const creditAgentCommission = async ({
 
   if (result) {
     const metricsUpdate = {};
-    if (normalizedBookingType === 'bus' || normalizedBookingType === 'pooling') {
+    if (['bus', 'pooling', 'entertainment'].includes(normalizedBookingType)) {
       metricsUpdate[normalizedMode === 'referral' ? 'metrics.referredBusBookings' : 'metrics.directBusBookings'] = 1;
     } else {
       metricsUpdate[normalizedMode === 'referral' ? 'metrics.referredRideBookings' : 'metrics.directRideBookings'] = 1;
@@ -287,7 +291,7 @@ export const revertAgentCommission = async ({
 
   if (result) {
     const metricsUpdate = {};
-    if (normalizedBookingType === 'bus' || normalizedBookingType === 'pooling') {
+    if (['bus', 'pooling', 'entertainment'].includes(normalizedBookingType)) {
       const metricKey = normalizedMode === 'referral' ? 'metrics.referredBusBookings' : 'metrics.directBusBookings';
       if (Number(agent.metrics?.[normalizedMode === 'referral' ? 'referredBusBookings' : 'directBusBookings'] || 0) > 0) {
         metricsUpdate[metricKey] = -1;

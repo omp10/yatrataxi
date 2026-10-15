@@ -21,6 +21,7 @@ export const getServiceModulePath = (module = {}) => {
   const name = normalizeValue(module.name);
   const identity = `${transportType} ${serviceType} ${iconType} ${name}`;
 
+  if (serviceType === 'entertainment' || identity.includes('entertainment')) return '/taxi/user/entertainment';
   if (identity.includes('delivery') || identity.includes('parcel')) return '/taxi/user/parcel/type';
   if (serviceType === 'rental' || identity.includes('rental')) return '/taxi/user/rental';
   if (serviceType === 'outstation' || identity.includes('outstation') || identity.includes('intercity')) return '/taxi/user/intercity';
@@ -60,6 +61,7 @@ export const getServiceModulePath = (module = {}) => {
 export const getServiceModuleButtonText = (module = {}) => {
   const identity = `${normalizeValue(module.transport_type)} ${normalizeValue(module.service_type)} ${normalizeValue(module.icon_type)} ${normalizeValue(module.name)}`;
   if (identity.includes('delivery') || identity.includes('parcel')) return 'Send Now';
+  if (identity.includes('entertainment')) return 'Book Tickets';
   if (identity.includes('rental')) return 'Rent Now';
   if (identity.includes('bus')) return 'Book Bus';
   if (

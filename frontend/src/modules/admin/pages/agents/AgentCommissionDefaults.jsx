@@ -2,17 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { ChevronRight, Percent, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
+import { AGENT_COMMISSION_RULES } from './agentCommissionRules';
 
 const cardClass = 'rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm';
 const inputClass = 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:border-slate-900';
 
-const RULES = [
-  { key: 'directRide', label: 'Agent-booked taxi ride', hint: 'Agent books a local taxi ride for a walk-in customer.' },
-  { key: 'referredRide', label: 'Referred taxi ride', hint: 'Customer books a taxi themselves after scanning the agent QR.' },
-  { key: 'intercity', label: 'Intercity trip', hint: 'One-way or return outstation trips.' },
-  { key: 'bus', label: 'Mini bus seat', hint: 'Per-seat bookings on fixed mini bus routes.' },
-  { key: 'pooling', label: 'Car pooling seat', hint: 'Shared taxi seats on pooling routes.' },
-];
+const RULES = AGENT_COMMISSION_RULES;
 
 const emptyRule = { enabled: true, type: 'percentage', value: 0 };
 

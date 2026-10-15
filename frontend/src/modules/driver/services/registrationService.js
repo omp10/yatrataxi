@@ -2,7 +2,7 @@ import api from "../../../shared/api/axiosInstance";
 
 const STORAGE_KEY = "driverRegistrationSession";
 const DRIVER_AUTH_KEYS = ["token", "driverToken", "driverInfo", "role", "driverRole", "chatRole"];
-const DRIVER_PORTAL_ROLES = ["driver", "owner", "bus_driver", "service_center", "service_center_staff"];
+const DRIVER_PORTAL_ROLES = ["driver", "owner", "bus_driver", "service_center", "service_center_staff", "venue_partner"];
 const readSessionValue = (key) => {
   try {
     return sessionStorage.getItem(key) || "";
@@ -87,6 +87,9 @@ export const normalizeDriverPortalRole = (role) => {
   }
   if (normalized === "bus_driver" || normalized === "bus-driver" || normalized === "busdriver") {
     return "bus_driver";
+  }
+  if (normalized === "venue_partner" || normalized === "venue-partner" || normalized === "venue") {
+    return "venue_partner";
   }
 
   return "driver";

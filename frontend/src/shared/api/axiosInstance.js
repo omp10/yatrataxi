@@ -74,6 +74,7 @@ const DRIVER_PORTAL_ROLES = new Set([
   'bus_driver',
   'service_center',
   'service_center_staff',
+  'venue_partner',
 ]);
 
 const getSessionItem = (key) => {

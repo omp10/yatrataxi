@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { applyGatewayPaymentOnce } from "../../services/paymentCaptureService.js";
+import { VenuePartner } from "../../entertainment/models/VenuePartner.js";
 import mongoose from "mongoose";
 import QRCode from "qrcode";
 import { Env, StandardCheckoutClient, StandardCheckoutPayRequest } from "@phonepe-pg/pg-sdk-node";
@@ -2666,7 +2667,25 @@ export const goOnline = async (req, res) => {
   });
 };
 
+const serializeVenuePartnerSession = (partner) => ({
+  id: String(partner._id),
+  _id: String(partner._id),
+  name: partner.name || "",
+  businessName: partner.businessName || "",
+  phone: partner.phone || "",
+  email: partner.email || "",
+  role: "venue_partner",
+  status: partner.status || "active",
+  approve: true,
+  onboarding: { role: "venue_partner" },
+});
+
 export const getCurrentDriver = async (req, res) => {
+  if (String(req.auth?.role || "").toLowerCase() === "venue_partner") {
+    res.json({ success: true, data: serializeVenuePartnerSession(req.auth.entity) });
+    return;
+  }
+
   if (String(req.auth?.role || "").toLowerCase() === "service_center_staff") {
     const access = await resolveAuthenticatedServiceCenterAccess(req);
 
@@ -2965,6 +2984,7 @@ const DRIVER_PUSH_ROLE_MODEL_MAP = {
   bus_driver: BusDriver,
   service_center: ServiceStore,
   service_center_staff: ServiceCenterStaff,
+  venue_partner: VenuePartner,
 };
 
 const resolvePushTokenEntityForRole = async (req) => {
@@ -6466,6 +6486,7 @@ export const getDriverApprovalStatus = async (req, res) => {
       "bus_driver",
       "service_center",
       "service_center_staff",
+      "venue_partner",
     ].includes(normalizedRole)
   ) {
     throw new ApiError(403, "Insufficient permissions for this resource");
@@ -6477,6 +6498,15 @@ export const getDriverApprovalStatus = async (req, res) => {
   );
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
+
+  if (normalizedRole === "venue_partner") {
+    const partner = await VenuePartner.findById(payload.sub).lean();
+    if (!partner || partner.active === false || partner.status === "inactive") {
+      throw new ApiError(403, "Venue partner account is inactive");
+    }
+    res.json({ success: true, data: serializeVenuePartnerSession(partner) });
+    return;
+  }
 
   if (normalizedRole === "service_center_staff") {
     const access = await resolveAuthenticatedServiceCenterAccess({

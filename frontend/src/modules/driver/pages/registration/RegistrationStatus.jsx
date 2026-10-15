@@ -57,6 +57,10 @@ const getPortalHomeRoute = (role = "") => {
     return "/taxi/driver/bus-home";
   }
 
+  if (normalizedRole === "venue_partner") {
+    return "/taxi/driver/venue-partner";
+  }
+
   if (
     normalizedRole === "service_center" ||
     normalizedRole === "service_center_staff"
@@ -146,7 +150,8 @@ const RegistrationStatus = () => {
       if (
         authenticatedRole === "bus_driver" ||
         authenticatedRole === "service_center" ||
-        authenticatedRole === "service_center_staff"
+        authenticatedRole === "service_center_staff" ||
+        authenticatedRole === "venue_partner"
       ) {
         navigate(getPortalHomeRoute(authenticatedRole), { replace: true });
         requestInFlightRef.current = false;
