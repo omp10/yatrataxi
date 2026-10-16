@@ -405,14 +405,19 @@ const IncomingRideRequest = ({
                   </button>
                   {isBidding ? (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-3 gap-2">
-                        {bidOptions.slice(0, 6).map((bidValue) => (
+                      {/* Every step from the lowest to the rider's limit; scrolls when there are many. */}
+                      <div className="grid max-h-[92px] grid-cols-3 gap-2 overflow-y-auto pr-0.5">
+                        {bidOptions.map((bidValue) => (
                           <button
                             key={bidValue}
                             type="button"
                             onClick={() => onSubmitBid?.(bidValue)}
                             disabled={isAccepting}
-                            className="rounded-[14px] border border-orange-200 bg-orange-50 px-2 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-orange-600 disabled:opacity-60"
+                            className={`rounded-[14px] border px-2 py-2 text-[10px] font-black uppercase tracking-[0.1em] disabled:opacity-60 ${
+                              bidValue === bidBaseFare
+                                ? 'border-orange-500 bg-orange-100 text-orange-700'
+                                : 'border-orange-200 bg-orange-50 text-orange-600'
+                            }`}
                           >
                             Rs {bidValue}
                           </button>
@@ -424,7 +429,7 @@ const IncomingRideRequest = ({
                         disabled={isAccepting}
                         className={`flex h-[58px] w-full items-center justify-center rounded-[18px] ${accentClass} px-5 text-[13px] font-black uppercase tracking-[0.16em] ${isParcel || isIntercity ? 'text-slate-950' : 'text-white'} shadow-[0_14px_30px_rgba(37,99,235,0.28)] transition-all active:scale-95 disabled:opacity-70`}
                       >
-                        {isAccepting ? 'Submitting...' : 'Send Bid'}
+                        {isAccepting ? 'Submitting...' : `Send Bid · Rs ${bidBaseFare}`}
                       </button>
                     </div>
                   ) : (

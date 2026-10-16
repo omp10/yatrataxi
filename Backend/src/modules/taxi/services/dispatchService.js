@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Ride } from '../user/models/Ride.js';
+import { RideBid } from '../user/models/RideBid.js';
 import { User } from '../user/models/User.js';
 import { UserWallet } from '../user/models/UserWallet.js';
 import { Driver } from '../driver/models/Driver.js';
@@ -718,6 +719,10 @@ export const markDriverRejectedFromDispatch = (rideId, driverId) => {
   saveDispatchState(rideId, { rejectedDriverIds });
 };
 
+// Bids on a ride that is cancelled or expired must not stay "pending" forever.
+const closeOpenRideBids = (rideId, status, session = null) =>
+  RideBid.updateMany({ rideId, status: 'pending' }, { status }, session ? { session } : {});
+
 const closeRideAsUnmatched = async (rideId) => {
   const dispatchState = getDispatchState(rideId);
   const ride = await Ride.findOneAndUpdate(
@@ -733,6 +738,8 @@ const closeRideAsUnmatched = async (rideId) => {
   if (!ride) {
     return;
   }
+
+  await closeOpenRideBids(ride._id, 'expired');
 
   if (ride.deliveryId) {
     await Delivery.findByIdAndUpdate(ride.deliveryId, {
@@ -783,6 +790,7 @@ export const cancelRideByAdmin = async (rideId) => {
     ride.biddingStatus = 'cancelled';
   }
   await ride.save();
+  await closeOpenRideBids(ride._id, 'cancelled');
 
   if (ride.deliveryId) {
     await Delivery.findByIdAndUpdate(ride.deliveryId, {
@@ -858,6 +866,7 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
       ride.biddingStatus = 'cancelled';
     }
     await ride.save({ session });
+    await closeOpenRideBids(ride._id, 'cancelled', session);
 
     if (ride.deliveryId) {
       await Delivery.findByIdAndUpdate(ride.deliveryId, {
@@ -977,6 +986,7 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
       ride.biddingStatus = 'cancelled';
     }
     await ride.save({ session });
+    await closeOpenRideBids(ride._id, 'cancelled', session);
 
     if (ride.deliveryId) {
       await Delivery.findByIdAndUpdate(ride.deliveryId, {
@@ -1074,12 +1084,15 @@ const scheduleNextAttempt = (rideId, nextAttemptIndex, retryDelayMs) => {
   saveDispatchState(rideId, { timer });
 };
 
-const getAttemptRadiusMeters = (baseDistanceMeters, attemptIndex) => {
+const getAttemptRadiusMeters = (baseDistanceMeters, attemptIndex, capMeters = 0) => {
   const safeBaseDistance = Math.max(1000, Number(baseDistanceMeters) || 0);
   const growthMultiplier = Math.min(1 + (Math.max(0, attemptIndex) * 0.5), 3);
+  const radius = Math.round(safeBaseDistance * growthMultiplier);
 
-  return Math.round(safeBaseDistance * growthMultiplier);
+  return capMeters > 0 ? Math.min(radius, capMeters) : radius;
 };
+
+const isDriverBidRide = (ride) => ride?.pricingNegotiationMode === 'driver_bid';
 
 const dispatchAttempt = async (rideId, attemptIndex = 0) => {
   const ride = await Ride.findById(rideId).populate('userId', 'name phone countryCode');
@@ -1090,10 +1103,12 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
   }
 
   try {
-    const dispatchConfig = await resolveTransportDispatchConfig();
+    const driverBidRide = isDriverBidRide(ride);
+    const dispatchConfig = await resolveTransportDispatchConfig({ bidding: driverBidRide });
     const radius = getAttemptRadiusMeters(
       dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
       attemptIndex,
+      dispatchConfig.biddingMaxDistanceMeters,
     );
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const dispatchState = getDispatchState(rideId);
@@ -1154,10 +1169,26 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
 
     if (attemptIndex >= dispatchConfig.maxAttempts - 1) {
       // Final attempt waits one more cycle before the ride is closed as unmatched.
+      const closeAfterSearch = async () => {
+        // Bids are waiting for the rider: give them the admin's decision time before closing.
+        if (driverBidRide && dispatchConfig.biddingDecisionMs > 0 && await RideBid.exists({ rideId, status: 'pending' })) {
+          const decisionTimer = setTimeout(() => {
+            closeRideAsUnmatched(rideId)
+              .catch((error) => console.error('Failed to mark ride unmatched', error))
+              .finally(() => stopDispatchFlow(rideId));
+          }, dispatchConfig.biddingDecisionMs);
+          saveDispatchState(rideId, { timer: decisionTimer });
+          return;
+        }
+
+        await closeRideAsUnmatched(rideId);
+        stopDispatchFlow(rideId);
+      };
       const timer = setTimeout(() => {
-        closeRideAsUnmatched(rideId)
-          .catch((error) => console.error('Failed to mark ride unmatched', error))
-          .finally(() => stopDispatchFlow(rideId));
+        closeAfterSearch().catch((error) => {
+          console.error('Failed to mark ride unmatched', error);
+          stopDispatchFlow(rideId);
+        });
       }, dispatchConfig.retryDelayMs);
 
         saveDispatchState(rideId, {
@@ -1261,11 +1292,12 @@ export const notifyLateAvailableDriver = async (driverId) => {
       continue;
     }
 
-    const dispatchConfig = await resolveTransportDispatchConfig();
+    const dispatchConfig = await resolveTransportDispatchConfig({ bidding: isDriverBidRide(ride) });
     const attemptIndex = Number.isInteger(dispatchState.radiusIndex) ? dispatchState.radiusIndex : 0;
     const radius = getAttemptRadiusMeters(
       dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
       attemptIndex,
+      dispatchConfig.biddingMaxDistanceMeters,
     );
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const { zone, drivers, searchRadiusMeters } = await matchDrivers(ride.pickupLocation.coordinates, {

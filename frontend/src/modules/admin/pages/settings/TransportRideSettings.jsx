@@ -119,7 +119,7 @@ const TransportRideSettings = () => {
                  </div>
 
                  <InputField 
-                    label="Maximum Waiting Time For User to Accept/Reject Bidding Ride in Seconds" 
+                    label="Outstation Bids: Seconds The Rider Has To Choose A Bid After The Search Ends" 
                     name="maximum_time_for_accept_reject_bidding_ride" 
                     value={settings.maximum_time_for_accept_reject_bidding_ride} 
                     onChange={handleChange} 
@@ -127,7 +127,7 @@ const TransportRideSettings = () => {
                  />
 
                  <InputField 
-                    label="Maximum Time For Accept/Reject drivers for Bidding Ride In Seconds" 
+                    label="Outstation Bids: Seconds To Collect Driver Bids (Search Time)" 
                     name="maximum_time_for_find_drivers_for_bitting_ride" 
                     value={settings.maximum_time_for_find_drivers_for_bitting_ride} 
                     onChange={handleChange} 
@@ -151,7 +151,7 @@ const TransportRideSettings = () => {
                  />
 
                  <InputField 
-                    label="Bidding Ride Maximum Distance" 
+                    label="Outstation Bids: Farthest Driver Distance In KM" 
                     name="bidding_ride_maximum_distance" 
                     value={settings.bidding_ride_maximum_distance} 
                     onChange={handleChange} 
