@@ -10,6 +10,7 @@ import {
   cancelBooking,
   createBookingOrder,
   expireStaleHolds,
+  getEntertainmentSettings,
   getSlotAvailability,
   normalizeVisitDate,
   serializeBooking,
@@ -56,8 +57,10 @@ export const getBookableVenueDetail = async (venueId, visitDateInput) => {
   const visitDate = visitDateInput ? normalizeVisitDate(visitDateInput) : todayIst();
   await expireStaleHolds();
   const category = await VenueCategory.findById(venue.categoryId).select('name').lean();
+  const { gstPercent } = await getEntertainmentSettings();
   return {
     ...serializeVenue(venue, { category }),
+    gstPercent,
     visitDate,
     slots: await getSlotAvailability(venue, visitDate),
   };

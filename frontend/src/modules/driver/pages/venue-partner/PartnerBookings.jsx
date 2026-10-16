@@ -82,7 +82,7 @@ const PartnerBookings = () => {
             <p className="mt-2 text-xs font-semibold text-slate-600">{b.venue?.name} · {b.visitDate} · {b.slot?.label} ({b.slot?.startTime}-{b.slot?.endTime})</p>
             <p className="mt-1 text-xs font-semibold text-slate-600">{(b.items || []).map((i) => `${i.name} × ${i.quantity}`).join(', ')}</p>
             <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-xs font-bold">
-              <span className="text-slate-500">Paid {money(b.amount)} · Commission {money(b.commissionAmount)}</span>
+              <span className="text-slate-500">Tickets {money(b.subtotal ?? b.amount)} · Commission {money(b.commissionAmount)}</span>
               <span className="text-emerald-600">You earn {money(b.status === 'cancelled' ? b.partnerEarning - (b.partnerEarning * ((b.cancellation?.refundAmount || 0) / (b.amount || 1))) : b.partnerEarning)}</span>
             </div>
           </div>

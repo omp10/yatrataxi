@@ -358,6 +358,50 @@ try {
   r = await call('GET', '/drivers/venue/wallet', { token: partnerT });
   check(r.data?.transactions?.some((t) => t.type === 'withdrawal'), 'wallet history shows the payout');
 
+  console.log('== GST on tickets ==');
+  r = await call('PUT', '/admin/entertainment/settings', { token: adminT, body: { holdMinutes: 15, gstPercent: 18, gstin: '27AAPFU0939F1ZV', refundRules: [{ label: '24h+ before', hoursBeforeVisit: 24, refundType: 'percentage', refundValue: 100 }, { label: '2-24h before', hoursBeforeVisit: 2, refundType: 'percentage', refundValue: 50 }] } });
+  check(r.status === 200 && r.data?.gstPercent === 18, 'admin sets 18% GST', `${r.status} ${r.message}`);
+  r = await call('PUT', '/admin/entertainment/settings', { token: adminT, body: { gstPercent: 150, refundRules: [] } });
+  check(r.status === 400, 'GST above 100% rejected', r.status);
+  r = await call('PUT', '/admin/entertainment/settings', { token: adminT, body: { gstPercent: 18, gstin: 'BADGSTIN', refundRules: [] } });
+  check(r.status === 400, 'invalid GSTIN rejected', r.status);
+  r = await call('GET', `/users/entertainment/venues/${venueId}?visitDate=${weekday}`, { token: userT });
+  check(r.data?.gstPercent === 18, 'customer venue page carries the GST rate', r.data?.gstPercent);
+
+  // 2 adult @1000 weekday = 2000 subtotal; GST 360; total 2360; commission 15% of 2000 = 300; partner 1700
+  const gstBalanceBefore = (await VenuePartner.findById(partnerId).lean()).wallet.balance;
+  r = await call('POST', '/users/entertainment/bookings/order', { token: userT, body: { venueId, visitDate: weekday, slotId: 'evening', items: [{ ticketTypeId: 'adult', quantity: 2 }] } });
+  const g1 = r.data?.booking;
+  check(r.status === 201 && g1?.subtotal === 2000 && g1?.gstAmount === 360 && g1?.amount === 2360 && g1?.gstPercent === 18, 'order = Rs2000 + 18% GST Rs360 = Rs2360', JSON.stringify(g1));
+  check(orders.get(r.data?.razorpayOrder?.id)?.amount === 236000, 'customer is charged the GST-inclusive Rs2360 at the gateway');
+  const gstOrderId = (await EntertainmentBooking.findById(g1.id).lean()).payment.orderId;
+  r = await call('POST', '/users/entertainment/bookings/verify', { token: userT, body: pay(gstOrderId) });
+  const gstBooking = await EntertainmentBooking.findById(g1.id).lean();
+  const gstBalanceAfter = (await VenuePartner.findById(partnerId).lean()).wallet.balance;
+  check(r.status === 200 && near(gstBooking.commissionAmount, 300) && near(gstBooking.partnerEarning, 1700), 'commission 15% is on Rs2000 (not on GST): Rs300 / partner Rs1700', JSON.stringify({ c: gstBooking.commissionAmount, p: gstBooking.partnerEarning }));
+  check(near(gstBalanceAfter - gstBalanceBefore, 1700), 'partner wallet gets Rs1700; GST never reaches the partner', `${gstBalanceBefore} -> ${gstBalanceAfter}`);
+  check(near(gstBooking.amount - gstBooking.commissionAmount - gstBooking.partnerEarning, 360), 'platform keeps GST Rs360 on top of its commission', JSON.stringify(gstBooking));
+  r = await call('GET', `/users/entertainment/bookings/${g1.id}`, { token: userT });
+  check(r.data?.subtotal === 2000 && r.data?.gstAmount === 360 && r.data?.cancellationQuote?.refundAmount === 2360, 'customer sees the breakdown; 24h+ refund returns tickets and GST (Rs2360)', JSON.stringify({ s: r.data?.subtotal, g: r.data?.gstAmount, q: r.data?.cancellationQuote }));
+  r = await call('POST', `/users/entertainment/bookings/${g1.id}/cancel`, { token: userT, body: {} });
+  const gstBalanceCancelled = (await VenuePartner.findById(partnerId).lean()).wallet.balance;
+  check(r.status === 200 && r.data?.cancellation?.refundAmount === 2360 && near(gstBalanceCancelled, gstBalanceBefore), 'full refund Rs2360; partner Rs1700 reversed', `${r.status} ${JSON.stringify(r.data?.cancellation)} ${gstBalanceCancelled}`);
+  const agentBefore = (await AgentWallet.findOne({ agentId: agent._id }).lean()).balance;
+  r = await call('POST', '/agents/entertainment/bookings/order', { token: agentT, body: { venueId, visitDate: weekday, slotId: 'evening', items: [{ ticketTypeId: 'child', quantity: 2 }], customer: { name: 'Walk GST', phone: `65${st}01` } } });
+  check(r.status === 201 && r.data?.booking?.amount === 1180 && r.data?.booking?.subtotal === 1000, 'agent order Rs1000 + Rs180 GST', JSON.stringify(r.data?.booking));
+  const gstAgentOrder = await EntertainmentBooking.findById(r.data.booking.id).lean();
+  made.users.push(gstAgentOrder.userId);
+  await call('POST', '/agents/entertainment/bookings/verify', { token: agentT, body: pay(gstAgentOrder.payment.orderId) });
+  const agentAfter = (await AgentWallet.findOne({ agentId: agent._id }).lean()).balance;
+  check(near(agentAfter - agentBefore, 50), 'agent commission 5% is on Rs1000 ticket value = Rs50 (GST excluded)', `${agentBefore} -> ${agentAfter}`);
+  r = await call('GET', `/admin/entertainment/bookings?partnerId=${partnerId}`, { token: adminT });
+  check(r.status === 200 && r.data?.summary?.gst > 0, 'admin summary reports GST collected', JSON.stringify(r.data?.summary));
+  r = await call('GET', '/drivers/venue/dashboard', { token: partnerT });
+  const dashSales = r.data?.totals?.sales;
+  const subSum = (await EntertainmentBooking.aggregate([{ $match: { partnerId: new mongoose.Types.ObjectId(partnerId), status: 'confirmed' } }, { $group: { _id: null, s: { $sum: { $ifNull: ['$subtotal', '$amount'] } } } }]))[0]?.s;
+  check(near(dashSales, subSum), 'partner dashboard sales exclude GST', `${dashSales} vs ${subSum}`);
+  await call('PUT', '/admin/entertainment/settings', { token: adminT, body: { holdMinutes: 15, gstPercent: 0, refundRules: [{ label: '24h+ before', hoursBeforeVisit: 24, refundType: 'percentage', refundValue: 100 }] } });
+
   console.log('\n== admin reporting ==');
   r = await call('GET', `/admin/entertainment/bookings?partnerId=${partnerId}`, { token: adminT });
   const confirmedSum = (await EntertainmentBooking.aggregate([{ $match: { partnerId: new mongoose.Types.ObjectId(partnerId), status: 'confirmed' } }, { $group: { _id: null, s: { $sum: '$amount' } } }]))[0]?.s;

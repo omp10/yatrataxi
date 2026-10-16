@@ -25,7 +25,7 @@ const CancelModal = ({ booking, onClose, onDone }) => {
     <Modal title={`Cancel ${booking.bookingCode}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <p className="text-sm font-semibold text-slate-600">
-          The customer gets a full refund of {money(booking.amount)}. The partner's earning ({money(booking.partnerEarning)})
+          The customer gets a full refund of {money(booking.amount)}{booking.gstAmount > 0 ? ` (including GST ${money(booking.gstAmount)})` : ''}. The partner's earning ({money(booking.partnerEarning)})
           {booking.agentCommission > 0 ? ` and the agent's commission (${money(booking.agentCommission)})` : ''} will be taken back.
         </p>
         <div><label className={labelClass}>Reason</label><textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={inputClass} /></div>
@@ -75,8 +75,9 @@ const EntertainmentBookingsAdmin = () => {
     <div className="p-6">
       <PageHeader title="Ticket Bookings" subtitle="All paid entertainment bookings. Totals cover confirmed bookings matching the filters." />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Sales" value={money(summary.sales)} sub={`${summary.tickets || 0} tickets · ${summary.bookings || 0} bookings`} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Collected (incl. GST)" value={money(summary.sales)} sub={`${summary.tickets || 0} tickets · ${summary.bookings || 0} bookings`} />
+        <StatCard label="GST collected" value={money(summary.gst)} sub="Kept by the platform" tone="text-indigo-600" />
         <StatCard label="Platform commission" value={money(summary.commission)} tone="text-emerald-600" />
         <StatCard label="Partner earnings" value={money(summary.partnerEarnings)} />
         <StatCard label="Agent commission" value={money(summary.agentCommission)} sub="Paid by the platform" />
@@ -118,7 +119,7 @@ const EntertainmentBookingsAdmin = () => {
               <thead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <tr>
                   <th className="py-2 pr-4">Booking</th><th className="py-2 pr-4">Customer</th><th className="py-2 pr-4">Venue & visit</th>
-                  <th className="py-2 pr-4 text-right">Paid</th><th className="py-2 pr-4 text-right">Commission</th><th className="py-2 pr-4 text-right">Partner</th>
+                  <th className="py-2 pr-4 text-right">Paid (incl. GST)</th><th className="py-2 pr-4 text-right">Commission</th><th className="py-2 pr-4 text-right">Partner</th>
                   <th className="py-2 pr-4">Status</th><th className="py-2" />
                 </tr>
               </thead>
@@ -130,7 +131,7 @@ const EntertainmentBookingsAdmin = () => {
                       <td className="py-3 pr-4"><p className="font-mono text-xs font-black">{b.bookingCode}</p><p className="text-[11px] font-semibold text-slate-500">{formatDate(b.createdAt)}{b.bookingSource === 'agent' ? ' · agent' : ''}</p></td>
                       <td className="py-3 pr-4"><p className="font-bold">{b.customer?.name || '-'}</p><p className="text-xs font-semibold text-slate-500">{b.customer?.phone}</p></td>
                       <td className="py-3 pr-4"><p className="font-bold">{b.venue?.name}</p><p className="text-xs font-semibold text-slate-500">{b.visitDate} · {b.slot?.label} · {b.totalTickets} ticket(s)</p></td>
-                      <td className="py-3 pr-4 text-right font-black">{money(b.amount)}</td>
+                      <td className="py-3 pr-4 text-right font-black">{money(b.amount)}{b.gstAmount > 0 && <span className="block text-[10px] font-semibold text-slate-400">tickets {money(b.subtotal)} + GST {money(b.gstAmount)}</span>}</td>
                       <td className="py-3 pr-4 text-right font-bold text-emerald-600">{money(b.commissionAmount)}<span className="block text-[10px] text-slate-400">{b.commissionPercent}%</span></td>
                       <td className="py-3 pr-4 text-right font-bold">{money(b.partnerEarning)}</td>
                       <td className="py-3 pr-4">

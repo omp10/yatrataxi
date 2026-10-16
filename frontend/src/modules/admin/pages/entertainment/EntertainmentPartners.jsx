@@ -99,7 +99,7 @@ const EntertainmentPartners = () => {
       {overview && (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Ticket sales" value={money(overview.sales)} sub={`${overview.tickets} tickets · ${overview.bookings} bookings`} />
-          <StatCard label="Platform commission" value={money(overview.commission)} tone="text-emerald-600" />
+          <StatCard label="Platform commission" value={money(overview.commission)} sub={`+ GST ${money(overview.gst)}`} tone="text-emerald-600" />
           <StatCard label="Partner earnings" value={money(overview.partnerEarnings)} />
           <StatCard
             label="Pending payouts"

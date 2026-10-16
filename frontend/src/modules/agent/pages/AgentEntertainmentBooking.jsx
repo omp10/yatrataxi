@@ -6,6 +6,7 @@ import { AgentCustomerForm } from '../components/AgentCustomerForm';
 import { estimateAgentCommission, formatCommissionRule, useAgentCommissionRule } from '../hooks/useAgentCommission';
 import VenueTicketPicker from '../../shared/components/entertainment/VenueTicketPicker';
 import { useVenueSelection } from '../../shared/components/entertainment/useVenueSelection';
+import PriceSummary from '../../shared/components/entertainment/PriceSummary';
 import { openRazorpayCheckout } from '../../../shared/utils/razorpayCheckout';
 
 const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -91,12 +92,15 @@ const AgentEntertainmentBooking = () => {
       </div>
 
       <div className="fixed bottom-0 left-1/2 z-30 w-full max-w-lg -translate-x-1/2 border-t border-slate-200 bg-white px-5 py-4">
+        {selection.totalTickets > 0 && selection.gstAmount > 0 && (
+          <PriceSummary className="mb-3" subtotal={selection.subtotal} gstPercent={selection.gstPercent} gstAmount={selection.gstAmount} total={selection.total} />
+        )}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold text-slate-500">{selection.totalTickets} ticket(s)</p>
+            <p className="text-xs font-semibold text-slate-500">{selection.totalTickets} ticket(s){selection.gstAmount > 0 ? ' incl. GST' : ''}</p>
             <p className="text-xl font-black text-slate-900">{money(selection.total)}</p>
-            {commissionLabel && selection.total > 0 && (
-              <p className="text-[11px] font-black text-emerald-600">You earn ~{money(estimateAgentCommission(selection.total, commissionRule))}</p>
+            {commissionLabel && selection.subtotal > 0 && (
+              <p className="text-[11px] font-black text-emerald-600">You earn ~{money(estimateAgentCommission(selection.subtotal, commissionRule))} (on ticket price)</p>
             )}
           </div>
           <button type="button" onClick={handlePay} disabled={!canPay} className="rounded-2xl bg-[#143a5a] px-6 py-3 text-sm font-black text-white disabled:opacity-40">

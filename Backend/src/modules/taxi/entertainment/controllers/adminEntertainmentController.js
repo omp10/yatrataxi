@@ -146,7 +146,7 @@ export const getPartner = async (req, res) => {
     VenuePartnerWalletTransaction.find({ partnerId: partner._id }).sort({ createdAt: -1 }).limit(50).lean(),
     EntertainmentBooking.aggregate([
       { $match: { partnerId: partner._id, status: 'confirmed' } },
-      { $group: { _id: null, bookings: { $sum: 1 }, tickets: { $sum: '$totalTickets' }, sales: { $sum: '$amount' }, commission: { $sum: '$commissionAmount' }, earnings: { $sum: '$partnerEarning' } } },
+      { $group: { _id: null, bookings: { $sum: 1 }, tickets: { $sum: '$totalTickets' }, sales: { $sum: '$amount' }, gst: { $sum: '$gstAmount' }, commission: { $sum: '$commissionAmount' }, earnings: { $sum: '$partnerEarning' } } },
     ]),
   ]);
   res.json({
@@ -159,6 +159,7 @@ export const getPartner = async (req, res) => {
         bookings: stats[0]?.bookings || 0,
         tickets: stats[0]?.tickets || 0,
         sales: roundMoney(stats[0]?.sales),
+        gst: roundMoney(stats[0]?.gst),
         commission: roundMoney(stats[0]?.commission),
         earnings: roundMoney(stats[0]?.earnings),
       },
@@ -275,6 +276,7 @@ export const listBookings = async (req, res) => {
           bookings: { $sum: 1 },
           tickets: { $sum: '$totalTickets' },
           sales: { $sum: '$amount' },
+          gst: { $sum: '$gstAmount' },
           commission: { $sum: '$commissionAmount' },
           partnerEarnings: { $sum: '$partnerEarning' },
           agentCommission: { $sum: '$agentMeta.commissionAmount' },
@@ -294,6 +296,7 @@ export const listBookings = async (req, res) => {
         bookings: s.bookings || 0,
         tickets: s.tickets || 0,
         sales: roundMoney(s.sales),
+        gst: roundMoney(s.gst),
         commission: roundMoney(s.commission),
         partnerEarnings: roundMoney(s.partnerEarnings),
         agentCommission: roundMoney(s.agentCommission),
@@ -400,7 +403,7 @@ export const getOverview = async (_req, res) => {
     Venue.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     EntertainmentBooking.aggregate([
       { $match: { status: 'confirmed' } },
-      { $group: { _id: null, bookings: { $sum: 1 }, tickets: { $sum: '$totalTickets' }, sales: { $sum: '$amount' }, commission: { $sum: '$commissionAmount' }, partnerEarnings: { $sum: '$partnerEarning' } } },
+      { $group: { _id: null, bookings: { $sum: 1 }, tickets: { $sum: '$totalTickets' }, sales: { $sum: '$amount' }, gst: { $sum: '$gstAmount' }, commission: { $sum: '$commissionAmount' }, partnerEarnings: { $sum: '$partnerEarning' } } },
     ]),
     VenuePartnerWithdrawalRequest.aggregate([{ $match: { status: 'pending' } }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$amount' } } }]),
   ]);
@@ -412,6 +415,7 @@ export const getOverview = async (_req, res) => {
       bookings: money[0]?.bookings || 0,
       tickets: money[0]?.tickets || 0,
       sales: roundMoney(money[0]?.sales),
+      gst: roundMoney(money[0]?.gst),
       commission: roundMoney(money[0]?.commission),
       partnerEarnings: roundMoney(money[0]?.partnerEarnings),
       pendingWithdrawals: { count: pendingWithdrawals[0]?.count || 0, amount: roundMoney(pendingWithdrawals[0]?.amount) },

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, MapPin, Loader2, CheckCircle2, XCircle, Star } from 'lucide-react';
+import PriceSummary from '../../../shared/components/entertainment/PriceSummary';
 import { entertainmentService } from '../../services/entertainmentService';
 import { STATUS_STYLES, formatVisitDate } from './ticketFormat';
 
@@ -122,10 +123,8 @@ const EntertainmentTicket = () => {
               <span className="font-bold text-slate-900">{money(item.amount)}</span>
             </div>
           ))}
-          <div className="flex justify-between border-t border-slate-100 pt-2 text-base">
-            <span className="font-black text-slate-900">Paid</span>
-            <span className="font-black text-slate-900">{money(booking.amount)}</span>
-          </div>
+          <PriceSummary subtotal={booking.subtotal} gstPercent={booking.gstPercent} gstAmount={booking.gstAmount} total={booking.amount} className="border-t border-slate-100 pt-2" />
+          <p className="text-[11px] font-semibold text-slate-400">Total paid, inclusive of GST</p>
           {booking.cancellation && (
             <div className="rounded-2xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
               <p className="flex items-center gap-1.5 font-black"><XCircle size={14} />Cancelled</p>

@@ -33,6 +33,13 @@ export const buildDateOptions = (venue, limit = 21) => {
   return options;
 };
 
+// Preview only; the server prices every order. GST is on top of the ticket price.
+export const priceWithGst = (subtotal, gstPercent) => {
+  const rate = Math.max(0, Number(gstPercent) || 0);
+  const gstAmount = Math.round(subtotal * rate) / 100;
+  return { subtotal, gstPercent: rate, gstAmount, total: Math.round((subtotal + gstAmount) * 100) / 100 };
+};
+
 export const summarizeSelection = (venue, visitDate, quantities) => {
   const items = (venue?.ticketTypes || [])
     .filter((ticket) => (quantities[ticket.id] || 0) > 0)
@@ -40,7 +47,7 @@ export const summarizeSelection = (venue, visitDate, quantities) => {
   return {
     items: items.map(({ ticketTypeId, quantity }) => ({ ticketTypeId, quantity })),
     totalTickets: items.reduce((sum, item) => sum + item.quantity, 0),
-    total: items.reduce((sum, item) => sum + item.amount, 0),
+    ...priceWithGst(items.reduce((sum, item) => sum + item.amount, 0), venue?.gstPercent),
   };
 };
 

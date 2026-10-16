@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, Star, Loader2, Info } from 'lucide-react';
 import { entertainmentService } from '../../services/entertainmentService';
 import VenueTicketPicker from '../../../shared/components/entertainment/VenueTicketPicker';
 import { useVenueSelection } from '../../../shared/components/entertainment/useVenueSelection';
+import PriceSummary from '../../../shared/components/entertainment/PriceSummary';
 import { openRazorpayCheckout } from '../../../../shared/utils/razorpayCheckout';
 
 const readUserInfo = () => {
@@ -98,9 +99,12 @@ const EntertainmentVenue = () => {
       </div>
 
       <div className="fixed bottom-0 left-1/2 w-full max-w-lg -translate-x-1/2 border-t border-slate-200 bg-white px-5 py-4">
+        {selection.totalTickets > 0 && selection.gstAmount > 0 && (
+          <PriceSummary className="mb-3" subtotal={selection.subtotal} gstPercent={selection.gstPercent} gstAmount={selection.gstAmount} total={selection.total} />
+        )}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold text-slate-500">{selection.totalTickets} ticket(s)</p>
+            <p className="text-xs font-semibold text-slate-500">{selection.totalTickets} ticket(s){selection.gstAmount > 0 ? ' incl. GST' : ''}</p>
             <p className="text-xl font-black text-slate-900">₹{selection.total.toLocaleString('en-IN')}</p>
           </div>
           <button

@@ -64,11 +64,18 @@ const normalizeRefundRule = (rule = {}, index = 0) => {
   };
 };
 
+const normalizeGstPercent = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.min(100, roundMoney(number)) : 0;
+};
+
 export const getEntertainmentSettings = async () => {
   const doc = await AdminBusinessSetting.findOne({ scope: 'default' }).select('entertainment').lean();
   const stored = doc?.entertainment || {};
   return {
     holdMinutes: Math.min(60, Math.max(5, Number(stored.holdMinutes) || DEFAULT_HOLD_MINUTES)),
+    gstPercent: normalizeGstPercent(stored.gstPercent),
+    gstin: toCleanString(stored.gstin).toUpperCase(),
     // Sorted from the earliest cancellation (most hours before) to the latest.
     refundRules: (Array.isArray(stored.refundRules) ? stored.refundRules : [])
       .map(normalizeRefundRule)
@@ -83,8 +90,17 @@ export const saveEntertainmentSettings = async (payload = {}) => {
       throw new ApiError(400, 'A percentage refund cannot exceed 100%');
     }
   }
+  if (payload.gstPercent !== undefined && payload.gstPercent !== '' && !(Number(payload.gstPercent) >= 0 && Number(payload.gstPercent) <= 100)) {
+    throw new ApiError(400, 'GST must be between 0 and 100%');
+  }
+  const gstin = toCleanString(payload.gstin).toUpperCase();
+  if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+    throw new ApiError(400, 'Enter a valid 15-character GSTIN');
+  }
   const next = {
     holdMinutes: Math.min(60, Math.max(5, Number(payload.holdMinutes) || DEFAULT_HOLD_MINUTES)),
+    gstPercent: normalizeGstPercent(payload.gstPercent),
+    gstin,
     refundRules,
   };
   await AdminBusinessSetting.updateOne({ scope: 'default' }, { $set: { entertainment: next } }, { upsert: true });
@@ -250,7 +266,7 @@ export const getSlotAvailability = async (venue, visitDate) => {
 };
 
 // Prices a basket from the venue's current price list. Client prices are ignored.
-export const quoteTickets = ({ venue, partner, visitDate, slotId, items }) => {
+export const quoteTickets = ({ venue, partner, visitDate, slotId, items, gstPercent = 0 }) => {
   assertBookableDate(venue, visitDate);
   const slot = (venue.timeSlots || []).find((item) => item.id === slotId && item.active);
   if (!slot) throw new ApiError(400, 'Choose an available time slot');
@@ -278,18 +294,23 @@ export const quoteTickets = ({ venue, partner, visitDate, slotId, items }) => {
   if (totalTickets < 1) throw new ApiError(400, 'Select at least one ticket');
   if (totalTickets > MAX_TICKETS_PER_BOOKING) throw new ApiError(400, `A booking can have at most ${MAX_TICKETS_PER_BOOKING} tickets`);
 
-  const amount = roundMoney(lines.reduce((sum, line) => sum + line.amount, 0));
+  const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.amount, 0));
+  const gstRate = normalizeGstPercent(gstPercent);
+  const gstAmount = roundMoney((subtotal * gstRate) / 100);
   const commissionPercent = resolveCommissionPercent(venue, partner);
-  const commissionAmount = roundMoney((amount * commissionPercent) / 100);
+  const commissionAmount = roundMoney((subtotal * commissionPercent) / 100);
 
   return {
     slot,
     items: lines,
     totalTickets,
-    amount,
+    subtotal,
+    gstPercent: gstRate,
+    gstAmount,
+    amount: roundMoney(subtotal + gstAmount),
     commissionPercent,
     commissionAmount,
-    partnerEarning: roundMoney(amount - commissionAmount),
+    partnerEarning: roundMoney(subtotal - commissionAmount),
     isWeekendPricing: weekend,
   };
 };
@@ -379,8 +400,8 @@ export const createBookingOrder = async ({ userId, customer = {}, venueId, visit
   await expireStaleHolds();
   const normalizedDate = normalizeVisitDate(visitDate);
   const { venue, partner } = await loadBookableVenue(venueId);
-  const quote = quoteTickets({ venue, partner, visitDate: normalizedDate, slotId: toCleanString(slotId), items });
   const settings = await getEntertainmentSettings();
+  const quote = quoteTickets({ venue, partner, visitDate: normalizedDate, slotId: toCleanString(slotId), items, gstPercent: settings.gstPercent });
   const category = await VenueCategory.findById(venue.categoryId).select('name').lean();
   const user = await User.findById(userId).select('name phone email referredByAgent').lean();
   if (!user) throw new ApiError(404, 'Customer not found');
@@ -414,6 +435,9 @@ export const createBookingOrder = async ({ userId, customer = {}, venueId, visit
       slotEndTime: quote.slot.endTime,
       items: quote.items,
       totalTickets: quote.totalTickets,
+      subtotal: quote.subtotal,
+      gstPercent: quote.gstPercent,
+      gstAmount: quote.gstAmount,
       amount: quote.amount,
       commissionPercent: quote.commissionPercent,
       commissionAmount: quote.commissionAmount,
@@ -460,7 +484,7 @@ const settleConfirmedBooking = async (booking) => {
     title: `Ticket sale ${booking.bookingCode}`,
     bookingId: booking._id,
     referenceKey: `ent:sale:${booking._id}`,
-    metadata: { amount: booking.amount, commissionAmount: booking.commissionAmount },
+    metadata: { amount: booking.amount, subtotal: booking.subtotal ?? booking.amount, gstAmount: booking.gstAmount || 0, commissionAmount: booking.commissionAmount },
   });
   if (partnerCredit) {
     await EntertainmentBooking.updateOne({ _id: booking._id }, { $set: { partnerCreditedAt: new Date() } });
@@ -472,7 +496,7 @@ const settleConfirmedBooking = async (booking) => {
       agentId,
       bookingType: 'entertainment',
       commissionMode: booking.agentMeta.commissionMode || 'direct',
-      grossAmount: booking.amount,
+      grossAmount: booking.subtotal ?? booking.amount,
       referenceKey: `agent:entertainment:${booking._id}`,
       title: `Ticket commission ${booking.bookingCode}`,
       metadata: { bookingId: String(booking._id), bookingCode: booking.bookingCode },
@@ -738,6 +762,9 @@ export const serializeBooking = (booking, { includeMoney = false } = {}) => {
     slot: { id: b.slotId, label: b.slotLabel, startTime: b.slotStartTime, endTime: b.slotEndTime },
     items: b.items,
     totalTickets: b.totalTickets,
+    subtotal: b.subtotal ?? roundMoney(b.amount - (b.gstAmount || 0)),
+    gstPercent: b.gstPercent || 0,
+    gstAmount: b.gstAmount || 0,
     amount: b.amount,
     currency: b.currency,
     customer: b.customer,

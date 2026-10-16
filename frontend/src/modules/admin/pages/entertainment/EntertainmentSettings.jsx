@@ -99,6 +99,8 @@ const BookingRules = () => {
     try {
       const payload = {
         holdMinutes: Number(settings.holdMinutes),
+        gstPercent: Number(settings.gstPercent) || 0,
+        gstin: settings.gstin || '',
         refundRules: settings.refundRules.map((rule) => ({ ...rule, hoursBeforeVisit: Number(rule.hoursBeforeVisit), refundValue: Number(rule.refundValue) })),
       };
       setSettings(unwrap(await api.saveSettings(payload), settings));
@@ -118,6 +120,21 @@ const BookingRules = () => {
     <div className={cardClass}>
       <p className="text-sm font-black text-slate-900">Booking & cancellation rules</p>
       <p className="mb-4 text-xs font-semibold text-slate-500">Apply to every venue. Admin cancellations from the bookings page always refund in full.</p>
+
+      <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>GST on tickets (%)</label>
+          <input type="number" min="0" max="100" step="0.01" value={settings.gstPercent ?? 0} onChange={(e) => setSettings({ ...settings, gstPercent: e.target.value })} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Your GSTIN (optional)</label>
+          <input maxLength={15} value={settings.gstin || ''} onChange={(e) => setSettings({ ...settings, gstin: e.target.value.toUpperCase() })} placeholder="27AAPFU0939F1ZV" className={inputClass} />
+        </div>
+        <p className="sm:col-span-2 text-[11px] font-semibold text-slate-500">
+          GST is added on top of the ticket price and collected by the platform; it is not shared with partners or agents.
+          Commission is worked out on the ticket price only. Refunds return GST in the same proportion. Applies to new bookings; set 0 to turn GST off.
+        </p>
+      </div>
 
       <div className="mb-5 max-w-xs">
         <label className={labelClass}>Seat hold while paying (minutes)</label>

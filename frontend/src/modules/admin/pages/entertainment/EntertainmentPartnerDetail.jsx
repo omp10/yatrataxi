@@ -40,7 +40,7 @@ const EntertainmentPartnerDetail = () => {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Wallet balance" value={money(partner.wallet?.balance)} sub={`Paid out ${money(partner.wallet?.lifetimePaidOut)}`} tone="text-emerald-600" />
         <StatCard label="Ticket sales" value={money(partner.stats?.sales)} sub={`${partner.stats?.tickets || 0} tickets · ${partner.stats?.bookings || 0} bookings`} />
-        <StatCard label="Platform commission" value={money(partner.stats?.commission)} sub={`Default rate ${partner.commissionPercent}%`} />
+        <StatCard label="Platform commission" value={money(partner.stats?.commission)} sub={`Default rate ${partner.commissionPercent}% · GST ${money(partner.stats?.gst)}`} />
         <StatCard label="Partner earnings" value={money(partner.stats?.earnings)} sub={`Status: ${partner.status}`} />
       </div>
 

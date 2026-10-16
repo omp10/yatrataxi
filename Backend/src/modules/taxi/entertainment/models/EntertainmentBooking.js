@@ -37,6 +37,11 @@ const entertainmentBookingSchema = new mongoose.Schema(
     slotEndTime: { type: String, default: '' },
     items: { type: [bookingItemSchema], default: [] },
     totalTickets: { type: Number, required: true, min: 1 },
+    // `amount` is what the customer paid (tickets + GST). GST belongs to the platform;
+    // commission and the partner's earning are worked out on `subtotal` only.
+    subtotal: { type: Number, default: null, min: 0 },
+    gstPercent: { type: Number, default: 0 },
+    gstAmount: { type: Number, default: 0 },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: 'INR' },
     // Money split, fixed at booking time.

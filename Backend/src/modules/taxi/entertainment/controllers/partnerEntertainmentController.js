@@ -87,7 +87,7 @@ export const getDashboard = async (req, res) => {
           _id: '$status',
           bookings: { $sum: 1 },
           tickets: { $sum: '$totalTickets' },
-          sales: { $sum: '$amount' },
+          sales: { $sum: { $ifNull: ['$subtotal', '$amount'] } },
           earnings: { $sum: '$partnerEarning' },
           refunds: { $sum: '$cancellation.refundAmount' },
         },
@@ -98,7 +98,7 @@ export const getDashboard = async (req, res) => {
       {
         $group: {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$payment.paidAt', timezone: '+05:30' } },
-          sales: { $sum: '$amount' },
+          sales: { $sum: { $ifNull: ['$subtotal', '$amount'] } },
           earnings: { $sum: '$partnerEarning' },
           tickets: { $sum: '$totalTickets' },
         },

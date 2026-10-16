@@ -60,6 +60,9 @@ const AgentEntertainmentTicket = () => {
           {(booking.items || []).map((item) => (
             <div key={item.ticketTypeId} className="flex justify-between font-semibold text-slate-600"><span>{item.name} × {item.quantity}</span><span>{money(item.amount)}</span></div>
           ))}
+          {booking.gstAmount > 0 && (
+            <div className="flex justify-between font-semibold text-slate-600"><span>GST ({booking.gstPercent}%)</span><span>{money(booking.gstAmount)}</span></div>
+          )}
           <div className="flex justify-between border-t border-slate-100 pt-2 font-black text-slate-900"><span>Collected</span><span>{money(booking.amount)}</span></div>
           <div className="flex justify-between font-black text-emerald-600"><span>Your commission</span><span>{money(booking.agentCommission)}</span></div>
           {booking.status === 'cancelled' && <p className="font-black text-rose-600">This booking was cancelled.</p>}
