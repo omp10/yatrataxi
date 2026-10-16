@@ -977,6 +977,8 @@ export const createRideRecord = async ({
     bidStepAmount: effectiveBidStepAmount,
     settings: bidRideSettings,
   });
+  // Local rides start at exactly the fare the rider was shown; the high % is only the ceiling for raises.
+  const localBidCeilingFare = Math.max(safeFare, bidRideRange.userBidCeilingFare);
   const effectiveUserMaxBidFare = pricingNegotiationMode === 'driver_bid'
     ? clampBidAmountWithinRange({
         amount: userMaxBidFare,
@@ -985,24 +987,14 @@ export const createRideRecord = async ({
         baseFare: safeFare,
         bidStepAmount: effectiveBidStepAmount,
       })
-    : pricingNegotiationMode === 'user_increment_only'
-      ? clampBidAmountWithinRange({
-          amount: safeFare,
-          minFare: bidRideRange.userBidFloorFare,
-          maxFare: bidRideRange.userBidCeilingFare,
-          baseFare: safeFare,
-          bidStepAmount: effectiveBidStepAmount,
-        })
-      : safeFare;
+    : safeFare;
   const effectiveBidFloorFare = pricingNegotiationMode === 'driver_bid'
     ? bidRideRange.driverBidFloorFare
-    : pricingNegotiationMode === 'user_increment_only'
-      ? bidRideRange.userBidFloorFare
-      : safeFare;
+    : safeFare;
   const effectiveBidCeilingMaxFare = pricingNegotiationMode === 'driver_bid'
     ? Math.min(bidRideRange.userBidCeilingFare, bidRideRange.driverBidCeilingFare)
     : pricingNegotiationMode === 'user_increment_only'
-      ? bidRideRange.userBidCeilingFare
+      ? localBidCeilingFare
       : safeFare;
   const effectiveStartingFare = pricingNegotiationMode === 'user_increment_only'
     ? effectiveUserMaxBidFare
@@ -1994,9 +1986,18 @@ export const increaseRideBidCeiling = async ({ rideId, userId, incrementSteps = 
       throw new ApiError(409, 'Ride is not open for bid increases');
     }
 
+    // The rider can only move their limit up to the admin's highest bid level.
+    const currentUserMaxBidFare = Number(ride.userMaxBidFare || ride.fare || 0);
+    const hardCeilingFare = Number(ride.bidCeilingMaxFare || 0);
+    if (hardCeilingFare > 0 && currentUserMaxBidFare >= hardCeilingFare) {
+      throw new ApiError(409, 'Your bid limit is already at the highest level allowed');
+    }
+
     const nextUserMaxBidFare = Math.max(
       Number(ride.baseFare || ride.fare || 0),
-      Number(ride.userMaxBidFare || ride.fare || 0) + (safeSteps * safeStepAmount),
+      hardCeilingFare > 0
+        ? Math.min(hardCeilingFare, currentUserMaxBidFare + (safeSteps * safeStepAmount))
+        : currentUserMaxBidFare + (safeSteps * safeStepAmount),
     );
     const updatedRide = await Ride.findOneAndUpdate(
       {
@@ -2036,7 +2037,9 @@ export const increaseRideBidCeiling = async ({ rideId, userId, incrementSteps = 
   }
 
   const currentFare = Math.max(0, Number(ride.fare || ride.baseFare || 0));
-  const maxAllowedFare = Math.max(currentFare, Number(ride.bidCeilingMaxFare || ride.userMaxBidFare || currentFare));
+  // The promo discount stays on the fare, so the ceiling moves down by the same amount.
+  const promoDiscount = Math.max(0, Number(ride.promo?.discount_amount || 0));
+  const maxAllowedFare = Math.max(currentFare, Number(ride.bidCeilingMaxFare || ride.userMaxBidFare || currentFare) - promoDiscount);
   if (currentFare >= maxAllowedFare) {
     throw new ApiError(409, 'Fare is already at the configured ceiling');
   }

@@ -25,10 +25,10 @@ const rideBidSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Distance from the package/recommended price; negative when the driver bids below it.
     incrementAmount: {
       type: Number,
       required: true,
-      min: 0,
     },
     status: {
       type: String,

@@ -209,7 +209,7 @@ const BidRideSettings = () => {
                  <SectionHeader title="User" />
                  <div className="space-y-6 mt-6">
                     <InputField 
-                       label="User Fare Low Percentage (Starting Level)" 
+                       label="Outstation Rider Starting Limit (% Above Recommended Price)" 
                        name="user_bidding_low_percentage" 
                        value={settings.user_bidding_low_percentage} 
                        onChange={handleChange} 
@@ -218,7 +218,7 @@ const BidRideSettings = () => {
                        helpLink
                     />
                     <InputField 
-                       label="User Fare High Percentage (Highest Level)" 
+                       label="Highest Level The Rider Can Raise To (% Above Recommended Price)" 
                        name="user_bidding_high_percentage" 
                        value={settings.user_bidding_high_percentage} 
                        onChange={handleChange} 
