@@ -10,6 +10,7 @@ import { DriverLoginSession } from '../models/DriverLoginSession.js';
 import { VenuePartner } from '../../entertainment/models/VenuePartner.js';
 import { signAccessToken } from './authService.js';
 import { sendOtpSms } from '../../services/smsService.js';
+import { REVIEW_OTP, isReviewPhone } from '../../services/reviewAccount.js';
 
 const LOGIN_OTP_TTL_MS = 10 * 60 * 1000;
 
@@ -68,6 +69,10 @@ const getStaticDriverOtpConfig = () => ({
 });
 const resolveDriverLoginOtpForPhone = (phone) => {
   const normalizedPhone = normalizePhone(phone);
+  if (isReviewPhone(normalizedPhone)) {
+    return { otp: REVIEW_OTP, isStatic: true };
+  }
+
   const staticOtpConfig = getStaticDriverOtpConfig();
   const defaultOtpEnabled = isTruthy(env.sms?.useDefaultOtp);
 

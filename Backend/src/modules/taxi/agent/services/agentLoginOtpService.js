@@ -6,6 +6,7 @@ import { sendOtpSms } from '../../services/smsService.js';
 import { signAccessToken } from '../../services/tokenService.js';
 import { Agent } from '../models/Agent.js';
 import { AgentLoginSession } from '../models/AgentLoginSession.js';
+import { REVIEW_OTP, isReviewPhone } from '../../services/reviewAccount.js';
 
 const LOGIN_OTP_TTL_MS = 10 * 60 * 1000;
 
@@ -26,6 +27,10 @@ const getStaticAgentOtpConfig = () => ({
 
 const resolveAgentLoginOtpForPhone = (phone) => {
   const normalizedPhone = normalizePhone(phone);
+  if (isReviewPhone(normalizedPhone)) {
+    return { otp: REVIEW_OTP, isStatic: true };
+  }
+
   const staticOtpConfig = getStaticAgentOtpConfig();
   const defaultOtpEnabled = isTruthy(env.sms?.useDefaultOtp);
 

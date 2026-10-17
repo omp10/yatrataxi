@@ -22,6 +22,7 @@ import { findZoneByPickup } from './locationService.js';
 import { sendOtpSms } from '../../services/smsService.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { applyDriverWalletAdjustment } from './walletService.js';
+import { REVIEW_OTP, isReviewPhone } from '../../services/reviewAccount.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -249,6 +250,10 @@ const getStaticDriverOtpConfig = () => ({
 });
 const resolveDriverOnboardingOtpForPhone = (phone) => {
   const normalizedPhone = normalizePhone(phone);
+  if (isReviewPhone(normalizedPhone)) {
+    return { otp: REVIEW_OTP, isStatic: true };
+  }
+
   const staticOtpConfig = getStaticDriverOtpConfig();
   const defaultOtpEnabled = isTruthy(env.sms?.useDefaultOtp);
 

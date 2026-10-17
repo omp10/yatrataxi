@@ -5,6 +5,7 @@ import { UserAuthSession } from '../models/UserAuthSession.js';
 import { User } from '../models/User.js';
 import { signAccessToken } from './authService.js';
 import { sendOtpSms } from '../../services/smsService.js';
+import { REVIEW_OTP, isReviewPhone } from '../../services/reviewAccount.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const VERIFIED_SESSION_TTL_MS = 10 * 60 * 1000;
@@ -31,6 +32,10 @@ const getStaticUserOtpConfig = () => ({
 });
 const resolveUserOtpForPhone = (phone) => {
   const normalizedPhone = normalizeUserPhone(phone);
+  if (isReviewPhone(normalizedPhone)) {
+    return { otp: REVIEW_OTP, isStatic: true };
+  }
+
   const staticOtpConfig = getStaticUserOtpConfig();
   const defaultOtpEnabled = isTruthy(env.sms?.useDefaultOtp);
 
