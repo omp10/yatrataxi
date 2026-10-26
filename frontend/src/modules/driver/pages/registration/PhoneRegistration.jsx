@@ -19,8 +19,7 @@ const ROLE_CONFIG = [
     { id: 'bus_driver', label: 'Bus', Icon: ShieldCheck, color: '#3B82F6' },
     { id: 'service_center', label: 'Center', Icon: Building2, color: '#8B5CF6' },
     { id: 'service_center_staff', label: 'Staff', Icon: UserRound, color: '#F43F5E' },
-    // TODO: re-enable Venue login later
-    //     { id: 'venue_partner', label: 'Venue', Icon: Ticket, color: '#6366F1' },
+    { id: 'venue_partner', label: 'Venue', Icon: Ticket, color: '#6366F1' },
 ];
 
 const getErrorMessage = (err) => String(
@@ -68,7 +67,7 @@ const PhoneRegistration = () => {
             if (normalized === 'bus_driver' || normalized === 'bus-driver' || normalized === 'busdriver') return 'bus_driver';
             if (normalized === 'service_center' || normalized === 'service-center' || normalized === 'servicecenter') return 'service_center';
             if (normalized === 'service_center_staff' || normalized === 'service-center-staff' || normalized === 'servicecenterstaff') return 'service_center_staff';
-            //             if (normalized === 'venue_partner' || normalized === 'venue-partner' || normalized === 'venue') return 'venue_partner';
+            if (normalized === 'venue_partner' || normalized === 'venue-partner' || normalized === 'venue') return 'venue_partner';
             return 'driver';
         };
 
