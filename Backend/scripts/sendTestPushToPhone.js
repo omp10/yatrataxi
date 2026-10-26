@@ -10,7 +10,7 @@ dotenv.config();
 const phone = String(process.argv[2] || '').replace(/\D/g, '').slice(-10);
 
 if (!phone) {
-  console.error('Usage: node scratch/sendTestPushToPhone.js <10-digit-phone>');
+  console.error('Usage: node scripts/sendTestPushToPhone.js <10-digit-phone>');
   process.exit(1);
 }
 

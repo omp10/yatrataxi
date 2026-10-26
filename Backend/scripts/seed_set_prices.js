@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { SetPrice } from './src/modules/taxi/admin/models/SetPrice.js';
-import { Zone } from './src/modules/taxi/driver/models/Zone.js';
-import { Vehicle } from './src/modules/taxi/admin/models/Vehicle.js';
-import { ServiceLocation } from './src/modules/taxi/admin/models/ServiceLocation.js';
+import { SetPrice } from '../src/modules/taxi/admin/models/SetPrice.js';
+import { Zone } from '../src/modules/taxi/driver/models/Zone.js';
+import { Vehicle } from '../src/modules/taxi/admin/models/Vehicle.js';
+import { ServiceLocation } from '../src/modules/taxi/admin/models/ServiceLocation.js';
 
 dotenv.config();
 

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { AdminAppSetting } from './src/modules/taxi/admin/models/AdminAppSetting.js';
+import { AdminAppSetting } from '../src/modules/taxi/admin/models/AdminAppSetting.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
