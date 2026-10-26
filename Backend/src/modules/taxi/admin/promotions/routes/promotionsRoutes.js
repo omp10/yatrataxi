@@ -6,8 +6,10 @@ import {
   deleteBanner,
   deleteNotification,
   deletePromoCode,
+  getBannerUploadSignature,
   getBanners,
   getNotifications,
+  getPublicHomeBanners,
   getPromoCodes,
   getPromotionsBootstrap,
   getPromotionsServiceLocations,
@@ -35,6 +37,9 @@ promotionsRouter.get('/user/explore-destinations', getPublicExploreDestinations)
 promotionsRouter.get('/taxi/explore-destinations', getPublicExploreDestinations);
 promotionsRouter.get('/explore-destinations', getPublicExploreDestinations);
 
+// Public home screen banners (unauthenticated)
+promotionsRouter.get('/user/home-banners', getPublicHomeBanners);
+
 promotionsRouter.use('/admin', authenticate(['admin']));
 
 promotionsRouter.get('/admin/promotions/bootstrap', getPromotionsBootstrap);
@@ -54,6 +59,7 @@ promotionsRouter.delete('/admin/push-notifications/:id', deleteNotification);
 
 promotionsRouter.get('/admin/banners', getBanners);
 promotionsRouter.post('/admin/banners', createBanner);
+promotionsRouter.post('/admin/banners/upload-signature', getBannerUploadSignature);
 promotionsRouter.patch('/admin/banners/:id', updateBanner);
 promotionsRouter.delete('/admin/banners/:id', deleteBanner);
 promotionsRouter.post('/admin/banners/:id/push', pushBanner);

@@ -6,7 +6,7 @@ import { User } from '../../../user/models/User.js';
 import { Banner } from '../models/Banner.js';
 import { Notification } from '../models/Notification.js';
 import { PromoCode } from '../models/PromoCode.js';
-import { uploadDataUrlToCloudinary } from '../../../../../utils/cloudinaryUpload.js';
+import { createCloudinaryUploadSignature, uploadDataUrlToCloudinary } from '../../../../../utils/cloudinaryUpload.js';
 import { sendPushNotificationToAudience } from '../../../services/pushNotificationService.js';
 import { listAdminDestinations } from './exploreDestinationService.js';
 
@@ -135,10 +135,42 @@ const serializeNotification = (item) => ({
   updatedAt: item.updatedAt,
 });
 
+// Older banners were saved with an auto-generated "Banner <ISO date>" title.
+// That is a placeholder, not copy meant for users.
+const AUTO_BANNER_TITLE_PATTERN = /^Banner \d{4}-\d{2}-\d{2}T/;
+const BANNER_MEDIA_TYPES = ['image', 'video'];
+// Must match the delivery URLs built in frontend/src/shared/utils/cloudinaryMedia.js
+// (getOptimizedVideoUrl / getVideoPosterUrl) so the app hits these prebuilt copies.
+const BANNER_VIDEO_EAGER_TRANSFORMS = 'q_auto,vc_h264,w_720,c_limit/mp4|so_0,q_auto,w_720,c_limit/jpg';
+const BANNER_MAX_UPLOAD_BYTES = {
+  image: 10 * 1024 * 1024,
+  video: 50 * 1024 * 1024,
+};
+
+// Banners saved before sort_order existed have no value; MongoDB sorts a
+// missing field before 0, so treat it as 0 explicitly.
+const findBannersInDisplayOrder = (match, { skip = 0, limit }) => Banner.aggregate([
+  { $match: match },
+  { $addFields: { display_order: { $ifNull: ['$sort_order', 0] } } },
+  { $sort: { display_order: 1, createdAt: -1 } },
+  { $skip: skip },
+  { $limit: limit },
+]);
+
+const getDisplayBannerTitle = (title) => {
+  const value = normalizeText(title);
+  return AUTO_BANNER_TITLE_PATTERN.test(value) ? '' : value;
+};
+
 const serializeBanner = (item) => ({
   _id: item._id,
-  title: item.title || '',
+  title: getDisplayBannerTitle(item.title),
+  subtitle: item.subtitle || '',
+  cta_label: item.cta_label || '',
   image: item.image || '',
+  media_type: item.media_type || 'image',
+  poster: item.poster || '',
+  sort_order: Number(item.sort_order || 0),
   link_type: item.link_type || 'external_link',
   external_link: item.external_link || '',
   deep_link: item.deep_link || '',
@@ -150,46 +182,17 @@ const serializeBanner = (item) => ({
   updatedAt: item.updatedAt,
 });
 
-const serializeBannerMinimal = (item) => ({
-  _id: item._id,
-  image: item.image || '',
-  active: item.active !== false,
+const serializePublicBanner = (item) => ({
+  id: String(item._id),
+  title: getDisplayBannerTitle(item.title),
+  subtitle: item.subtitle || '',
+  cta_label: item.cta_label || '',
+  media_type: item.media_type || 'image',
+  media_url: item.image || '',
+  poster: item.poster || '',
+  link_type: item.link_type || 'external_link',
+  redirect_url: item.redirect_url || item.external_link || item.deep_link || '',
 });
-
-const serializeBannerFromPayload = (item, payload = {}) => {
-  const keys = new Set(Object.keys(payload || {}));
-  const response = { _id: item._id };
-
-  if (keys.has('image') || keys.has('image_url') || keys.has('use_url')) {
-    response.image = item.image || '';
-  }
-  if (keys.has('image_url')) {
-    response.image_url = String(payload.image_url || '');
-  }
-  if (keys.has('use_url')) {
-    response.use_url = payload.use_url === true || payload.use_url === 1 || payload.use_url === '1' || payload.use_url === 'true';
-  }
-  if (keys.has('active')) {
-    response.active = item.active !== false;
-  }
-  if (keys.has('title')) {
-    response.title = item.title || '';
-  }
-  if (keys.has('link_type')) {
-    response.link_type = item.link_type || 'external_link';
-  }
-  if (keys.has('external_link')) {
-    response.external_link = item.external_link || '';
-  }
-  if (keys.has('deep_link')) {
-    response.deep_link = item.deep_link || '';
-  }
-  if (keys.has('redirect_url') || keys.has('target_route_url')) {
-    response.redirect_url = item.redirect_url || item.external_link || item.deep_link || '';
-  }
-
-  return response;
-};
 
 const ensureServiceLocationExists = async (serviceLocationId) => {
   const location = await ServiceLocation.findById(toObjectIdOrThrow(serviceLocationId, 'service location id')).lean();
@@ -372,21 +375,35 @@ const normalizeNotificationPayload = async (payload, existing = null) => {
 };
 
 const normalizeBannerPayload = async (payload, existing = null) => {
-  const generatedTitle = `Banner ${new Date().toISOString()}`;
-  const title = normalizeText(payload.title ?? existing?.title ?? generatedTitle);
-  let image = normalizeText(payload.image ?? payload.image_url ?? existing?.image);
+  const title = normalizeText(payload.title ?? existing?.title ?? '');
+  const subtitle = normalizeText(payload.subtitle ?? existing?.subtitle ?? '');
+  const ctaLabel = normalizeText(payload.cta_label ?? existing?.cta_label ?? '');
+  let image = normalizeText(payload.image ?? payload.image_url ?? payload.media_url ?? existing?.image);
+  const mediaType = normalizeText(payload.media_type ?? existing?.media_type ?? 'image').toLowerCase();
+  const poster = normalizeText(payload.poster ?? existing?.poster ?? '');
+  const sortOrder = Math.trunc(parseNumber(payload.sort_order, existing?.sort_order ?? 0));
   const rawLinkType = normalizeText(payload.link_type ?? payload.redirect_type ?? existing?.link_type ?? 'external_link');
   const linkType = rawLinkType === 'app_route' ? 'deep_link' : rawLinkType;
   const redirectUrl = normalizeText(
     payload.redirect_url ?? payload.external_link ?? payload.deep_link ?? payload.target_route_url ?? existing?.redirect_url,
   );
   const active = normalizeBoolean(payload.active ?? payload.status, existing?.active ?? true);
+  if (!BANNER_MEDIA_TYPES.includes(mediaType)) {
+    throw new ApiError(400, 'Media type must be image or video');
+  }
+
   if (!image) {
-    throw new ApiError(400, 'Banner image is required');
+    throw new ApiError(400, mediaType === 'video' ? 'Banner video is required' : 'Banner image is required');
+  }
+
+  // Videos are uploaded straight from the browser to Cloudinary (see
+  // createBannerUploadSignature) because they are too large for a JSON body.
+  if (mediaType === 'video' && !/^https?:\/\//i.test(image)) {
+    throw new ApiError(400, 'Banner video must be an uploaded video URL');
   }
 
   // If image is a data URL (base64), upload it to Cloudinary
-  if (image.startsWith('data:')) {
+  if (mediaType === 'image' && image.startsWith('data:')) {
     try {
       const uploaded = await uploadDataUrlToCloudinary({
         dataUrl: image,
@@ -405,7 +422,12 @@ const normalizeBannerPayload = async (payload, existing = null) => {
 
   return {
     title,
+    subtitle,
+    cta_label: ctaLabel,
     image,
+    media_type: mediaType,
+    poster: mediaType === 'video' ? poster : '',
+    sort_order: sortOrder,
     link_type: linkType,
     external_link: linkType === 'external_link' ? redirectUrl : '',
     deep_link: linkType === 'deep_link' ? redirectUrl : '',
@@ -575,12 +597,12 @@ export const listBanners = async ({ page = 1, limit = 50, active }) => {
   const skip = (safePage - 1) * safeLimit;
 
   const [items, total] = await Promise.all([
-    Banner.find(query).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
+    findBannersInDisplayOrder(query, { skip, limit: safeLimit }),
     Banner.countDocuments(query),
   ]);
 
   return {
-    results: items.map(serializeBannerMinimal),
+    results: items.map(serializeBanner),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -593,7 +615,33 @@ export const listBanners = async ({ page = 1, limit = 50, active }) => {
 export const createBanner = async (payload) => {
   const normalizedPayload = await normalizeBannerPayload(payload);
   const banner = await Banner.create(normalizedPayload);
-  return serializeBannerFromPayload(banner.toObject(), payload);
+  return serializeBanner(banner.toObject());
+};
+
+// Active banners for the user app's home screen hero.
+export const listPublicBanners = async ({ limit = 10 } = {}) => {
+  const safeLimit = Math.min(20, Math.max(1, Number(limit) || 10));
+  const items = await findBannersInDisplayOrder({ active: true }, { limit: safeLimit });
+
+  return items.filter((item) => item.image).map(serializePublicBanner);
+};
+
+// Signed params so the admin panel can upload banner media (especially video)
+// directly to Cloudinary without routing large files through this server.
+export const createBannerUploadSignature = ({ media_type: rawMediaType } = {}) => {
+  const mediaType = normalizeText(rawMediaType || 'image').toLowerCase();
+  if (!BANNER_MEDIA_TYPES.includes(mediaType)) {
+    throw new ApiError(400, 'Media type must be image or video');
+  }
+
+  return {
+    ...createCloudinaryUploadSignature({
+      publicIdPrefix: `banner-${mediaType}`,
+      resourceType: mediaType,
+      eager: mediaType === 'video' ? BANNER_VIDEO_EAGER_TRANSFORMS : '',
+    }),
+    max_bytes: BANNER_MAX_UPLOAD_BYTES[mediaType],
+  };
 };
 
 export const updateBanner = async (id, payload) => {

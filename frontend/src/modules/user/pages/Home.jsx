@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarClock, ChevronRight, Clock3, MapPin, ShieldCheck, User } from 'lucide-react';
+import { CalendarClock, Car, ChevronRight, Clock3, MapPin, ShieldCheck, User } from 'lucide-react';
 import HeaderGreeting from '../components/HeaderGreeting';
+import HomeHeroBanner, { HERO_HEADER_OFFSET_PX } from '../components/HomeHeroBanner';
+import HomeSearchBar from '../components/HomeSearchBar';
 import ServiceGrid from '../components/ServiceGrid';
 import LocationMapSection from '../components/LocationMapSection';
 import ActionsSection from '../components/ActionsSection';
@@ -544,9 +546,9 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] pb-24 max-w-lg mx-auto relative font-sans no-scrollbar">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#FFF6DC_0%,#FFFBF2_18%,#F8FAFC_42%,#F3F4F6_100%)] pb-24 max-w-lg mx-auto relative font-sans no-scrollbar">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-16 right-[-40px] h-44 w-44 rounded-full bg-orange-100/60 blur-3xl" />
+        <div className="absolute -top-16 right-[-40px] h-44 w-44 rounded-full bg-amber-200/50 blur-3xl" />
         <div className="absolute top-52 left-[-60px] h-52 w-52 rounded-full bg-emerald-100/60 blur-3xl" />
         <div className="absolute bottom-28 right-[-40px] h-40 w-40 rounded-full bg-blue-100/60 blur-3xl" />
       </div>
@@ -554,6 +556,13 @@ const Home = () => {
 
       <div className="relative z-10 space-y-4 pb-6">
         <HeaderGreeting />
+
+        {/* Pulled up under the sticky header so the hero runs to the top edge:
+            header height plus the 1rem gap from space-y-4. */}
+        <div style={{ marginTop: `calc(-${HERO_HEADER_OFFSET_PX}px - 1rem)` }}>
+          <HomeHeroBanner />
+          <HomeSearchBar />
+        </div>
 
         {isScheduledAcceptedRide && (
           <motion.button
@@ -636,50 +645,51 @@ const Home = () => {
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mx-5 overflow-hidden rounded-[32px] border border-white/60 bg-white/50 p-5 shadow-[0_20px_40px_rgba(0,0,0,0.06)] backdrop-blur-2xl relative"
+            className="mx-5 flex items-center gap-3 rounded-[24px] border border-white bg-white p-3 shadow-[0_12px_30px_rgba(15,23,42,0.07)]"
           >
-            <div className="relative z-10 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-20 w-24 flex items-center justify-center shrink-0">
-                  <img src={currentRideIcon} alt="" className="h-full w-full object-contain scale-110" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    {rideStage === 'end_requested' ? 'Review Pending' : 'Live Rental'}
-                  </p>
-                  <h2 className="text-[24px] font-black tracking-tight text-slate-900 leading-none mt-1">
-                    {rentalTimerLabel}
-                  </h2>
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
-                    <p className="text-[12px] font-black text-slate-900">
-                      {currentRide.vehicle?.name || 'Assigned Vehicle'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="text-right space-y-2.5">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Current Fare</p>
-                  <p className="text-[18px] font-black text-slate-900 tracking-tight">Rs {rentalCurrentCharge.toFixed(0)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEndRide();
-                  }}
-                  disabled={endingRide || rideStage === 'end_requested'}
-                  className="bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl shadow-[0_8px_16px_rgba(15,23,42,0.2)] active:scale-95 disabled:opacity-50 disabled:grayscale transition-all"
-                >
-                  {endingRide ? 'Ending...' : rideStage === 'end_requested' ? 'Pending' : 'End Ride'}
-                </button>
-              </div>
+            <div className="flex h-[84px] w-[96px] shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-[linear-gradient(180deg,#F8FAFC_0%,#FDE7C7_100%)]">
+              <img src={currentRideIcon} alt="" className="h-full w-full object-cover" />
             </div>
-            
-            <div className="absolute -right-6 -bottom-6 h-24 w-24 rounded-full bg-orange-100/40 blur-3xl pointer-events-none" />
-            <div className="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-emerald-100/40 blur-3xl pointer-events-none" />
+
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1 text-[9.5px] font-black uppercase tracking-[0.18em] text-orange-500">
+                <Clock3 size={12} strokeWidth={3} className="shrink-0" />
+                <span className="truncate">{rideStage === 'end_requested' ? 'Review pending' : 'Live rental'}</span>
+              </p>
+              <h2 className="mt-1 truncate text-[16px] font-black leading-tight tracking-tight text-slate-900">
+                {currentRide.vehicle?.name || 'Assigned Vehicle'}
+              </h2>
+              <p className="mt-1 flex items-center gap-1 text-[11.5px] font-semibold text-slate-500">
+                <MapPin size={12} className="shrink-0 text-orange-500" strokeWidth={2.6} />
+                <span className="truncate capitalize">{currentRide.pickup || 'Rental pickup'}</span>
+              </p>
+              <p className="mt-0.5 flex items-center gap-1 text-[11.5px] font-semibold tabular-nums text-slate-500">
+                <Clock3 size={12} className="shrink-0 text-slate-400" strokeWidth={2.6} />
+                {rentalTimerLabel}
+              </p>
+            </div>
+
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="text-right">
+                <p className="text-[10px] font-semibold text-slate-500">Current fare</p>
+                <p className="text-[19px] font-black leading-tight tracking-tight text-slate-900">₹{rentalCurrentCharge.toFixed(0)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEndRide();
+                }}
+                disabled={endingRide || rideStage === 'end_requested'}
+                className={`rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 ${
+                  rideStage === 'end_requested'
+                    ? 'bg-[#FFD24D] text-slate-900'
+                    : 'bg-slate-900 text-white shadow-[0_8px_16px_rgba(15,23,42,0.2)] disabled:opacity-60'
+                }`}
+              >
+                {endingRide ? 'Ending...' : rideStage === 'end_requested' ? 'Pending' : 'End ride'}
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -757,22 +767,24 @@ const Home = () => {
             exit={{ y: 18, opacity: 0, scale: 0.96 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => navigate(trackingPath, { state: currentRide })}
-            className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[20px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+            className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[22px] border border-white bg-white/95 px-3.5 py-3 text-left shadow-[0_14px_36px_rgba(15,23,42,0.16)] backdrop-blur-xl"
           >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900 shadow-lg">
-              <img src={currentRideIcon} alt={vehicleLabel} className="h-8 w-8 object-contain" draggable={false} />
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[16px] bg-[#FFF4E2] p-1.5">
+              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[12px] bg-slate-900 shadow-md">
+                <img src={currentRideIcon} alt={vehicleLabel} className="h-8 w-8 object-contain" draggable={false} />
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-orange-600">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-orange-500">
                     {isScheduledAcceptedRide
                       ? 'Scheduled ride ready'
                       : serviceType === 'parcel'
                         ? 'Parcel in progress'
                         : serviceType === 'rental'
-                          ? (rideStage === 'end_requested' ? 'Rental end review' : 'Rental in progress')
+                          ? (rideStage === 'end_requested' ? 'Rental · End review pending' : 'Rental in progress')
                           : 'Current Ride'}
                   </p>
                 </div>
@@ -782,7 +794,7 @@ const Home = () => {
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 truncate text-[14px] font-black leading-tight text-slate-900">
+              <p className="mt-0.5 truncate text-[15px] font-black leading-tight text-slate-900">
                 {rideStageContextLabel}
               </p>
               {isScheduledAcceptedRide ? (
@@ -798,12 +810,14 @@ const Home = () => {
                   ) : null}
                 </div>
               ) : null}
-              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                <MapPin size={12} className="shrink-0 text-emerald-500" strokeWidth={2.5} />
-                <span className="truncate">{currentRide.pickup || 'Pickup location'}</span>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <MapPin size={12} className={`shrink-0 ${serviceType === 'rental' ? 'text-orange-500' : 'text-emerald-500'}`} strokeWidth={2.5} />
+                <span className="truncate capitalize">{currentRide.pickup || 'Pickup location'}</span>
               </div>
-              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                <MapPin size={12} className="shrink-0 text-orange-500" strokeWidth={2.5} />
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                {serviceType === 'rental'
+                  ? <Car size={12} className="shrink-0 text-slate-400" strokeWidth={2.5} />
+                  : <MapPin size={12} className="shrink-0 text-orange-500" strokeWidth={2.5} />}
                 <span className="truncate">{currentRide.drop || 'Drop location'}</span>
               </div>
               {serviceType === 'rental' ? (
@@ -813,7 +827,7 @@ const Home = () => {
                     {rentalTimerLabel}
                   </span>
                   <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
-                    Live charge Rs {rentalCurrentCharge.toFixed(0)}
+                    Live charge ₹{rentalCurrentCharge.toFixed(0)}
                   </span>
                 </div>
               ) : isScheduledAcceptedRide ? (
@@ -829,10 +843,10 @@ const Home = () => {
               ) : null}
             </div>
             <div className="shrink-0 text-right flex flex-col items-end gap-1">
-              <p className="text-[11px] font-black text-slate-900 px-2 py-0.5 rounded-lg bg-slate-100">
-                Rs {Number(serviceType === 'rental' ? rentalCurrentCharge : currentRide.fare || 0).toFixed(0)}
+              <p className="rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-black text-slate-900">
+                ₹{Number(serviceType === 'rental' ? rentalCurrentCharge : currentRide.fare || 0).toFixed(0)}
               </p>
-              <div className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-[12px] bg-slate-900 text-white shadow-md">
+              <div className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white shadow-md">
                 <ChevronRight size={18} strokeWidth={3} />
               </div>
             </div>

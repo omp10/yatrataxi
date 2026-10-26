@@ -58,6 +58,14 @@ export const deleteBanner = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
+export const getBannerUploadSignature = asyncHandler(async (req, res) =>
+  ok(res, promotionsService.createBannerUploadSignature(req.body)),
+);
+
+export const getPublicHomeBanners = asyncHandler(async (req, res) =>
+  ok(res, await promotionsService.listPublicBanners(req.query)),
+);
+
 export const pushBanner = asyncHandler(async (req, res) =>
   ok(res, await promotionsService.pushBanner(req.params.id)),
 );

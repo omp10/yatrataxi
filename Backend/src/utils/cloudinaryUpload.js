@@ -33,6 +33,36 @@ const buildSignature = (params, apiSecret) => {
   return crypto.createHash('sha1').update(`${payload}${apiSecret}`).digest('hex');
 };
 
+// Signed parameters for a browser-side upload straight to Cloudinary. The
+// client must send every entry of `fields` plus api_key and signature, or
+// Cloudinary rejects the request. `eager` pre-builds derived versions at upload
+// time; large videos cannot be transformed on the fly on first request.
+export const createCloudinaryUploadSignature = ({
+  folder = env.cloudinary.folder,
+  publicIdPrefix = 'upload',
+  resourceType = 'image',
+  eager = '',
+} = {}) => {
+  if (!env.cloudinary.cloudName || !env.cloudinary.apiKey || !env.cloudinary.apiSecret) {
+    throw new ApiError(500, 'Cloudinary credentials are not configured');
+  }
+
+  const fields = {
+    folder,
+    public_id: `${publicIdPrefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+    timestamp: Math.floor(Date.now() / 1000).toString(),
+    ...(eager ? { eager, eager_async: 'true' } : {}),
+  };
+
+  return {
+    upload_url: `https://api.cloudinary.com/v1_1/${env.cloudinary.cloudName}/${resourceType}/upload`,
+    api_key: env.cloudinary.apiKey,
+    signature: buildSignature(fields, env.cloudinary.apiSecret),
+    fields,
+    resource_type: resourceType,
+  };
+};
+
 export const uploadDataUrlToCloudinary = async ({
   dataUrl,
   folder = env.cloudinary.folder,

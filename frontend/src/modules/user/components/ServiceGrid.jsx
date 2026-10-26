@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { ChevronRight } from 'lucide-react';
 import { useSettings, normalizeAssetUrl } from '../../../shared/context/SettingsContext';
 import { getActiveServiceModules, getServiceModulePath } from '../utils/serviceModulePresentation';
 
 const MotionButton = motion.button;
+const COLLAPSED_SERVICE_COUNT = 6;
 
 const getServiceKey = (service, index) => {
   const label = String(service?.label || '').trim();
@@ -14,12 +16,12 @@ const getServiceKey = (service, index) => {
 
 const getAccent = (index) => {
   const accents = [
-    'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]',
-    'bg-[linear-gradient(135deg,#FEFCE8_0%,#FDE68A_100%)]',
-    'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]',
-    'bg-[linear-gradient(135deg,#F5F3FF_0%,#E9D5FF_100%)]',
-    'bg-[linear-gradient(135deg,#ECFDF5_0%,#A7F3D0_100%)]',
-    'bg-[linear-gradient(135deg,#FFF1F2_0%,#FECDD3_100%)]',
+    'bg-[radial-gradient(circle_at_50%_40%,#FEF3C7_0%,#FFFBEB_70%)]',
+    'bg-[radial-gradient(circle_at_50%_40%,#DBEAFE_0%,#EFF6FF_70%)]',
+    'bg-[radial-gradient(circle_at_50%_40%,#FFEDD5_0%,#FFF7ED_70%)]',
+    'bg-[radial-gradient(circle_at_50%_40%,#FCE7F3_0%,#FDF2F8_70%)]',
+    'bg-[radial-gradient(circle_at_50%_40%,#DCFCE7_0%,#F0FDF4_70%)]',
+    'bg-[radial-gradient(circle_at_50%_40%,#E0F2FE_0%,#F0F9FF_70%)]',
   ];
   return accents[index % accents.length];
 };
@@ -29,11 +31,9 @@ const ServiceTile = ({ icon, label, description, path, accentClass, loading }) =
 
   if (loading) {
     return (
-      <div className="flex w-full min-h-[112px] items-center justify-center">
-        <div className="flex h-[100px] w-[90%] animate-pulse flex-col items-center justify-center gap-2 rounded-[16px] border border-white/20 bg-white/65 px-1 py-1.5">
-        <div className="h-[72px] w-[72px] rounded-[16px] bg-gray-200" />
-          <div className="h-3 w-12 rounded-full bg-gray-200" />
-        </div>
+      <div className="flex h-[124px] animate-pulse flex-col items-center justify-center gap-2.5 rounded-[20px] bg-white/80 p-2 shadow-[0_8px_22px_rgba(15,23,42,0.05)]">
+        <div className="h-[70px] w-[86%] rounded-[16px] bg-slate-100" />
+        <div className="h-3 w-14 rounded-full bg-slate-100" />
       </div>
     );
   }
@@ -41,30 +41,27 @@ const ServiceTile = ({ icon, label, description, path, accentClass, loading }) =
   return (
     <MotionButton
       type="button"
-      whileHover={{ y: -1.5 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.97 }}
       onClick={() => path && navigate(path)}
-      className="flex h-full min-h-[112px] w-full items-center justify-center transition-transform"
+      className="flex h-[124px] flex-col items-center justify-center gap-2 rounded-[20px] border border-white bg-white p-2 shadow-[0_8px_22px_rgba(15,23,42,0.06)]"
     >
-      <div className="flex h-[108px] w-[92%] flex-col items-center justify-center gap-1.5 px-1 py-1">
-        <div className={`flex h-[82px] w-[82px] items-center justify-center rounded-[18px] ${accentClass || 'bg-gray-50'}`}>
-          <img src={icon} alt={label} className="h-[70px] w-[70px] object-contain drop-shadow-sm" />
-        </div>
-
-        <div className="flex flex-col items-center gap-0.5 text-center">
-          <span className="min-h-[24px] text-[10.5px] font-black leading-tight tracking-tight text-slate-900 line-clamp-2 uppercase">
-            {label}
-          </span>
-          <span className="sr-only">{description}</span>
-        </div>
+      <div className={`flex h-[74px] w-full items-center justify-center rounded-[16px] ${accentClass}`}>
+        {icon ? (
+          <img src={icon} alt="" className="h-[66px] w-[86%] object-contain drop-shadow-sm" draggable={false} />
+        ) : null}
       </div>
+      <span className="line-clamp-1 px-1 text-center text-[12.5px] font-bold leading-tight text-slate-900">
+        {label}
+      </span>
+      <span className="sr-only">{description}</span>
     </MotionButton>
   );
 };
 
 const ServiceGrid = () => {
-  const { modules, loading: settingsLoading } = useSettings();
-  const loading = settingsLoading;
+  const { modules, loading } = useSettings();
+  const [expanded, setExpanded] = useState(false);
   const services = useMemo(() => getActiveServiceModules(modules).map((m, idx) => ({
       icon: normalizeAssetUrl(m.mobile_menu_icon),
       label: m.name,
@@ -73,8 +70,10 @@ const ServiceGrid = () => {
       accentClass: getAccent(idx)
     })), [modules]);
 
-  const optionCount = loading ? '...' : services.length;
-  const optionLabel = services.length === 1 ? 'option' : 'options';
+  const canExpand = services.length > COLLAPSED_SERVICE_COUNT;
+  const visibleServices = canExpand && !expanded ? services.slice(0, COLLAPSED_SERVICE_COUNT) : services;
+
+  if (!loading && services.length === 0) return null;
 
   return (
     <div className="px-5">
@@ -82,28 +81,31 @@ const ServiceGrid = () => {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="py-1"
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Services</p>
-            <h2 className="mt-1 text-[18px] font-black tracking-tight text-slate-900">Choose your ride</h2>
-            <p className="mt-0.5 text-[11px] font-bold text-slate-500">Tap to start quickly.</p>
-          </div>
-
-          <div className="rounded-full border border-white/80 bg-white/90 px-3 py-2 text-[11px] font-black text-slate-600 shadow-sm">
-            {optionCount} {optionLabel}
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[21px] font-black tracking-tight text-slate-950">Explore services</h2>
+          {canExpand ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="inline-flex items-center gap-0.5 text-[13px] font-bold text-orange-500 active:opacity-70"
+            >
+              {expanded ? 'Show less' : 'View all'}
+              <ChevronRight
+                size={16}
+                strokeWidth={2.8}
+                className={`transition-transform ${expanded ? '-rotate-90' : ''}`}
+              />
+            </button>
+          ) : null}
         </div>
 
-        <div className="mt-4 grid auto-rows-fr grid-cols-3 gap-3 md:grid-cols-4">
-          {loading ? (
-             [...Array(4)].map((_, i) => <ServiceTile key={i} loading />)
-          ) : (
-            services.map((service, index) => (
-              <ServiceTile key={getServiceKey(service, index)} {...service} />
-            ))
-          )}
+        <div className="mt-3.5 grid grid-cols-3 gap-3 md:grid-cols-4">
+          {loading
+            ? [...Array(6)].map((_, i) => <ServiceTile key={i} loading />)
+            : visibleServices.map((service, index) => (
+                <ServiceTile key={getServiceKey(service, index)} {...service} />
+              ))}
         </div>
       </motion.section>
     </div>
