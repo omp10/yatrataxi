@@ -22,6 +22,10 @@ const ROLE_CONFIG = [
     { id: 'venue_partner', label: 'Venue', Icon: Ticket, color: '#6366F1' },
 ];
 
+// Store review build: only the Driver role is offered. Set to true after the
+// app is approved to bring back Owner, Bus, Center, Staff and Venue logins.
+const SHOW_PARTNER_ROLES = false;
+
 const getErrorMessage = (err) => String(
     err?.message ||
     err?.error ||
@@ -60,6 +64,7 @@ const PhoneRegistration = () => {
     const [phone, setPhone] = useState(() => String(location.state?.phone || storedSession.phone || '').replace(/\D/g, '').slice(-10));
     const [role, setRole] = useState(() => {
         if (isOwnerPortal) return 'owner';
+        if (!SHOW_PARTNER_ROLES) return 'driver';
 
         const normalizePortalRole = (value) => {
             const normalized = String(value || '').toLowerCase();
@@ -86,7 +91,9 @@ const PhoneRegistration = () => {
     const portalLabel = isOwnerPortal ? 'Owner' : 'Driver';
     const roleOptions = isOwnerPortal
         ? ROLE_CONFIG.filter((item) => item.id === 'owner')
-        : ROLE_CONFIG;
+        : SHOW_PARTNER_ROLES
+            ? ROLE_CONFIG
+            : ROLE_CONFIG.filter((item) => item.id === 'driver');
     
     const activeRole = ROLE_CONFIG.find(r => r.id === role) || ROLE_CONFIG[0];
 
@@ -277,6 +284,7 @@ const PhoneRegistration = () => {
                     </header>
 
                     {/* Highly Visible Tabs */}
+                    {roleOptions.length > 1 ? (
                     <section className="space-y-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
                             Select Your Role
@@ -302,6 +310,7 @@ const PhoneRegistration = () => {
                             })}
                         </div>
                     </section>
+                    ) : null}
 
                     {/* Clean Input Card */}
                     <motion.div 

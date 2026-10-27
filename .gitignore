@@ -16,3 +16,4 @@ temp_interactive_push.bat
 build_output.txt
 scratch/
 tmp-*
+config.bat
