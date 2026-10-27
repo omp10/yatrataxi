@@ -319,8 +319,8 @@ Processing Time: Refunds are typically credited back to the original payment met
             title: 'Legal & Support',
             items: [
                 { id: 'driver_app', label: 'Driver Application', icon: <UserPlus size={20} />, action: () => openLegal('driver_app') },
-                { id: 'terms', label: 'Terms & Conditions', icon: <FileText size={20} />, action: () => openLegal('terms') },
-                { id: 'privacy', label: 'Privacy Policy', icon: <Shield size={20} />, action: () => openLegal('privacy') },
+                { id: 'terms', label: 'Terms & Conditions', icon: <FileText size={20} />, action: () => navigate('/driver/terms') },
+                { id: 'privacy', label: 'Privacy Policy', icon: <Shield size={20} />, action: () => navigate('/driver/privacy') },
                 { id: 'refund', label: 'Refund Policy', icon: <HandCoins size={20} />, action: () => openLegal('refund') },
             ]
         },
@@ -465,23 +465,23 @@ Processing Time: Refunds are typically credited back to the original payment met
                     </div>
                     
                     <div className="space-y-5">
-                        <a href="mailto:Yatra Desktrawler@gmail.com" className="flex items-center gap-4 group">
+                        <a href="mailto:yatradesk0990@gmail.com" className="flex items-center gap-4 group">
                             <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-emerald-500 transition-colors shadow-sm">
                                 <Mail size={18} />
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Support</p>
-                                <p className="text-[14px] font-bold text-slate-800">Yatra Desktrawler@gmail.com</p>
+                                <p className="text-[14px] font-bold text-slate-800">yatradesk0990@gmail.com</p>
                             </div>
                         </a>
 
-                        <a href="tel:9389394808" className="flex items-center gap-4 group">
+                        <a href="tel:+919529959942" className="flex items-center gap-4 group">
                             <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-sky-500 transition-colors shadow-sm">
                                 <Phone size={18} />
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Call Owner</p>
-                                <p className="text-[14px] font-bold text-slate-800">93893 94808</p>
+                                <p className="text-[14px] font-bold text-slate-800">+91 95299 59942</p>
                             </div>
                         </a>
                     </div>

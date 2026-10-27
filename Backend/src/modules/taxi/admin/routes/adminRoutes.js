@@ -97,6 +97,9 @@ import {
   getGoodsTypes,
   getAgent,
   getAgents,
+  getAgentDeletionRequests,
+  approveAgentDeletionRequest,
+  rejectAgentDeletionRequest,
   getAgentNeededDocuments,
   getAgentBookings,
   getAgentCommissionDefaults,
@@ -295,6 +298,9 @@ adminRouter.delete('/admin/agents/documents/:id', deleteAgentNeededDocument);
 adminRouter.get('/admin/agents/commission-defaults', getAgentCommissionDefaults);
 adminRouter.put('/admin/agents/commission-defaults', updateAgentCommissionDefaults);
 adminRouter.get('/admin/agents/bookings', getAgentBookings);
+adminRouter.get('/admin/agents/delete-requests', getAgentDeletionRequests);
+adminRouter.patch('/admin/agents/delete-requests/:id/approve', approveAgentDeletionRequest);
+adminRouter.patch('/admin/agents/delete-requests/:id/reject', rejectAgentDeletionRequest);
 adminRouter.get('/admin/agents/:id', getAgent);
 adminRouter.patch('/admin/agents/:id', updateAgent);
 adminRouter.get('/admin/drivers', getDrivers);

@@ -3232,7 +3232,7 @@ Processing Time: Refunds are typically credited back to the original payment met
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Email Owner</p>
-                    <a href="mailto:Yatra Desktrawler@gmail.com" className="text-base font-bold text-slate-900 hover:text-emerald-600 transition">Yatra Desktrawler@gmail.com</a>
+                    <a href="mailto:yatradesk0990@gmail.com" className="text-base font-bold text-slate-900 hover:text-emerald-600 transition">yatradesk0990@gmail.com</a>
                   </div>
                 </div>
 
@@ -3242,7 +3242,7 @@ Processing Time: Refunds are typically credited back to the original payment met
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Call Owner</p>
-                    <a href="tel:9389394808" className="text-base font-bold text-slate-900 hover:text-sky-600 transition">93893 94808</a>
+                    <a href="tel:+919529959942" className="text-base font-bold text-slate-900 hover:text-sky-600 transition">+91 95299 59942</a>
                   </div>
                 </div>
 

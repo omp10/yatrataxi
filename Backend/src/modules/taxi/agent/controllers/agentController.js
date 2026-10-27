@@ -58,6 +58,11 @@ const createAgentSessionPayload = (agent) => ({
     commissionConfig: agent.commissionConfig || {},
     metrics: agent.metrics || {},
     payout: agent.payout || {},
+    deletionRequest: {
+      status: agent.deletionRequest?.status || 'none',
+      requestedAt: agent.deletionRequest?.requestedAt || null,
+      adminNote: agent.deletionRequest?.adminNote || '',
+    },
   },
 });
 
@@ -677,6 +682,48 @@ export const updateAgentProfile = async (req, res) => {
   res.json({
     success: true,
     data: createAgentSessionPayload(agent).agent,
+  });
+};
+
+export const requestAgentAccountDeletion = async (req, res) => {
+  const reason = toCleanString(req.body?.reason);
+  if (!reason) {
+    throw new ApiError(400, 'Deletion reason is required');
+  }
+
+  const agent = await Agent.findById(req.auth.sub);
+  if (!agent || agent.deletedAt) {
+    throw new ApiError(404, 'Agent not found');
+  }
+
+  if (agent.deletionRequest?.status === 'pending') {
+    res.json({
+      success: true,
+      data: {
+        deletionRequestStatus: 'pending',
+        requestedAt: agent.deletionRequest.requestedAt || null,
+      },
+      message: 'Deletion request is already pending admin review',
+    });
+    return;
+  }
+
+  agent.deletionRequest = {
+    status: 'pending',
+    reason: reason.slice(0, 300),
+    requestedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+    adminNote: '',
+  };
+  await agent.save();
+
+  res.status(201).json({
+    success: true,
+    data: {
+      deletionRequestStatus: agent.deletionRequest.status,
+      requestedAt: agent.deletionRequest.requestedAt,
+    },
   });
 };
 

@@ -961,6 +961,7 @@ const AdminLayout = () => {
               { label: 'Agent Needed Documents', path: '/admin/agents/documents', permission: 'users.view' },
               { label: 'Agents', path: '/admin/agents', permission: 'users.view' },
               { label: 'Pending Agents', path: '/admin/agents/pending', permission: 'users.view' },
+              { label: 'Delete Request Agents', path: '/admin/agents/delete-requests', permission: 'users.view' },
               { label: 'Agent Bookings', path: '/admin/agents/bookings', permission: 'users.view' },
               { label: 'Agent Commission Defaults', path: '/admin/agents/commission-defaults', permission: 'users.view' },
               { label: 'Agent Withdrawal Requests', path: '/admin/agents/withdrawals', permission: 'wallet.view' },

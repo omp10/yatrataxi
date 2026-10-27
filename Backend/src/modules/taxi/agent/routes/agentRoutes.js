@@ -24,6 +24,7 @@ import {
   getAgentBusSeatLayout,
   updateAgentProfile,
   saveAgentFcmToken,
+  requestAgentAccountDeletion,
 } from '../controllers/agentController.js';
 
 export const agentRouter = Router();
@@ -35,6 +36,7 @@ agentRouter.post('/onboarding/complete', asyncHandler(completeAgentOnboarding));
 agentRouter.post('/login', asyncHandler(loginAgent));
 agentRouter.get('/me', authenticate(['agent']), asyncHandler(getAgentProfile));
 agentRouter.patch('/me', authenticate(['agent']), asyncHandler(updateAgentProfile));
+agentRouter.post('/me/delete-request', authenticate(['agent']), asyncHandler(requestAgentAccountDeletion));
 agentRouter.get('/dashboard', authenticate(['agent']), asyncHandler(getAgentDashboard));
 agentRouter.get('/wallet', authenticate(['agent']), asyncHandler(getAgentWallet));
 agentRouter.get('/wallet/withdrawals', authenticate(['agent']), asyncHandler(listAgentWithdrawalRequests));

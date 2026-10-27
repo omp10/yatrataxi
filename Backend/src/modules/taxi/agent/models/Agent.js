@@ -204,8 +204,32 @@ const agentSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletion_reason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    deletionRequest: {
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none',
+        index: true,
+      },
+      reason: { type: String, default: '', trim: true },
+      requestedAt: { type: Date, default: null },
+      reviewedAt: { type: Date, default: null },
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+      adminNote: { type: String, default: '', trim: true },
+    },
   },
   { timestamps: true },
 );
+
+agentSchema.index({ 'deletionRequest.status': 1, deletedAt: 1 });
 
 export const Agent = mongoose.models.TaxiAgent || mongoose.model('TaxiAgent', agentSchema);

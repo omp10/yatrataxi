@@ -110,8 +110,8 @@ const DriverSupport = () => {
 
                 <div className="space-y-3 pb-5">
                     {[
-                        { label: 'Privacy Policy', icon: <FileText size={16} />, path: '/privacy' },
-                        { label: 'Terms of Service', icon: <Globe size={16} />, path: '/terms' }
+                        { label: 'Privacy Policy', icon: <FileText size={16} />, path: '/driver/privacy' },
+                        { label: 'Terms of Service', icon: <Globe size={16} />, path: '/driver/terms' }
                     ].map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between text-slate-400 px-2 py-1 active:text-slate-900 transition-colors cursor-pointer">
                              <div className="flex items-center gap-3">

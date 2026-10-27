@@ -19,7 +19,7 @@ export const normalizeAssetUrl = (url = '') => {
 const DEFAULT_SETTINGS_CONTEXT = {
   settings: {
     general: {
-      app_name: 'Yatra Desk Trawler',
+      app_name: 'Yatra Desk',
       logo: '',
       favicon: '',
     },
@@ -281,7 +281,7 @@ export const SettingsProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const appName = settings.general?.app_name || 'Yatra Desk Trawler';
+    const appName = settings.general?.app_name || 'Yatra Desk';
     document.title = appName;
 
     const favicon = settings.general?.favicon || settings.customization?.favicon;

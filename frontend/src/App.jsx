@@ -226,6 +226,7 @@ const AdminNegativeBalanceDrivers = lazy(() => import('./modules/admin/pages/dri
 const AdminWithdrawalRequestDrivers = lazy(() => import('./modules/admin/pages/drivers/WithdrawalRequestDrivers'));
 const AdminWithdrawalRequestDetail = lazy(() => import('./modules/admin/pages/drivers/WithdrawalRequestDetail'));
 const AdminDriverDeleteRequests = lazy(() => import('./modules/admin/pages/drivers/DriverDeleteRequests'));
+const AdminAgentDeleteRequests = lazy(() => import('./modules/admin/pages/agents/AgentDeleteRequests'));
 const AdminGlobalDocuments = lazy(() => import('./modules/admin/pages/drivers/GlobalDocuments'));
 const AdminDriverDocumentForm = lazy(() => import('./modules/admin/pages/drivers/DriverDocumentForm'));
 const AdminDriverBulkUpload = lazy(() => import('./modules/admin/pages/drivers/DriverBulkUpload'));
@@ -404,7 +405,12 @@ const AdminSectionPlaceholder = () => {
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
   const location = useLocation();
-  const staticPages = ['/', '/about', '/contact', '/support', '/faq', '/services', '/privacy', '/terms', '/refund', '/cancellation', '/blog', '/links'];
+  const staticPages = [
+    '/', '/about', '/contact', '/support', '/faq', '/services', '/privacy', '/terms', '/refund', '/cancellation', '/blog', '/links',
+    '/privacy-policy', '/terms-and-conditions',
+    '/driver/terms', '/driver/privacy', '/driver/support',
+    '/agent/terms', '/agent/privacy', '/agent/support',
+  ];
   const isStaticPath = staticPages.includes(location.pathname);
   const isAdminPath =
     location.pathname.startsWith('/admin') ||
@@ -766,6 +772,12 @@ function App() {
               <Route path="/privacy-policy" element={<LegalPage />} />
               <Route path="/refund" element={<LegalPage />} />
               <Route path="/cancellation" element={<LegalPage />} />
+              <Route path="/driver/terms" element={<LegalPage />} />
+              <Route path="/driver/privacy" element={<LegalPage />} />
+              <Route path="/driver/support" element={<SupportPage />} />
+              <Route path="/agent/terms" element={<LegalPage />} />
+              <Route path="/agent/privacy" element={<LegalPage />} />
+              <Route path="/agent/support" element={<SupportPage />} />
               <Route path="/phonepe/status" element={<PhonePeStatusPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/onboarding" element={<Onboarding />} />
@@ -1277,6 +1289,7 @@ function App() {
                 <Route path="agents" element={<AdminAgentManager />} />
                 <Route path="agents/documents" element={<AdminAgentNeededDocuments />} />
                 <Route path="agents/pending" element={<AdminPendingAgents />} />
+                <Route path="agents/delete-requests" element={<AdminAgentDeleteRequests />} />
                 <Route path="agents/bookings" element={<AdminAgentBookings />} />
                 <Route path="agents/commission-defaults" element={<AdminAgentCommissionDefaults />} />
                 <Route path="agents/withdrawals" element={<AdminAgentWithdrawalRequests />} />

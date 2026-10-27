@@ -1,48 +1,62 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Clock3, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Building2, Clock3, HelpCircle, Mail, MapPin, Phone, ShieldCheck, Trash2 } from 'lucide-react';
 import { SUPPORT_INFO } from '../content/supportInfo';
+import { APP_AUDIENCES, SUPPORT_FAQS, getAudienceFromPath } from '../content/legalContent';
 
-const quickCards = [
-  {
-    title: 'Client care number',
-    value: SUPPORT_INFO.phone,
-    href: `tel:${SUPPORT_INFO.phoneHref}`,
-    helper: 'Call for booking, ride, parcel, or account help',
-    Icon: Phone,
-  },
-  {
-    title: 'Client support email',
-    value: SUPPORT_INFO.email,
-    href: `mailto:${SUPPORT_INFO.email}`,
-    helper: SUPPORT_INFO.responseTime,
-    Icon: Mail,
-  },
-];
-
-const detailCards = [
-  {
-    title: 'Client info',
-    value: SUPPORT_INFO.companyName,
-    helper: `Owner: ${SUPPORT_INFO.ownerName} · ${SUPPORT_INFO.serviceArea}`,
-    Icon: Building2,
-  },
-  {
-    title: 'Availability',
-    value: SUPPORT_INFO.availability,
-    helper: SUPPORT_INFO.supportLabel,
-    Icon: Clock3,
-  },
-  {
-    title: 'Office address',
-    value: SUPPORT_INFO.officeAddress,
-    helper: 'Use this for business communication and document follow-ups',
-    Icon: MapPin,
-  },
-];
+const SUPPORT_SCOPE = {
+  user: 'Reach our team for help with bookings, rides, parcels, payments, refunds, safety, or your account.',
+  driver: 'Reach our partner team for help with registration, document verification, trips, wallet, payouts, or your account.',
+  agent: 'Reach our agent desk for help with onboarding, customer bookings, commission, withdrawals, or your account.',
+};
 
 const SupportPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const audience = getAudienceFromPath(location.pathname);
+  const app = APP_AUDIENCES[audience];
+  const faqs = SUPPORT_FAQS[audience];
+  const deletionFaq = faqs[faqs.length - 1];
+
+  const quickCards = [
+    {
+      title: 'Support phone',
+      value: SUPPORT_INFO.phone,
+      href: `tel:${SUPPORT_INFO.phoneHref}`,
+      helper: SUPPORT_INFO.availability,
+      Icon: Phone,
+    },
+    {
+      title: 'Support email',
+      value: SUPPORT_INFO.email,
+      href: `mailto:${SUPPORT_INFO.email}?subject=${encodeURIComponent(`${app.appName} support`)}`,
+      helper: SUPPORT_INFO.responseTime,
+      Icon: Mail,
+    },
+  ];
+
+  const detailCards = [
+    {
+      title: 'Operated by',
+      value: SUPPORT_INFO.ownerName,
+      helper: `${SUPPORT_INFO.companyName} · Grievance Officer`,
+      Icon: Building2,
+    },
+    {
+      title: 'Availability',
+      value: SUPPORT_INFO.availability,
+      helper: SUPPORT_INFO.supportLabel,
+      Icon: Clock3,
+    },
+    SUPPORT_INFO.officeAddress
+      ? {
+          title: 'Office address',
+          value: SUPPORT_INFO.officeAddress,
+          helper: 'Use this for business communication and document follow-ups',
+          Icon: MapPin,
+        }
+      : null,
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-stone-50 text-slate-900 font-sans">
@@ -68,12 +82,12 @@ const SupportPage = () => {
           <div className="mb-6 flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl sm:rounded-[24px] bg-[#f4b400] text-black shadow-lg shadow-black/20">
             <ShieldCheck size={28} />
           </div>
-          <h1 className="max-w-4xl text-2xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight">
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-[#f4b400]">{app.appName}</p>
+          <h1 className="mt-3 max-w-4xl text-2xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight">
             Talk to <span className="text-[#f4b400]">Support</span>
           </h1>
           <p className="mt-3 sm:mt-5 max-w-3xl text-sm sm:text-base md:text-lg leading-relaxed text-stone-300">
-            Reach our customer support team for booking, ride assistance, payments, driver inquiries,
-            or general help.
+            {SUPPORT_SCOPE[audience]}
           </p>
 
           <div className="mt-6 sm:mt-8 grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
@@ -90,7 +104,7 @@ const SupportPage = () => {
                   <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] text-stone-400">
                     {item.title}
                   </p>
-                  <p className="mt-0.5 text-base sm:text-xl md:text-2xl font-black text-white break-words sm:break-normal">
+                  <p className="mt-0.5 text-base sm:text-xl md:text-2xl font-black text-white break-all">
                     {item.value}
                   </p>
                   <p className="mt-0.5 text-xs sm:text-sm font-semibold text-stone-300 leading-snug">
@@ -104,8 +118,8 @@ const SupportPage = () => {
       </section>
 
       {/* Details Section */}
-      <section className="px-4 sm:px-6 py-10 sm:py-16">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+      <section className="px-4 sm:px-6 pt-10 sm:pt-16">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           {detailCards.map((card) => (
             <div
               key={card.title}
@@ -127,6 +141,42 @@ const SupportPage = () => {
               </p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="px-4 sm:px-6 pt-10 sm:pt-14">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="flex items-center gap-2 text-xl sm:text-2xl font-black tracking-tight">
+            <HelpCircle size={22} className="text-[#f4b400]" /> Frequently asked questions
+          </h2>
+          <div className="mt-5 space-y-3">
+            {faqs.map((faq) => (
+              <details key={faq.q} className="group rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                <summary className="cursor-pointer list-none text-base font-bold text-slate-900">
+                  {faq.q}
+                </summary>
+                <p className="mt-3 text-sm sm:text-base leading-7 text-slate-600">{faq.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Account deletion */}
+      <section className="px-4 sm:px-6 py-10 sm:py-14">
+        <div className="mx-auto max-w-6xl rounded-2xl sm:rounded-[24px] border border-rose-100 bg-rose-50 p-5 sm:p-6">
+          <h2 className="flex items-center gap-2 text-lg font-black text-rose-700">
+            <Trash2 size={20} /> Account and data deletion
+          </h2>
+          <p className="mt-2 text-sm sm:text-base leading-7 text-rose-900/80">{deletionFaq.a}</p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link to={`${app.prefix}/terms`} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">Terms</Link>
+            <Link to={`${app.prefix}/privacy`} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">Privacy Policy</Link>
+            {audience === 'user' ? (
+              <Link to="/refund" className="rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">Refund Policy</Link>
+            ) : null}
+          </div>
         </div>
       </section>
     </div>

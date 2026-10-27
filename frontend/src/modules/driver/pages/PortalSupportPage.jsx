@@ -46,13 +46,15 @@ const PortalSupportPage = () => {
       helper: SUPPORT_INFO.supportLabel,
       Icon: Clock3,
     },
-    {
-      title: 'Office address',
-      value: SUPPORT_INFO.officeAddress,
-      helper: 'Business communication and document follow-ups',
-      Icon: MapPin,
-    },
-  ];
+    SUPPORT_INFO.officeAddress
+      ? {
+          title: 'Office address',
+          value: SUPPORT_INFO.officeAddress,
+          helper: 'Business communication and document follow-ups',
+          Icon: MapPin,
+        }
+      : null,
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-stone-50 text-slate-900">

@@ -44,7 +44,7 @@ const PhoneRegistration = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { settings } = useSettings();
-    const appName = settings.general?.app_name || 'Yatra Desk Trawler';
+    const appName = settings.general?.app_name || 'Yatra Desk';
     const appLogo = settings.general?.logo || settings.customization?.logo || settings.general?.favicon || '';
     const storedSession = getStoredDriverRegistrationSession();
     const isOwnerPortal = location.pathname.startsWith('/taxi/owner');

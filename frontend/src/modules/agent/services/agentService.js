@@ -161,6 +161,7 @@ export const agentService = {
   login: (payload) => api.post('/agents/login', payload),
   getProfile: () => api.get('/agents/me', withAgentAuth()),
   updateProfile: (payload) => api.patch('/agents/me', payload, withAgentAuth()),
+  requestAccountDeletion: (reason) => api.post('/agents/me/delete-request', { reason }, withAgentAuth()),
   getDashboard: () => api.get('/agents/dashboard', withAgentAuth()),
   getWallet: () => api.get('/agents/wallet', withAgentAuth()),
   getWithdrawals: () => api.get('/agents/wallet/withdrawals', withAgentAuth()),

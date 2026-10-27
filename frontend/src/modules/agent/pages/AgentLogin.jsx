@@ -10,7 +10,7 @@ const AgentLogin = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { settings } = useSettings();
-    const appName = settings?.general?.app_name || 'Yatra Desk Trawler';
+    const appName = settings?.general?.app_name || 'Yatra Desk';
     const appLogo = settings?.general?.logo || settings?.customization?.logo || settings?.general?.favicon || '';
     
     const [phone, setPhone] = useState('');
@@ -162,7 +162,7 @@ const AgentLogin = () => {
                                 className="h-6 w-6 rounded-lg border-2 border-slate-100 bg-slate-50 text-[#143a5a] focus:ring-[#143a5a] transition-all cursor-pointer"
                             />
                             <label htmlFor="terms" className="text-sm font-medium text-slate-400 leading-snug cursor-pointer select-none">
-                                I accept the <Link to="/terms" onClick={(event) => event.stopPropagation()} className="text-[#143a5a] font-bold underline">Terms</Link> & <Link to="/privacy" onClick={(event) => event.stopPropagation()} className="text-[#143a5a] font-bold underline">Privacy</Link>
+                                I accept the <Link to="/agent/terms" onClick={(event) => event.stopPropagation()} className="text-[#143a5a] font-bold underline">Terms</Link> & <Link to="/agent/privacy" onClick={(event) => event.stopPropagation()} className="text-[#143a5a] font-bold underline">Privacy</Link>
                             </label>
                         </div>
 

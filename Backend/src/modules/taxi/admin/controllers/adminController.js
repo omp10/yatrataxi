@@ -13,6 +13,7 @@ import { Agent } from '../../agent/models/Agent.js';
 import { AgentWallet } from '../../agent/models/AgentWallet.js';
 import { AgentNeededDocument } from '../models/AgentNeededDocument.js';
 import { AgentWithdrawalRequest } from '../../agent/models/AgentWithdrawalRequest.js';
+import { AgentLoginSession } from '../../agent/models/AgentLoginSession.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 import { hashPassword } from '../../services/passwordService.js';
 import { listAgentWalletTransactions, applyAgentWalletAdjustment } from '../../agent/services/agentWalletService.js';
@@ -167,6 +168,8 @@ const buildAgentSearchFilters = ({ search = '', status = '' } = {}) => {
         ],
       }
     : {};
+
+  filters.deletedAt = null;
 
   const normalizedStatus = String(status || '').trim().toLowerCase();
   if (normalizedStatus === 'pending') {
@@ -563,16 +566,114 @@ export const getAgents = asyncHandler(async (req, res) => {
   }).lean();
   const walletMap = new Map(wallets.map((item) => [String(item.agentId), item]));
   const totals = {
-    total: await Agent.countDocuments({}),
-    pending: await Agent.countDocuments({ kycStatus: 'pending' }),
-    verified: await Agent.countDocuments({ kycStatus: 'verified' }),
-    inactive: await Agent.countDocuments({ status: 'inactive' }),
+    total: await Agent.countDocuments({ deletedAt: null }),
+    pending: await Agent.countDocuments({ kycStatus: 'pending', deletedAt: null }),
+    verified: await Agent.countDocuments({ kycStatus: 'verified', deletedAt: null }),
+    inactive: await Agent.countDocuments({ status: 'inactive', deletedAt: null }),
   };
 
   ok(res, {
     totals,
     results: agents.map((agent) => serializeAgentAdmin(agent, walletMap.get(String(agent._id)) || null)),
   });
+});
+
+export const getAgentDeletionRequests = asyncHandler(async (req, res) => {
+  const requestedStatus = String(req.query?.status || 'pending').toLowerCase();
+  const statusQuery =
+    requestedStatus === 'all' ? { $in: ['pending', 'approved', 'rejected'] } : requestedStatus;
+  const agents = await Agent.find({ 'deletionRequest.status': statusQuery, deletedAt: null })
+    .sort({ 'deletionRequest.requestedAt': -1, createdAt: -1 })
+    .lean();
+  const agentIds = agents.map((item) => item._id);
+  const [wallets, pendingWithdrawals] = await Promise.all([
+    AgentWallet.find({ agentId: { $in: agentIds } }).select('agentId balance').lean(),
+    AgentWithdrawalRequest.aggregate([
+      { $match: { agentId: { $in: agentIds }, status: 'pending' } },
+      { $group: { _id: '$agentId', count: { $sum: 1 } } },
+    ]),
+  ]);
+  const balanceMap = new Map(wallets.map((item) => [String(item.agentId), Number(item.balance || 0)]));
+  const withdrawalMap = new Map(pendingWithdrawals.map((item) => [String(item._id), item.count]));
+
+  ok(res, {
+    results: agents.map((agent) => ({
+      _id: String(agent._id),
+      name: agent.name || '',
+      phone: agent.phone || '',
+      email: agent.email || '',
+      walletBalance: balanceMap.get(String(agent._id)) || 0,
+      pendingWithdrawals: withdrawalMap.get(String(agent._id)) || 0,
+      deletionRequest: agent.deletionRequest || { status: 'none' },
+    })),
+  });
+});
+
+export const approveAgentDeletionRequest = asyncHandler(async (req, res) => {
+  const agent = await Agent.findOne({ _id: req.params.id, deletedAt: null, 'deletionRequest.status': 'pending' });
+  if (!agent) {
+    throw new ApiError(404, 'Pending agent deletion request not found');
+  }
+
+  const [wallet, pendingWithdrawals] = await Promise.all([
+    AgentWallet.findOne({ agentId: agent._id }).select('balance').lean(),
+    AgentWithdrawalRequest.countDocuments({ agentId: agent._id, status: 'pending' }),
+  ]);
+  if (pendingWithdrawals > 0) {
+    throw new ApiError(400, 'Resolve the pending withdrawal requests of this agent before approving deletion');
+  }
+  if (Number(wallet?.balance || 0) > 0) {
+    throw new ApiError(400, 'Settle the agent wallet balance (pay out or adjust to zero) before approving deletion');
+  }
+
+  // Anonymise personal data; booking and wallet records stay linked by id for tax/audit retention.
+  const now = new Date();
+  const originalPhone = agent.phone;
+  agent.set({
+    phone: `deleted_${agent._id}`,
+    name: 'Deleted Agent',
+    email: '',
+    profileImage: '',
+    notes: '',
+    documents: {},
+    payout: { bankName: '', accountHolder: '', accountNumber: '', ifscCode: '', upiId: '' },
+    fcmTokenWeb: '',
+    fcmTokenMobile: '',
+    active: false,
+    status: 'inactive',
+    deletedAt: now,
+    deletion_reason: 'agent_delete_request',
+    'deletionRequest.status': 'approved',
+    'deletionRequest.reviewedAt': now,
+    'deletionRequest.reviewedBy': req.auth?.sub || null,
+    'deletionRequest.adminNote': '',
+  });
+  await agent.save();
+  await AgentLoginSession.deleteMany({ phone: originalPhone });
+
+  ok(res, { id: String(agent._id), deleted: true });
+});
+
+export const rejectAgentDeletionRequest = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const adminNote = String(req.body?.adminNote || req.body?.note || '').trim();
+  const agent = await Agent.findOneAndUpdate(
+    { _id: req.params.id, deletedAt: null, 'deletionRequest.status': 'pending' },
+    {
+      $set: {
+        'deletionRequest.status': 'rejected',
+        'deletionRequest.reviewedAt': now,
+        'deletionRequest.reviewedBy': req.auth?.sub || null,
+        'deletionRequest.adminNote': adminNote,
+      },
+    },
+    { returnDocument: 'after', runValidators: true },
+  );
+  if (!agent) {
+    throw new ApiError(404, 'Pending agent deletion request not found');
+  }
+
+  ok(res, { id: String(agent._id), status: 'rejected' });
 });
 
 export const getAgent = asyncHandler(async (req, res) => {

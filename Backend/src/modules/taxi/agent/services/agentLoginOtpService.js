@@ -169,7 +169,7 @@ export const verifyAgentLoginOtp = async ({ phone, otp }) => {
   }
 
   const agent = await Agent.findById(session.agentId);
-  if (!agent) {
+  if (!agent || agent.deletedAt) {
     throw new ApiError(404, 'Agent account not found');
   }
 

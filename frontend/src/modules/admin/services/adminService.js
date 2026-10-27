@@ -76,6 +76,9 @@ export const adminService = {
   getDriverDeleteRequests: () => api.get('/admin/drivers/delete-requests'),
   approveDriverDeleteRequest: (id) => api.patch(`/admin/drivers/delete-requests/${id}/approve`),
   rejectDriverDeleteRequest: (id, adminNote = '') => api.patch(`/admin/drivers/delete-requests/${id}/reject`, { adminNote }),
+  getAgentDeleteRequests: () => api.get('/admin/agents/delete-requests'),
+  approveAgentDeleteRequest: (id) => api.patch(`/admin/agents/delete-requests/${id}/approve`),
+  rejectAgentDeleteRequest: (id, adminNote = '') => api.patch(`/admin/agents/delete-requests/${id}/reject`, { adminNote }),
   getDriverNeededDocuments: (templateType = 'document') =>
     api.get(`/admin/owner-management/driver-needed-document?template_type=${encodeURIComponent(templateType)}`),
   getDriverNeededDocument: (id) => api.get(`/admin/owner-management/driver-needed-document/${id}`),
